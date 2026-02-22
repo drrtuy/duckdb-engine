@@ -148,6 +148,7 @@ MDB_CMAKE_FLAGS=(
     -DWITH_SBOM=0
     -DDEB=noble
     -DINSTALL_LAYOUT=DEB
+    -DDBUG_ON=1
 )
 
 echo "--- Configuring ---"

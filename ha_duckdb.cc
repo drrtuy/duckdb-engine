@@ -584,6 +584,11 @@ int ha_duckdb::rnd_next(uchar *buf)
 
   memset(buf, 0, table->s->reclength);
 
+  for (auto *field= table->field; *field; ++field)
+  {
+    bitmap_set_bit(table->write_set, (*field)->field_index);
+  }
+
   /* fetch new chunk when current chunk is empty */
   if (!current_chunk || current_row_index >= current_chunk->size())
   {
@@ -628,10 +633,39 @@ int ha_duckdb::rnd_pos(uchar *, uchar *)
   DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 }
 
-int ha_duckdb::info(uint)
+int ha_duckdb::info(uint flag)
 {
   DBUG_ENTER("ha_duckdb::info");
+  if (flag & HA_STATUS_VARIABLE)
+  {
+    /* Retrieve variable info, such as row counts and file lengths */
+    stats.records= records();
+    stats.deleted= 0;
+    // stats.data_file_length =
+    // stats.index_file_length =
+    // stats.delete_length =
+    stats.check_time= 0;
+    // stats.mrr_length_per_rec =
+
+    // stats.data_file_length may be unset for TIAMAT; avoid division by
+    // garbage.
+    if (stats.records == 0 || stats.data_file_length == 0)
+      stats.mean_rec_length= 0;
+    else
+      stats.mean_rec_length= (ulong) (stats.data_file_length / stats.records);
+  }
+
   DBUG_RETURN(0);
+}
+
+ha_rows ha_duckdb::records()
+{
+  DBUG_ENTER("ha_tiamat::records");
+  // Optimizer may call records()/info() in contexts where ha_share isn't
+  // initialized for this handler instance. Return a conservative estimate.
+  if (stats.records)
+    DBUG_RETURN(stats.records);
+  DBUG_RETURN(10);
 }
 
 int ha_duckdb::extra(enum ha_extra_function)
