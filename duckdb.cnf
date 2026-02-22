@@ -1,0 +1,7 @@
+[mariadbd]
+plugin-maturity=experimental
+
+[mysqld]
+debug=t:f,*tiamat*:d,error,query:o,/var/lib/mysql/mysqld.trace
+plugin-load-add=ha_duckdb.so
+#loose-duckdb-memory-limit=1073741824
