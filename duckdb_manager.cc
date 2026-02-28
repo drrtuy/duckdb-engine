@@ -70,12 +70,17 @@ bool DuckdbManager::Initialize()
 
   config.options.checkpoint_wal_size= checkpoint_threshold;
 
-  /* Default temp directory: same as data directory */
+  /* Temp directory: user-specified or default (data directory) */
   {
     char tmp_path[FN_REFLEN];
-    fn_format(tmp_path, DUCKDB_DEFAULT_TMP_NAME, mysql_real_data_home, "",
-              MYF(0));
-    config.options.temporary_directory= tmp_path;
+    if (global_duckdb_temp_directory && global_duckdb_temp_directory[0])
+      config.options.temporary_directory= global_duckdb_temp_directory;
+    else
+    {
+      fn_format(tmp_path, DUCKDB_DEFAULT_TMP_NAME, mysql_real_data_home, "",
+                MYF(0));
+      config.options.temporary_directory= tmp_path;
+    }
   }
 
   /* Store all tables in one file in the data directory */

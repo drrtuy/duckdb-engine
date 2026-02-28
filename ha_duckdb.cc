@@ -38,6 +38,7 @@
 #include "delta_appender.h"
 #include "row_mysql.h"
 #include "ha_duckdb_pushdown.h"
+#include "duckdb_log.h"
 
 /* Global status counters */
 struct duckdb_status_t
@@ -1072,6 +1073,8 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
 
 /* ----- Plugin declaration ----- */
 
+/* ---- AliSQL-specific global variables (no DuckDB push) ---- */
+
 static MYSQL_SYSVAR_BOOL(copy_ddl_in_batch, copy_ddl_in_batch,
                          PLUGIN_VAR_RQCMDARG,
                          "Use batch insert to speed up copy ddl", NULL, NULL,
@@ -1086,36 +1089,131 @@ static MYSQL_SYSVAR_BOOL(update_modified_column_only,
                          "Whether to only update modified columns", NULL, NULL,
                          TRUE);
 
+/* ---- Global proxy variables (pushed into DuckDB) ---- */
+
 static MYSQL_SYSVAR_ULONGLONG(memory_limit, myduck::global_memory_limit,
                               PLUGIN_VAR_RQCMDARG,
                               "DuckDB memory limit in bytes (0 = default)",
-                              NULL, NULL, 0, 0, ULONGLONG_MAX, 0);
+                              NULL, myduck::update_memory_limit_cb, 0, 0,
+                              ULONGLONG_MAX, 0);
+
+static MYSQL_SYSVAR_STR(temp_directory, myduck::global_duckdb_temp_directory,
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                        "Directory for DuckDB temporary files", NULL, NULL,
+                        NULL);
+
+static MYSQL_SYSVAR_ULONGLONG(max_temp_directory_size,
+                              myduck::global_max_temp_directory_size,
+                              PLUGIN_VAR_RQCMDARG,
+                              "Max disk space for DuckDB temp directory "
+                              "(0 = 90%% of available)",
+                              NULL, myduck::update_max_temp_directory_size_cb,
+                              0, 0, ULONGLONG_MAX, 1024);
 
 static MYSQL_SYSVAR_ULONGLONG(max_threads, myduck::global_max_threads,
                               PLUGIN_VAR_RQCMDARG,
-                              "DuckDB max threads (0 = default)", NULL, NULL,
-                              0, 0, ULONGLONG_MAX, 0);
+                              "DuckDB max threads (0 = default)", NULL,
+                              myduck::update_threads_cb, 0, 0, 1048576, 0);
+
+static MYSQL_SYSVAR_BOOL(use_direct_io, myduck::global_use_dio,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Use Direct I/O for DuckDB data files", NULL, NULL,
+                         FALSE);
+
+static MYSQL_SYSVAR_BOOL(scheduler_process_partial,
+                         myduck::global_scheduler_process_partial,
+                         PLUGIN_VAR_RQCMDARG,
+                         "Partially process tasks before rescheduling", NULL,
+                         myduck::update_scheduler_process_partial_cb, TRUE);
 
 static MYSQL_SYSVAR_ULONGLONG(checkpoint_threshold,
                               myduck::checkpoint_threshold,
                               PLUGIN_VAR_RQCMDARG,
-                              "DuckDB checkpoint threshold in bytes", NULL,
-                              NULL, 268435456, 0, ULONGLONG_MAX, 0);
+                              "DuckDB WAL checkpoint threshold in bytes", NULL,
+                              myduck::update_checkpoint_threshold_cb,
+                              268435456, 0, ULONGLONG_MAX, 1024);
 
 static MYSQL_SYSVAR_BOOL(use_double_for_decimal,
-                         myduck::use_double_for_decimal, PLUGIN_VAR_RQCMDARG,
-                         "Use DOUBLE instead of DECIMAL for DuckDB", NULL,
-                         NULL, FALSE);
+                         myduck::use_double_for_decimal,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Use DOUBLE for DECIMAL precision > 38", NULL, NULL,
+                         FALSE);
+
+static MYSQL_SYSVAR_BOOL(require_primary_key, myduck::require_primary_key,
+                         PLUGIN_VAR_RQCMDARG,
+                         "Require primary key for DuckDB tables", NULL, NULL,
+                         TRUE);
+
+static MYSQL_SYSVAR_ULONGLONG(appender_allocator_flush_threshold,
+                              myduck::appender_allocator_flush_threshold,
+                              PLUGIN_VAR_RQCMDARG,
+                              "Flush appender allocator when batch memory "
+                              "reaches this threshold",
+                              NULL, myduck::update_appender_flush_threshold_cb,
+                              67108864, 0, ULONGLONG_MAX, 1024);
+
+static MYSQL_SYSVAR_SET(log_options, myduck::duckdb_log_options,
+                        PLUGIN_VAR_RQCMDARG, "DuckDB operation types to log",
+                        NULL, NULL, 0, &myduck::log_options_typelib);
+
+/* ---- Session variables (propagated per-connection) ---- */
+
+static MYSQL_THDVAR_ULONGLONG(merge_join_threshold, PLUGIN_VAR_RQCMDARG,
+                              "Row count threshold to prefer merge join", NULL,
+                              NULL, 4611686018427387904ULL, 0,
+                              4611686018427387904ULL, 0);
+
+static MYSQL_THDVAR_BOOL(force_no_collation, PLUGIN_VAR_RQCMDARG,
+                         "Disable collation pushdown, use binary comparison",
+                         NULL, NULL, FALSE);
+
+static MYSQL_THDVAR_ENUM(explain_output, PLUGIN_VAR_RQCMDARG,
+                         "DuckDB EXPLAIN output format", NULL, NULL,
+                         myduck::EXPLAIN_PHYSICAL_ONLY,
+                         &myduck::explain_output_typelib);
+
+static MYSQL_THDVAR_SET(disabled_optimizers, PLUGIN_VAR_RQCMDARG,
+                        "Disable specific DuckDB optimizer rules", NULL, NULL,
+                        0, &myduck::disabled_optimizers_typelib);
+
+/* ---- THDVAR accessor functions (used from duckdb_context.cc) ---- */
+
+namespace myduck
+{
+
+ulonglong get_thd_merge_join_threshold(THD *thd)
+{
+  return THDVAR(thd, merge_join_threshold);
+}
+
+my_bool get_thd_force_no_collation(THD *thd)
+{
+  return THDVAR(thd, force_no_collation);
+}
+
+ulong get_thd_explain_output(THD *thd) { return THDVAR(thd, explain_output); }
+
+ulonglong get_thd_disabled_optimizers(THD *thd)
+{
+  return THDVAR(thd, disabled_optimizers);
+}
+
+} // namespace myduck
 
 static struct st_mysql_sys_var *duckdb_system_variables[]= {
-    MYSQL_SYSVAR(copy_ddl_in_batch),
-    MYSQL_SYSVAR(dml_in_batch),
+    MYSQL_SYSVAR(copy_ddl_in_batch), MYSQL_SYSVAR(dml_in_batch),
     MYSQL_SYSVAR(update_modified_column_only),
-    MYSQL_SYSVAR(memory_limit),
-    MYSQL_SYSVAR(max_threads),
-    MYSQL_SYSVAR(checkpoint_threshold),
-    MYSQL_SYSVAR(use_double_for_decimal),
-    NULL};
+    /* Global proxy */
+    MYSQL_SYSVAR(memory_limit), MYSQL_SYSVAR(temp_directory),
+    MYSQL_SYSVAR(max_temp_directory_size), MYSQL_SYSVAR(max_threads),
+    MYSQL_SYSVAR(use_direct_io), MYSQL_SYSVAR(scheduler_process_partial),
+    MYSQL_SYSVAR(checkpoint_threshold), MYSQL_SYSVAR(use_double_for_decimal),
+    MYSQL_SYSVAR(require_primary_key),
+    MYSQL_SYSVAR(appender_allocator_flush_threshold),
+    MYSQL_SYSVAR(log_options),
+    /* Session proxy */
+    MYSQL_SYSVAR(merge_join_threshold), MYSQL_SYSVAR(force_no_collation),
+    MYSQL_SYSVAR(explain_output), MYSQL_SYSVAR(disabled_optimizers), NULL};
 
 static struct st_mysql_show_var duckdb_status_variables[]= {
     {"Duckdb_rows_insert", (char *) &srv_duckdb_status.duckdb_rows_insert,

@@ -142,6 +142,11 @@ public:
 private:
   std::shared_ptr<duckdb::Connection> m_con;
   BatchState batch_state;
+
+  /* Cached session variable values — propagated to DuckDB on change */
+  ulonglong m_merge_join_threshold= 4611686018427387904ULL;
+  ulonglong m_disabled_optimizers= 0;
+  std::string m_explain_output_str;
 };
 
 } // namespace myduck
