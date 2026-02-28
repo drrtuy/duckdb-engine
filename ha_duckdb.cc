@@ -677,7 +677,142 @@ int ha_duckdb::extra(enum ha_extra_function)
 int ha_duckdb::delete_all_rows()
 {
   DBUG_ENTER("ha_duckdb::delete_all_rows");
-  DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  int ret= 0;
+  THD *thd= ha_thd();
+
+  ret= duckdb_register_trx(thd);
+  if (ret)
+    DBUG_RETURN(ret);
+
+  auto *ctx= get_duckdb_context(thd);
+
+  /* Discard any pending batch rows for this table */
+  ctx->delete_appender(table->s->db.str, table->s->table_name.str);
+
+  /* Execute DELETE FROM `schema`.`table` */
+  char buf[256];
+  String query(buf, sizeof(buf), &my_charset_bin);
+  query.length(0);
+  query.append(STRING_WITH_LEN("DELETE FROM `"));
+  query.append(table->s->db.str, table->s->db.length);
+  query.append(STRING_WITH_LEN("`.`"));
+  query.append(table->s->table_name.str, table->s->table_name.length);
+  query.append(STRING_WITH_LEN("`"));
+
+  auto query_result= myduck::duckdb_query(
+      ctx->get_connection(), std::string(query.c_ptr_safe(), query.length()));
+  if (query_result->HasError())
+  {
+    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    DBUG_RETURN(HA_DUCKDB_DML_ERROR);
+  }
+
+  DBUG_RETURN(0);
+}
+
+const COND *ha_duckdb::cond_push(const COND *cond)
+{
+  DBUG_ENTER("ha_duckdb::cond_push");
+  /*
+    Accept all conditions — DuckDB will evaluate the WHERE clause
+    from the original SQL query in direct_delete_rows().
+  */
+  DBUG_RETURN(NULL);
+}
+
+int ha_duckdb::direct_delete_rows_init()
+{
+  DBUG_ENTER("ha_duckdb::direct_delete_rows_init");
+  DBUG_RETURN(0);
+}
+
+int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
+{
+  DBUG_ENTER("ha_duckdb::direct_delete_rows");
+  int ret= 0;
+  THD *thd= ha_thd();
+
+  ret= duckdb_register_trx(thd);
+  if (ret)
+    DBUG_RETURN(ret);
+
+  auto *ctx= get_duckdb_context(thd);
+
+  /* Flush any pending batch rows so DuckDB sees consistent data */
+  std::string error_msg;
+  if (ctx->flush_appenders(error_msg))
+  {
+    my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+    DBUG_RETURN(HA_DUCKDB_DML_ERROR);
+  }
+
+  /* Execute the original DELETE statement in DuckDB */
+  LEX_STRING *qs= thd_query_string(thd);
+  std::string query(qs->str, qs->length);
+  auto result= myduck::duckdb_query(ctx->get_connection(), query);
+  if (result->HasError())
+  {
+    my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
+    DBUG_RETURN(HA_DUCKDB_DML_ERROR);
+  }
+
+  /* DuckDB returns a single row with the count of affected rows */
+  auto chunk= result->Fetch();
+  if (chunk && chunk->size() > 0)
+    *delete_rows= chunk->GetValue(0, 0).GetValue<int64_t>();
+  else
+    *delete_rows= 0;
+
+  DBUG_RETURN(0);
+}
+
+int ha_duckdb::direct_update_rows_init(List<Item> *update_fields
+                                       __attribute__((unused)))
+{
+  DBUG_ENTER("ha_duckdb::direct_update_rows_init");
+  DBUG_RETURN(0);
+}
+
+int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
+{
+  DBUG_ENTER("ha_duckdb::direct_update_rows");
+  int ret= 0;
+  THD *thd= ha_thd();
+
+  ret= duckdb_register_trx(thd);
+  if (ret)
+    DBUG_RETURN(ret);
+
+  auto *ctx= get_duckdb_context(thd);
+
+  /* Flush any pending batch rows so DuckDB sees consistent data */
+  std::string error_msg;
+  if (ctx->flush_appenders(error_msg))
+  {
+    my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+    DBUG_RETURN(HA_DUCKDB_DML_ERROR);
+  }
+
+  /* Execute the original UPDATE statement in DuckDB */
+  LEX_STRING *qs= thd_query_string(thd);
+  std::string query(qs->str, qs->length);
+  auto result= myduck::duckdb_query(ctx->get_connection(), query);
+  if (result->HasError())
+  {
+    my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
+    DBUG_RETURN(HA_DUCKDB_DML_ERROR);
+  }
+
+  /* DuckDB returns a single row with the count of affected rows */
+  auto chunk= result->Fetch();
+  ha_rows affected= 0;
+  if (chunk && chunk->size() > 0)
+    affected= chunk->GetValue(0, 0).GetValue<int64_t>();
+
+  *update_rows= affected;
+  *found_rows= affected;
+
+  DBUG_RETURN(0);
 }
 
 int ha_duckdb::external_lock(THD *thd, int lock_type)

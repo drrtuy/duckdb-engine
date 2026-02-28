@@ -1,5 +1,9 @@
 [mariadbd]
 plugin-maturity=experimental
+socket=/run/mysqld/mysqld.sock
+
+[client]
+socket=/run/mysqld/mysqld.sock
 
 [mysqld]
 debug=t:f,*:d,error,query:O,/var/lib/mysql/mysqld.trace

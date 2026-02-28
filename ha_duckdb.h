@@ -76,7 +76,8 @@ public:
   ulonglong table_flags() const override
   {
     return (HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE |
-            HA_NO_AUTO_INCREMENT | HA_NULL_IN_KEY | HA_CAN_INDEX_BLOBS);
+            HA_NO_AUTO_INCREMENT | HA_NULL_IN_KEY | HA_CAN_INDEX_BLOBS |
+            HA_CAN_DIRECT_UPDATE_AND_DELETE);
   }
 
   ulong index_flags(uint inx, uint part, bool all_parts) const override
@@ -136,6 +137,11 @@ public:
   int extra(enum ha_extra_function operation) override;
   int external_lock(THD *thd, int lock_type) override;
   int delete_all_rows(void) override;
+  const COND *cond_push(const COND *cond) override;
+  int direct_delete_rows_init() override;
+  int direct_delete_rows(ha_rows *delete_rows) override;
+  int direct_update_rows_init(List<Item> *update_fields) override;
+  int direct_update_rows(ha_rows *update_rows, ha_rows *found_rows) override;
   ha_rows records() override;
   ha_rows records_in_range(uint inx, const key_range *min_key,
                            const key_range *max_key,
