@@ -20,6 +20,7 @@
 
 #include "duckdb_manager.h"
 #include "duckdb_query.h"
+#include "delta_appender.h"
 
 #include <my_global.h>
 #include <my_bitmap.h>
@@ -108,33 +109,30 @@ public:
 
   void delete_appender(const std::string &schema, const std::string &table)
   {
-    /* TODO: implement when DeltaAppender is fully ported */
+    if (!m_appenders || m_appenders->is_empty())
+      return;
+    std::string db= schema, tb= table;
+    m_appenders->delete_appender(db, tb);
   }
 
   bool flush_appenders(std::string &error_msg)
   {
-    /* TODO: implement batch appender flushing */
+    if (m_appenders && !m_appenders->is_empty())
+    {
+      if (m_appenders->flush_all(false, error_msg))
+        return true;
+    }
     set_batch_state(BatchState::UNDEFINED);
     return false;
   }
 
-  int append_row_insert(TABLE *table, const MY_BITMAP *blob_map)
-  {
-    /* TODO: implement via DeltaAppender */
-    return 0;
-  }
+  DeltaAppender *get_appender(TABLE *table);
 
-  int append_row_update(TABLE *table, const uchar *old_row)
-  {
-    /* TODO: implement via DeltaAppender */
-    return 0;
-  }
+  int append_row_insert(TABLE *table, const MY_BITMAP *blob_map);
 
-  int append_row_delete(TABLE *table)
-  {
-    /* TODO: implement via DeltaAppender */
-    return 0;
-  }
+  int append_row_update(TABLE *table, const uchar *old_row);
+
+  int append_row_delete(TABLE *table);
 
   void set_batch_state(BatchState state) { batch_state= state; }
   BatchState get_batch_state() { return batch_state; }
@@ -142,6 +140,7 @@ public:
 private:
   std::shared_ptr<duckdb::Connection> m_con;
   BatchState batch_state;
+  std::unique_ptr<DeltaAppenders> m_appenders;
 
   /* Cached session variable values — propagated to DuckDB on change */
   ulonglong m_merge_join_threshold= 4611686018427387904ULL;

@@ -1,0 +1,3 @@
+--plugin-maturity=experimental
+--plugin-load-add=ha_duckdb.so
+--duckdb_dml_in_batch=OFF

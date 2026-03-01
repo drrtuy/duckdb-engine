@@ -24,6 +24,8 @@
 
 #include "duckdb_context.h"
 #include "duckdb_config.h"
+#include "duckdb_types.h"
+#include "ha_duckdb.h"
 #include "duckdb_timezone.h"
 #include "duckdb_charset_collation.h"
 
@@ -93,6 +95,40 @@ void DuckdbThdContext::config_duckdb_env(THD *thd)
       sql_print_warning("DuckDB: config_duckdb_env failed: %s (sql=%s)",
                         res->GetError().c_str(), sql.c_str());
   }
+}
+
+DeltaAppender *DuckdbThdContext::get_appender(TABLE *table)
+{
+  if (!m_appenders)
+    m_appenders= std::make_unique<DeltaAppenders>(m_con);
+
+  DatabaseTableNames dt(table->s->normalized_path.str);
+  std::string db= dt.db_name;
+  std::string tb= dt.table_name;
+
+  return m_appenders->get_appender(
+      db, tb, batch_state == BatchState::IN_INSERT_ONLY_BATCH, table);
+}
+
+int DuckdbThdContext::append_row_insert(TABLE *table,
+                                        const MY_BITMAP *blob_map)
+{
+  DeltaAppender *delta= get_appender(table);
+  return delta ? delta->append_row_insert(table, 0, blob_map)
+               : HA_DUCKDB_APPEND_ERROR;
+}
+
+int DuckdbThdContext::append_row_update(TABLE *table, const uchar *old_row)
+{
+  DeltaAppender *delta= get_appender(table);
+  return delta ? delta->append_row_update(table, 0, old_row)
+               : HA_DUCKDB_APPEND_ERROR;
+}
+
+int DuckdbThdContext::append_row_delete(TABLE *table)
+{
+  DeltaAppender *delta= get_appender(table);
+  return delta ? delta->append_row_delete(table, 0) : HA_DUCKDB_APPEND_ERROR;
 }
 
 } // namespace myduck

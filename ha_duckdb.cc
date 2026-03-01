@@ -81,6 +81,21 @@ static myduck::DuckdbThdContext *get_duckdb_context(THD *thd)
 
 /* ----- Transaction callbacks ----- */
 
+static int duckdb_prepare(THD *thd, bool all)
+{
+  if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))
+  {
+    std::string error_msg;
+    auto *ctx= get_duckdb_context(thd);
+    if (ctx->flush_appenders(error_msg))
+    {
+      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static int duckdb_commit(THD *thd, bool commit_trx)
 {
   if (commit_trx ||
@@ -91,8 +106,8 @@ static int duckdb_commit(THD *thd, bool commit_trx)
     std::string error_msg;
     auto *ctx= get_duckdb_context(thd);
 
-    /* Flush any pending batch appender data before commit,
-       otherwise batch-mode inserts are lost. */
+    /* Safety net: flush if prepare() was not called (no 2PC).
+       This is a no-op when appenders were already flushed. */
     if (ctx->flush_appenders(error_msg))
     {
       my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
@@ -180,6 +195,7 @@ static int duckdb_init_func(void *p)
   duckdb_hton->db_type= DB_TYPE_AUTOASSIGN;
   duckdb_hton->create= duckdb_create_handler;
   duckdb_hton->flags= HTON_NO_FLAGS;
+  duckdb_hton->prepare= duckdb_prepare;
   duckdb_hton->commit= duckdb_commit;
   duckdb_hton->rollback= duckdb_rollback;
   duckdb_hton->close_connection= duckdb_close_connection;
@@ -440,6 +456,16 @@ int ha_duckdb::write_row(const uchar *)
     ret= ctx->append_row_insert(table, &m_blob_map);
     if (ret == 0)
       srv_duckdb_status.duckdb_rows_insert_in_batch++;
+    else
+    {
+      /* Appender failed (e.g. table not yet created during ALTER TABLE).
+         Fall back to non-batch SQL insert. */
+      ctx->set_batch_state(myduck::BatchState::NOT_IN_BATCH);
+      InsertConvertor convertor(table, false);
+      ret= execute_dml(thd, &convertor);
+      if (ret == 0)
+        srv_duckdb_status.duckdb_rows_insert++;
+    }
   }
 
   dbug_tmp_restore_column_map(&table->read_set, org_bitmap);
@@ -478,6 +504,14 @@ int ha_duckdb::update_row(const uchar *old_row, const uchar *new_row)
     ret= ctx->append_row_update(table, old_row);
     if (ret == 0)
       srv_duckdb_status.duckdb_rows_update_in_batch++;
+    else
+    {
+      ctx->set_batch_state(myduck::BatchState::NOT_IN_BATCH);
+      UpdateConvertor update_convertor(table, old_row);
+      ret= execute_dml(thd, &update_convertor);
+      if (ret == 0)
+        srv_duckdb_status.duckdb_rows_update++;
+    }
   }
 
   DBUG_RETURN(ret);
@@ -508,6 +542,14 @@ int ha_duckdb::delete_row(const uchar *)
     ret= ctx->append_row_delete(table);
     if (ret == 0)
       srv_duckdb_status.duckdb_rows_delete_in_batch++;
+    else
+    {
+      ctx->set_batch_state(myduck::BatchState::NOT_IN_BATCH);
+      DeleteConvertor convertor(table);
+      ret= execute_dml(thd, &convertor);
+      if (ret == 0)
+        srv_duckdb_status.duckdb_rows_delete++;
+    }
   }
 
   DBUG_RETURN(ret);
@@ -1146,8 +1188,7 @@ static MYSQL_SYSVAR_ULONGLONG(checkpoint_threshold,
                               268435456, 0, ULONGLONG_MAX, 1024);
 
 static MYSQL_SYSVAR_BOOL(use_double_for_decimal,
-                         myduck::use_double_for_decimal,
-                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         myduck::use_double_for_decimal, PLUGIN_VAR_RQCMDARG,
                          "Use DOUBLE for DECIMAL precision > 38", NULL, NULL,
                          FALSE);
 

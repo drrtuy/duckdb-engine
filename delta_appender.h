@@ -23,33 +23,35 @@
 #include "duckdb_manager.h"
 #include "field.h"
 
-class DeltaAppender {
- public:
+class DeltaAppender
+{
+public:
   int append_row_insert(TABLE *table, ulonglong trx_no,
                         const MY_BITMAP *blob_type_map);
 
   int append_row_update(TABLE *table, ulonglong trx_no, const uchar *old_row);
 
   int append_row_delete(TABLE *table, ulonglong trx_no,
-                        const uchar *old_row = nullptr);
+                        const uchar *old_row= nullptr);
 
-  static std::string buf_table_name(std::string db, std::string tb) {
+  static std::string buf_table_name(std::string db, std::string tb)
+  {
     return db + "_rds_buf_" + tb;
   }
 
   DeltaAppender(std::shared_ptr<duckdb::Connection> con, std::string db,
                 std::string tb, bool use_tmp_table)
-      : m_use_tmp_table(use_tmp_table),
-        m_schema_name(db),
-        m_table_name(tb),
-        m_con(con) {}
+      : m_use_tmp_table(use_tmp_table), m_schema_name(db), m_table_name(tb),
+        m_con(con)
+  {
+  }
 
   bool Initialize(TABLE *table);
 
   int append_mysql_field(const Field *field,
-                         const MY_BITMAP *blob_type_map = nullptr);
+                         const MY_BITMAP *blob_type_map= nullptr);
 
-  DeltaAppender() = default;
+  DeltaAppender()= default;
 
   ~DeltaAppender() { cleanup(); }
 
@@ -59,7 +61,7 @@ class DeltaAppender {
 
   void cleanup();
 
- private:
+private:
   void generateQuery(std::stringstream &ss, bool delete_flag);
 
   bool m_use_tmp_table;
@@ -82,12 +84,15 @@ class DeltaAppender {
   std::unique_ptr<duckdb::Appender> m_appender;
 };
 
-class DeltaAppenders {
- public:
+class DeltaAppenders
+{
+public:
   DeltaAppenders(std::shared_ptr<duckdb::Connection> con)
-      : m_con(con), m_append_infos() {}
+      : m_con(con), m_append_infos()
+  {
+  }
 
-  ~DeltaAppenders() = default;
+  ~DeltaAppenders()= default;
 
   void delete_appender(std::string &db, std::string &tb);
 
@@ -102,10 +107,7 @@ class DeltaAppenders {
   DeltaAppender *get_appender(std::string &db, std::string &tb,
                               bool insert_only, TABLE *table);
 
- private:
-  int append_mysql_field(duckdb::Appender *appender, const Field *field);
-
- private:
+private:
   std::shared_ptr<duckdb::Connection> m_con;
 
   std::map<std::pair<std::string, std::string>, std::unique_ptr<DeltaAppender>>
