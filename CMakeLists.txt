@@ -16,6 +16,7 @@ SET(DUCKDB_SOURCES
   duckdb_timezone.cc
   duckdb_table.cc
   ha_duckdb_pushdown.cc
+  duckdb_udf.cc
 )
 
 MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_SOURCES}

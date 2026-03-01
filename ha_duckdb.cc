@@ -90,6 +90,16 @@ static int duckdb_commit(THD *thd, bool commit_trx)
 
     std::string error_msg;
     auto *ctx= get_duckdb_context(thd);
+
+    /* Flush any pending batch appender data before commit,
+       otherwise batch-mode inserts are lost. */
+    if (ctx->flush_appenders(error_msg))
+    {
+      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      ctx->duckdb_trans_rollback(error_msg);
+      return 1;
+    }
+
     if (ctx->duckdb_trans_commit(error_msg))
     {
       my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
@@ -855,7 +865,9 @@ int ha_duckdb::create(const char *name, TABLE *form,
   if (ret)
     DBUG_RETURN(ret);
 
-  CreateTableConvertor convertor(thd, form, create_info);
+  DatabaseTableNames dt(name);
+  CreateTableConvertor convertor(thd, form, create_info, dt.db_name,
+                                 dt.table_name);
 
   if (convertor.check())
     DBUG_RETURN(HA_DUCKDB_CREATE_ERROR);

@@ -102,11 +102,11 @@ class CreateTableConvertor : public BaseConvertor
 {
 public:
   CreateTableConvertor(THD *thd, const TABLE *table,
-                       const HA_CREATE_INFO *create_info)
-      : m_schema_name(std::string(table->s->db.str, table->s->db.length)),
-        m_table_name(std::string(table->s->table_name.str,
-                                 table->s->table_name.length)),
-        m_thd(thd), m_table(table), m_create_info(create_info)
+                       const HA_CREATE_INFO *create_info,
+                       const std::string &schema_name,
+                       const std::string &table_name)
+      : m_schema_name(schema_name), m_table_name(table_name), m_thd(thd),
+        m_table(table), m_create_info(create_info)
   {
   }
 
