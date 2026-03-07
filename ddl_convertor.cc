@@ -22,8 +22,11 @@
 #include <cassert>
 #include <iomanip>
 #include <sstream>
+#include <unordered_set>
 
 #include <my_global.h>
+#undef UNKNOWN
+#include "duckdb_config.h"
 #include "sql_class.h"
 #include "sql_alter.h"
 #include "sql_table.h" /* primary_key_name */
@@ -32,7 +35,7 @@
 
 bool report_duckdb_table_struct_error(const std::string &err_msg)
 {
-  my_error(ER_UNKNOWN_ERROR, MYF(0), err_msg.c_str());
+  my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), err_msg.c_str());
   return true;
 }
 
@@ -93,23 +96,102 @@ static bool is_primary_key(const KEY *key)
          (strcasecmp(key->name.str, primary_key_name.str) == 0);
 }
 
-/** Get default expression string for duckdb.
-    In MariaDB, default expressions are stored in Virtual_column_info. */
-static std::string get_default_expr_for_duckdb(THD *thd,
-                                               Virtual_column_info *vcol)
+/**
+  Extract default expression string for a field from TABLE_SHARE::vcol_defs.
+
+  The Item tree in field->default_value->expr may be corrupted at
+  ha_duckdb::create() time (the mem_root it was allocated on gets reset
+  between pack_vcols and ha_create_table). Instead, read the original
+  expression text directly from the .frm binary blob (vcol_defs).
+
+  vcol_defs format per entry (FRM_VER_EXPRESSSIONS):
+    byte 0     : type (VCOL_DEFAULT=2)
+    bytes 1-2  : field_nr
+    bytes 3-4  : expr_length
+    byte 5     : name_length
+    bytes 6..  : name (name_length bytes)
+    then       : expression text (expr_length bytes)
+*/
+static std::string get_default_expr_from_vcol_defs(const TABLE_SHARE *share,
+                                                   uint target_field_nr)
 {
-  if (!vcol || !vcol->expr)
+  if (!share->vcol_defs.length || !share->vcol_defs.str)
     return "";
 
+  const uchar *pos= share->vcol_defs.str;
+  const uchar *end= pos + share->vcol_defs.length;
+
+  while (pos < end)
+  {
+    uint type= pos[0];
+    uint field_nr= uint2korr(pos + 1);
+    uint expr_len= uint2korr(pos + 3);
+    uint name_len= pos[5];
+    pos+= 6 + name_len; /* FRM_VCOL_NEW_HEADER_SIZE + name */
+
+    if (type == 2 /* VCOL_DEFAULT */ && field_nr == target_field_nr)
+      return std::string((const char *) pos, expr_len);
+
+    pos+= expr_len;
+  }
+  return "";
+}
+
+/**
+  Read the literal default value of a field from the default record and
+  return it as a string suitable for DuckDB SQL.
+
+  BIT fields are converted to DuckDB blob literal format: '\xHH...'::BLOB.
+  Other fields use standard quoted literal format: 'value'.
+
+  @param field    Field whose default value to read (must not be at offset)
+  @param offset   Offset from record[0] to default_values (s->default_values -
+                  record[0])
+  @return         Default value string, or "NULL" if field is null at default
+                  record
+*/
+static std::string get_field_default_for_duckdb(Field *field,
+                                                my_ptrdiff_t offset)
+{
+  field->move_field_offset(offset);
+
   std::string default_value;
-  default_value+= "(";
+  if (field->is_null())
+  {
+    default_value= "NULL";
+  }
+  else if (field->type() == MYSQL_TYPE_BIT)
+  {
+    /* BIT maps to blob in DuckDB: '\xHH\xHH...'::BLOB */
+    char vbuf[MAX_FIELD_WIDTH];
+    String vstr(vbuf, sizeof(vbuf), &my_charset_bin);
+    String *val= field->val_str(&vstr);
+    std::ostringstream ss;
+    ss << "'";
+    if (val)
+    {
+      for (uint i= 0; i < val->length(); i++)
+      {
+        char hx[8];
+        snprintf(hx, sizeof(hx), "\\x%02X", (unsigned char) val->ptr()[i]);
+        ss << hx;
+      }
+    }
+    ss << "'::BLOB";
+    default_value= ss.str();
+  }
+  else
+  {
+    char buf[MAX_FIELD_WIDTH];
+    String str(buf, sizeof(buf), system_charset_info);
+    String *val= field->val_str(&str);
+    if (val && val->length() > 0)
+      default_value= "'" + std::string(val->ptr(), val->length()) + "'";
+    else
+      default_value= "NULL";
+  }
 
-  char buffer[256];
-  String s(buffer, sizeof(buffer), system_charset_info);
-  vcol->print(&s);
-  default_value+= std::string(s.ptr(), s.length());
-  default_value+= ")";
-
+  field->move_field_offset(-offset);
   return default_value;
 }
 
@@ -311,22 +393,24 @@ std::string FieldConvertor::translate()
   {
     if (field->default_value)
     {
-      /* Expression default */
-      std::string default_str=
-          get_default_expr_for_duckdb(current_thd, field->default_value);
-      if (!default_str.empty())
-        result << " DEFAULT " << default_str;
+      /*
+        Expression default. The Item tree in field->default_value->expr
+        is corrupted at ha_duckdb::create() time. Read the expression
+        string directly from TABLE_SHARE::vcol_defs (.frm binary blob).
+      */
+      std::string expr_str=
+          get_default_expr_from_vcol_defs(field->table->s, field->field_index);
+      if (!expr_str.empty())
+        result << " DEFAULT (" << expr_str << ")";
     }
-    else if (!field->is_null())
+    else
     {
       /* Simple literal default — extract from record[1] (s->default_values) */
-      char buf[MAX_FIELD_WIDTH];
-      String str(buf, sizeof(buf), system_charset_info);
-      /*
-        Move to default value record temporarily.
-        For now, we skip complex default extraction — it will be refined
-        when testing actual CREATE TABLE with defaults.
-      */
+      my_ptrdiff_t offset=
+          field->table->s->default_values - field->table->record[0];
+      std::string def= get_field_default_for_duckdb(field, offset);
+      if (def != "NULL")
+        result << " DEFAULT " << def;
     }
   }
 
@@ -449,9 +533,35 @@ bool CreateTableConvertor::check()
   /* Check PK. */
   TABLE_SHARE *share= m_table->s;
 
-  /* If no keys, table can be created without PK. */
-  if (share->keys == 0)
-    return false;
+  bool has_pk= false;
+  KEY *key_info= m_table->key_info;
+
+  /*
+    TABLE_SHARE::primary_key is supposed to be either MAX_KEY or an index into
+    key_info[]. However during CREATE (especially via ALGORITHM=COPY shadow
+    tables) it can be uninitialized/garbage, so validate the range and
+    fall back to scanning keys.
+  */
+  if (share->primary_key != MAX_KEY && share->primary_key < share->keys)
+    has_pk= is_primary_key(key_info + share->primary_key);
+
+  if (!has_pk)
+  {
+    for (uint i= 0; i < share->keys; i++)
+    {
+      if (is_primary_key(key_info + i))
+      {
+        has_pk= true;
+        break;
+      }
+    }
+  }
+
+  if (myduck::require_primary_key && !has_pk)
+  {
+    my_error(ER_REQUIRES_PRIMARY_KEY, MYF(0));
+    return true;
+  }
 
   return false;
 }
@@ -554,19 +664,20 @@ std::string AddColumnConvertor::translate()
 
     std::string type= FieldConvertor::convert_type(field);
 
-    bool has_default= (new_field->default_value != nullptr) ||
-                      (new_field->on_update != nullptr);
-
-    /* Set default value. */
+    bool has_default= false;
     std::string default_value= "NULL";
+
     if (new_field->on_update != nullptr)
     {
+      has_default= true;
       default_value= "CURRENT_TIMESTAMP";
     }
-    else if (new_field->default_value != nullptr)
+    else if (!(field->flags & NO_DEFAULT_VALUE_FLAG))
     {
-      default_value=
-          get_default_expr_for_duckdb(current_thd, new_field->default_value);
+      my_ptrdiff_t offset=
+          field->table->s->default_values - field->table->record[0];
+      has_default= true;
+      default_value= get_field_default_for_duckdb(field, offset);
     }
 
     append_stmt_column_add(result, m_schema_name, m_table_name,
@@ -589,18 +700,94 @@ std::string AddColumnConvertor::translate()
 
 void DropColumnConvertor::prepare_columns()
 {
-  Field **first_field= m_old_table->field;
-  Field **ptr, *field;
+  /*
+    Prefer Alter_info::drop_list as authoritative (if still populated).
+    Fallback to old/new table diff when drop_list is unavailable at commit
+    time.
 
-  for (ptr= first_field; (field= *ptr); ptr++)
+    Important: exclude renamed/changed columns from diff-based drop detection.
+    In MariaDB, rename/change is represented in Alter_info::create_list via
+    Create_field::change (old name).
+  */
+  if (m_alter_info && m_alter_info->drop_list.elements)
   {
-    if (!(field->flags & FIELD_IS_DROPPED))
+    List_iterator<Alter_drop> drop_it(m_alter_info->drop_list);
+    Alter_drop *drop;
+    while ((drop= drop_it++))
+    {
+      if (drop->type != Alter_drop::COLUMN)
+        continue;
+
+      for (Field **old_ptr= m_old_table->field; *old_ptr; old_ptr++)
+      {
+        Field *old_field= *old_ptr;
+        if (strcasecmp(old_field->field_name.str, drop->name.str) == 0)
+        {
+          m_columns_to_drop.emplace_back(nullptr, old_field);
+          break;
+        }
+      }
+    }
+    return;
+  }
+
+  if (!m_new_table)
+    return;
+
+  /* Build a set of old names that are being renamed/changed. */
+  std::unordered_set<std::string> renamed_old_names;
+  if (m_alter_info)
+  {
+    List_iterator<Create_field> def_it(m_alter_info->create_list);
+    Create_field *def;
+    while ((def= def_it++))
+    {
+      if (def->change.str)
+        renamed_old_names.emplace(def->change.str);
+    }
+  }
+
+  for (Field **old_ptr= m_old_table->field; *old_ptr; old_ptr++)
+  {
+    Field *old_field= *old_ptr;
+
+    if (renamed_old_names.find(old_field->field_name.str) !=
+        renamed_old_names.end())
       continue;
-    m_columns_to_drop.emplace_back(nullptr, field);
+
+    bool found_in_new= false;
+    for (Field **new_ptr= m_new_table->field; *new_ptr; new_ptr++)
+    {
+      if (strcasecmp((*new_ptr)->field_name.str, old_field->field_name.str) ==
+          0)
+      {
+        found_in_new= true;
+        break;
+      }
+    }
+
+    if (!found_in_new)
+      m_columns_to_drop.emplace_back(nullptr, old_field);
   }
 }
 
-bool DropColumnConvertor::check() { return false; }
+bool DropColumnConvertor::check()
+{
+  if (!myduck::require_primary_key)
+    return false;
+
+  for (auto &pair : m_columns_to_drop)
+  {
+    Field *field= pair.second;
+    if (field && (field->flags & PRI_KEY_FLAG))
+    {
+      my_error(ER_REQUIRES_PRIMARY_KEY, MYF(0));
+      return true;
+    }
+  }
+
+  return false;
+}
 
 std::string DropColumnConvertor::translate()
 {
@@ -620,24 +807,88 @@ std::string DropColumnConvertor::translate()
 
 void ChangeColumnDefaultConvertor::prepare_columns()
 {
-  assert(m_alter_info != nullptr);
-
-  List_iterator<Create_field> new_field_it(m_alter_info->create_list);
-  Create_field *new_field;
-
-  while ((new_field= new_field_it++))
+  /*
+    Compare old and new table fields to detect default value changes.
+    We cannot use alter_info->alter_list because it is consumed
+    (emptied) by mysql_prepare_alter_table() before commit.
+  */
+  for (Field **new_ptr= m_new_table->field; *new_ptr; new_ptr++)
   {
-    Field *cur_field= find_field(new_field, m_new_table);
+    Field *new_field= *new_ptr;
 
-    bool set_default= (new_field->default_value != nullptr) ||
-                      (new_field->on_update != nullptr);
-    bool drop_default= ((new_field->flags & NO_DEFAULT_VALUE_FLAG) != 0);
+    /* Find the same column in the old table by name */
+    Field *old_field= nullptr;
+    for (Field **old_ptr= m_old_table->field; *old_ptr; old_ptr++)
+    {
+      if (strcasecmp((*old_ptr)->field_name.str, new_field->field_name.str) ==
+          0)
+      {
+        old_field= *old_ptr;
+        break;
+      }
+    }
 
-    if (drop_default)
-      m_columns_to_drop_default.emplace_back(new_field, cur_field);
+    if (!old_field)
+      continue;
 
-    if (set_default)
-      m_columns_to_set_default.emplace_back(new_field, cur_field);
+    bool old_has_default= !(old_field->flags & NO_DEFAULT_VALUE_FLAG);
+    bool new_has_default= !(new_field->flags & NO_DEFAULT_VALUE_FLAG);
+
+    if (old_has_default && !new_has_default)
+    {
+      /* Default was dropped */
+      m_columns_to_drop_default.emplace_back(nullptr, new_field);
+    }
+    else if (new_has_default && !old_has_default)
+    {
+      /* Default was added */
+      m_columns_to_set_default.emplace_back(nullptr, new_field);
+    }
+    else if (old_has_default && new_has_default)
+    {
+      /* Both have default — check if value changed */
+      my_ptrdiff_t old_off=
+          old_field->table->s->default_values - old_field->table->record[0];
+      my_ptrdiff_t new_off=
+          new_field->table->s->default_values - new_field->table->record[0];
+
+      old_field->move_field_offset(old_off);
+      new_field->move_field_offset(new_off);
+
+      bool changed= false;
+      bool new_is_null= new_field->is_null();
+      if (old_field->is_null() != new_is_null)
+        changed= true;
+      else if (!old_field->is_null())
+      {
+        char buf1[MAX_FIELD_WIDTH], buf2[MAX_FIELD_WIDTH];
+        String s1(buf1, sizeof(buf1), system_charset_info);
+        String s2(buf2, sizeof(buf2), system_charset_info);
+        String *v1= old_field->val_str(&s1);
+        String *v2= new_field->val_str(&s2);
+        if (v1 && v2)
+          changed= sortcmp(v1, v2, system_charset_info) != 0;
+        else
+          changed= (v1 != v2);
+      }
+
+      old_field->move_field_offset(-old_off);
+      new_field->move_field_offset(-new_off);
+
+      if (changed)
+      {
+        /*
+          If the new default is NULL in the default record, treat it
+          as DROP DEFAULT for DuckDB. MariaDB does not set
+          NO_DEFAULT_VALUE_FLAG for nullable columns on DROP DEFAULT,
+          but the semantic is "no explicit default".
+        */
+        if (new_is_null)
+          m_columns_to_drop_default.emplace_back(nullptr, new_field);
+        else
+          m_columns_to_set_default.emplace_back(nullptr, new_field);
+      }
+    }
   }
 }
 
@@ -648,30 +899,22 @@ std::string ChangeColumnDefaultConvertor::translate()
   /* Drop default value. */
   for (auto &pair : m_columns_to_drop_default)
   {
-    Create_field *new_field= pair.first;
-    assert((new_field->flags & NO_DEFAULT_VALUE_FLAG) != 0);
+    Field *field= pair.second;
     append_stmt_column_drop_default(result, m_schema_name, m_table_name,
-                                    new_field->field_name.str);
+                                    field->field_name.str);
   }
 
   /* Set default value. */
   for (auto &pair : m_columns_to_set_default)
   {
-    Create_field *new_field= pair.first;
+    Field *field= pair.second;
 
-    std::string default_value= "NULL";
-    if (new_field->on_update != nullptr)
-    {
-      default_value= "CURRENT_TIMESTAMP";
-    }
-    else if (new_field->default_value != nullptr)
-    {
-      default_value=
-          get_default_expr_for_duckdb(current_thd, new_field->default_value);
-    }
+    my_ptrdiff_t offset=
+        field->table->s->default_values - field->table->record[0];
+    std::string default_value= get_field_default_for_duckdb(field, offset);
 
     append_stmt_column_set_default(result, m_schema_name, m_table_name,
-                                   new_field->field_name.str, default_value);
+                                   field->field_name.str, default_value);
   }
 
   return result.str();
@@ -761,6 +1004,7 @@ std::string ChangeColumnConvertor::translate()
   for (auto &pair : m_columns)
   {
     Create_field *new_field= pair.first;
+    Field *field= pair.second;
     bool drop_default= ((new_field->flags & NO_DEFAULT_VALUE_FLAG) != 0);
 
     /* Drop default value. */
@@ -768,19 +1012,16 @@ std::string ChangeColumnConvertor::translate()
     {
       append_stmt_column_drop_default(result, m_schema_name, m_table_name,
                                       new_field->field_name.str);
+      continue;
     }
 
-    /* Set default value. */
-    std::string default_value= "NULL";
-    if (new_field->on_update != nullptr)
-    {
-      default_value= "CURRENT_TIMESTAMP";
-    }
-    else if (new_field->default_value != nullptr)
-    {
-      default_value=
-          get_default_expr_for_duckdb(current_thd, new_field->default_value);
-    }
+    if (!field || (field->flags & NO_DEFAULT_VALUE_FLAG))
+      continue;
+
+    my_ptrdiff_t offset=
+        field->table->s->default_values - field->table->record[0];
+    std::string default_value= get_field_default_for_duckdb(field, offset);
+
     append_stmt_column_set_default(result, m_schema_name, m_table_name,
                                    new_field->field_name.str, default_value);
   }

@@ -134,11 +134,15 @@ public:
 
   int append_row_delete(TABLE *table);
 
+  void set_in_copy_ddl(bool in) { in_copy_ddl= in; }
+  bool is_in_copy_ddl() const { return in_copy_ddl; }
+
   void set_batch_state(BatchState state) { batch_state= state; }
   BatchState get_batch_state() { return batch_state; }
 
 private:
   std::shared_ptr<duckdb::Connection> m_con;
+  bool in_copy_ddl= false;
   BatchState batch_state;
   std::unique_ptr<DeltaAppenders> m_appenders;
 

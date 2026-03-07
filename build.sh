@@ -186,6 +186,10 @@ if [[ $START_MDB = true ]]; then
     stop_mdb
     start_mdb
     setup_dev_user
+
+    echo "--- Creating duckdb_query_udf ---"
+    "$INSTALL_PREFIX/bin/mariadb" -e \
+        "CREATE FUNCTION IF NOT EXISTS duckdb_query_udf RETURNS STRING SONAME 'ha_duckdb.so';"
 fi
 
 echo "=== BUILD FINISHED ==="

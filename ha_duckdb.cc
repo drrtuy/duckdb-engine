@@ -96,6 +96,18 @@ static int duckdb_prepare(THD *thd, bool all)
   return 0;
 }
 
+static void push_duckdb_query_error(const std::string &err)
+{
+  if (err.find("Parser Error") != std::string::npos ||
+      err.find("syntax error") != std::string::npos)
+  {
+    my_error(ER_PARSE_ERROR, MYF(0), err.c_str());
+    return;
+  }
+
+  my_error(ER_UNKNOWN_ERROR, MYF(0), err.c_str());
+}
+
 static int duckdb_commit(THD *thd, bool commit_trx)
 {
   if (commit_trx ||
@@ -721,9 +733,24 @@ ha_rows ha_duckdb::records()
   DBUG_RETURN(10);
 }
 
-int ha_duckdb::extra(enum ha_extra_function)
+int ha_duckdb::extra(enum ha_extra_function operation)
 {
   DBUG_ENTER("ha_duckdb::extra");
+  THD *thd= ha_thd();
+  auto *ctx= get_duckdb_context(thd);
+
+  switch (operation)
+  {
+  case HA_EXTRA_BEGIN_ALTER_COPY:
+    ctx->set_in_copy_ddl(true);
+    break;
+  case HA_EXTRA_END_ALTER_COPY:
+  case HA_EXTRA_ABORT_ALTER_COPY:
+    ctx->set_in_copy_ddl(false);
+    break;
+  default:
+    break;
+  }
   DBUG_RETURN(0);
 }
 
@@ -921,7 +948,7 @@ int ha_duckdb::create(const char *name, TABLE *form,
 
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    push_duckdb_query_error(query_result->GetError());
     DBUG_RETURN(HA_DUCKDB_CREATE_ERROR);
   }
 
@@ -1052,7 +1079,8 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
   if (ret)
     DBUG_RETURN(true);
 
-  ulonglong flags= ha_alter_info->alter_info->flags;
+  ulonglong handler_flags= ha_alter_info->handler_flags;
+  ulonglong sql_flags= ha_alter_info->alter_info->flags;
 
   using DDL_convertor= std::unique_ptr<AlterTableConvertor>;
   using DDL_convertors= std::vector<DDL_convertor>;
@@ -1063,31 +1091,32 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
   std::string table_name(table->s->table_name.str,
                          table->s->table_name.length);
 
-  if (flags & ALTER_ADD_COLUMN)
+  if (handler_flags & ALTER_ADD_COLUMN)
   {
     convertor= std::make_unique<AddColumnConvertor>(
         schema_name, table_name, altered_table, ha_alter_info->alter_info);
     convertors.push_back(std::move(convertor));
   }
 
-  if (flags & ALTER_DROP_COLUMN)
+  if (handler_flags & ALTER_DROP_COLUMN)
   {
-    convertor=
-        std::make_unique<DropColumnConvertor>(schema_name, table_name, table);
+    convertor= std::make_unique<DropColumnConvertor>(
+        schema_name, table_name, table, altered_table,
+        ha_alter_info->alter_info);
     convertors.push_back(std::move(convertor));
   }
 
-  if (flags & ALTER_CHANGE_COLUMN)
+  if ((sql_flags & ALTER_CHANGE_COLUMN) || (handler_flags & ALTER_COLUMN_NAME))
   {
     convertor= std::make_unique<ChangeColumnConvertor>(
         schema_name, table_name, altered_table, ha_alter_info->alter_info);
     convertors.push_back(std::move(convertor));
   }
 
-  if (flags & ALTER_CHANGE_COLUMN_DEFAULT)
+  if (sql_flags & ALTER_CHANGE_COLUMN_DEFAULT)
   {
     convertor= std::make_unique<ChangeColumnDefaultConvertor>(
-        schema_name, table_name, altered_table, ha_alter_info->alter_info);
+        schema_name, table_name, table, altered_table);
     convertors.push_back(std::move(convertor));
   }
 
@@ -1095,7 +1124,7 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
     When adding a primary key, set NOT NULL on the corresponding columns
     in DuckDB (DuckDB doesn't have indexes, but needs the constraint).
   */
-  if (flags & ALTER_ADD_INDEX)
+  if (sql_flags & ALTER_ADD_INDEX)
   {
     convertor= std::make_unique<ChangeColumnForPrimaryKeyConvertor>(
         schema_name, table_name, altered_table);

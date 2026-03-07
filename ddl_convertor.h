@@ -210,9 +210,11 @@ class DropColumnConvertor : public AlterTableConvertor
 {
 public:
   DropColumnConvertor(const std::string &schema_name,
-                      const std::string &table_name, const TABLE *old_table)
+                      const std::string &table_name, const TABLE *old_table,
+                      const TABLE *new_table, Alter_info *alter_info)
       : AlterTableConvertor(schema_name, table_name, DROP_COLUMN),
-        m_old_table(old_table)
+        m_old_table(old_table), m_new_table(new_table),
+        m_alter_info(alter_info)
   {
     prepare_columns();
   }
@@ -225,6 +227,12 @@ public:
 private:
   /** old TABLE */
   const TABLE *m_old_table;
+
+  /** new TABLE (altered) */
+  const TABLE *m_new_table;
+
+  /** Alter options, fields and keys for the new version of table. */
+  Alter_info *m_alter_info;
 
   /** Columns to drop */
   Columns m_columns_to_drop;
@@ -239,9 +247,9 @@ class ChangeColumnDefaultConvertor : public AlterTableConvertor
 public:
   ChangeColumnDefaultConvertor(const std::string &schema_name,
                                const std::string &table_name,
-                               const TABLE *new_table, Alter_info *alter_info)
+                               const TABLE *old_table, const TABLE *new_table)
       : AlterTableConvertor(schema_name, table_name, ALTER_COLUMN),
-        m_new_table(new_table), m_alter_info(alter_info)
+        m_old_table(old_table), m_new_table(new_table)
   {
     prepare_columns();
   }
@@ -251,11 +259,11 @@ public:
   std::string translate() override;
 
 private:
-  /** new TABLE */
-  const TABLE *m_new_table;
+  /** old TABLE */
+  const TABLE *m_old_table;
 
-  /** Alter options, fields and keys for the new version of table. */
-  Alter_info *m_alter_info;
+  /** new TABLE (altered) */
+  const TABLE *m_new_table;
 
   /** Columns to set default */
   Columns m_columns_to_set_default;
@@ -263,7 +271,7 @@ private:
   /** Columns to drop default */
   Columns m_columns_to_drop_default;
 
-  /** Prepare columns to set default and drop default. */
+  /** Prepare columns by comparing old and new table defaults. */
   void prepare_columns();
 };
 
