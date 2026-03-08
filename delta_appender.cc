@@ -230,9 +230,8 @@ bool DeltaAppender::Initialize(TABLE *table)
     std::string schema_name("main");
     try
     {
-      m_appender= std::make_unique<duckdb::Appender>(
-          *m_con, schema_name, m_tmp_table_name,
-          duckdb::AppenderType::PHYSICAL);
+      m_appender= std::make_unique<duckdb::Appender>(*m_con, schema_name,
+                                                     m_tmp_table_name);
     }
     catch (std::exception &ex)
     {
@@ -268,8 +267,8 @@ bool DeltaAppender::Initialize(TABLE *table)
   {
     try
     {
-      m_appender= std::make_unique<duckdb::Appender>(
-          *m_con, m_schema_name, m_table_name, duckdb::AppenderType::PHYSICAL);
+      m_appender= std::make_unique<duckdb::Appender>(*m_con, m_schema_name,
+                                                     m_table_name);
     }
     catch (std::exception &ex)
     {
@@ -340,14 +339,18 @@ int DeltaAppender::append_mysql_field(const Field *field_arg,
       }
 
       if (precision_val <= duckdb::Decimal::MAX_WIDTH_INT16)
-        appender->Append<int16_t>(get_duckdb_decimal<int16_t>(value, dec));
+        appender->Append(duckdb::Value::DECIMAL(
+            get_duckdb_decimal<int16_t>(value, dec), precision_val, dec));
       else if (precision_val <= duckdb::Decimal::MAX_WIDTH_INT32)
-        appender->Append<int32_t>(get_duckdb_decimal<int32_t>(value, dec));
+        appender->Append(duckdb::Value::DECIMAL(
+            get_duckdb_decimal<int32_t>(value, dec), precision_val, dec));
       else if (precision_val <= duckdb::Decimal::MAX_WIDTH_INT64)
-        appender->Append<int64_t>(get_duckdb_decimal<int64_t>(value, dec));
+        appender->Append(duckdb::Value::DECIMAL(
+            get_duckdb_decimal<int64_t>(value, dec), precision_val, dec));
       else
-        appender->Append<duckdb::hugeint_t>(
-            get_duckdb_decimal<duckdb::hugeint_t>(value, dec));
+        appender->Append(duckdb::Value::DECIMAL(
+            get_duckdb_decimal<duckdb::hugeint_t>(value, dec), precision_val,
+            dec));
     }
     else if (myduck::use_double_for_decimal)
     {
@@ -365,8 +368,8 @@ int DeltaAppender::append_mysql_field(const Field *field_arg,
                  "Decimal value out of range for DECIMAL(38,...)");
         return HA_DUCKDB_APPEND_ERROR;
       }
-      appender->Append<duckdb::hugeint_t>(
-          get_duckdb_decimal<duckdb::hugeint_t>(value, dec));
+      appender->Append(duckdb::Value::DECIMAL(
+          get_duckdb_decimal<duckdb::hugeint_t>(value, dec), 38, dec));
     }
     break;
   }

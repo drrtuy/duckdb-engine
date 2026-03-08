@@ -43,7 +43,6 @@ bool DuckdbManager::Initialize()
   duckdb::DBConfig config;
 
   config.options.use_direct_io= global_use_dio;
-  config.options.scheduler_process_partial= global_scheduler_process_partial;
 
   if (global_max_threads != 0)
     config.options.maximum_threads= global_max_threads;
@@ -63,10 +62,6 @@ bool DuckdbManager::Initialize()
 
   if (global_max_temp_directory_size != 0)
     config.options.maximum_swap_space= global_max_temp_directory_size;
-
-  if (appender_allocator_flush_threshold != 0)
-    config.options.appender_allocator_flush_threshold=
-        appender_allocator_flush_threshold;
 
   config.options.checkpoint_wal_size= checkpoint_threshold;
 

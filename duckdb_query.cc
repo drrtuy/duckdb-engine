@@ -34,15 +34,26 @@ extern handlerton *duckdb_hton;
 namespace myduck
 {
 
+static std::string backticks_to_double_quotes(const std::string &sql)
+{
+  std::string out(sql);
+  for (auto &ch : out)
+    if (ch == '`')
+      ch= '"';
+  return out;
+}
+
 std::unique_ptr<duckdb::QueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query)
 {
+  const std::string q= backticks_to_double_quotes(query);
+
   if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", query.c_str());
+    sql_print_information("DuckDB query: %s", q.c_str());
 
   try
   {
-    auto res= connection.Query(query);
+    auto res= connection.Query(q);
 
     if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT)
     {
