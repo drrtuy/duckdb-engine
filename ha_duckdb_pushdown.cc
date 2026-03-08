@@ -16,6 +16,7 @@
 */
 
 #define MYSQL_SERVER 1
+#include <algorithm>
 #include <my_global.h>
 #include "sql_class.h"
 #include "sql_select.h"
@@ -37,8 +38,7 @@ static bool all_tables_are_duckdb(SELECT_LEX *sel_lex)
   if (!sel_lex->join)
     return false;
 
-  for (TABLE_LIST *tbl= sel_lex->join->tables_list;
-       tbl; tbl= tbl->next_local)
+  for (TABLE_LIST *tbl= sel_lex->join->tables_list; tbl; tbl= tbl->next_local)
   {
     if (!tbl->table)
       return false;
@@ -52,8 +52,8 @@ static bool all_tables_are_duckdb(SELECT_LEX *sel_lex)
   }
 
   /* Check inner units (subqueries) recursively */
-  for (SELECT_LEX_UNIT *un= sel_lex->first_inner_unit();
-       un; un= un->next_unit())
+  for (SELECT_LEX_UNIT *un= sel_lex->first_inner_unit(); un;
+       un= un->next_unit())
   {
     for (SELECT_LEX *sl= un->first_select(); sl; sl= sl->next_select())
     {
@@ -67,9 +67,8 @@ static bool all_tables_are_duckdb(SELECT_LEX *sel_lex)
 
 /* ----- Factory function ----- */
 
-select_handler *
-create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
-                             SELECT_LEX_UNIT *sel_unit)
+select_handler *create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
+                                             SELECT_LEX_UNIT *sel_unit)
 {
   /*
     Only handle plain SELECT and INSERT ... SELECT for now.
@@ -97,8 +96,7 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
                                                    SELECT_LEX *sel_lex,
                                                    SELECT_LEX_UNIT *sel_unit)
     : select_handler(thd_arg, duckdb_hton, sel_lex, sel_unit),
-      current_row_index(0),
-      query_string(thd_arg->charset())
+      current_row_index(0), query_string(thd_arg->charset())
 {
   query_string.length(0);
 
@@ -120,13 +118,17 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
   }
 }
 
-ha_duckdb_select_handler::~ha_duckdb_select_handler() = default;
+ha_duckdb_select_handler::~ha_duckdb_select_handler()= default;
 
 int ha_duckdb_select_handler::init_scan()
 {
   DBUG_ENTER("ha_duckdb_select_handler::init_scan");
 
   std::string sql(query_string.ptr(), query_string.length());
+
+  // SELECT_LEX::print() quotes identifiers with backticks (MySQL style).
+  // DuckDB uses double quotes for identifiers, so convert them.
+  std::replace(sql.begin(), sql.end(), '`', '"');
 
   query_result= myduck::duckdb_query(thd, sql, true);
 

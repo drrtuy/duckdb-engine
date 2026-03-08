@@ -213,15 +213,15 @@ bool DeltaAppender::Initialize(TABLE *table)
     m_tmp_table_name= buf_table_name(m_schema_name, m_table_name);
 
     std::stringstream ss;
-    ss << "CREATE TEMPORARY TABLE IF NOT EXISTS main.`" << m_tmp_table_name
-       << "` AS FROM `" << m_schema_name << "`.`" << m_table_name
-       << "` LIMIT 0;";
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#mdb_delete_flag` BOOL;";
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#mdb_row_no` INT;";
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#mdb_trx_no` INT;";
+    ss << "CREATE TEMPORARY TABLE IF NOT EXISTS main.\"" << m_tmp_table_name
+       << "\" AS FROM \"" << m_schema_name << "\".\"" << m_table_name
+       << "\" LIMIT 0;";
+    ss << "ALTER TABLE main.\"" << m_tmp_table_name
+       << "\" ADD COLUMN \"#mdb_delete_flag\" BOOL;";
+    ss << "ALTER TABLE main.\"" << m_tmp_table_name
+       << "\" ADD COLUMN \"#mdb_row_no\" INT;";
+    ss << "ALTER TABLE main.\"" << m_tmp_table_name
+       << "\" ADD COLUMN \"#mdb_trx_no\" INT;";
 
     auto ret= myduck::duckdb_query(*m_con, ss.str());
     if (ret->HasError())
@@ -248,9 +248,9 @@ bool DeltaAppender::Initialize(TABLE *table)
     {
       if (i)
         m_pk_list+= ", ";
-      m_pk_list+= "`";
+      m_pk_list+= "\"";
       m_pk_list+= key_part->field->field_name.str;
-      m_pk_list+= "`";
+      m_pk_list+= "\"";
       bitmap_set_bit(&m_pk_bitmap, key_part->field->field_index);
     }
 
@@ -258,9 +258,9 @@ bool DeltaAppender::Initialize(TABLE *table)
     {
       if (i)
         m_col_list+= ", ";
-      m_col_list+= "`";
+      m_col_list+= "\"";
       m_col_list+= table->field[i]->field_name.str;
-      m_col_list+= "`";
+      m_col_list+= "\"";
     }
   }
   else
@@ -469,30 +469,31 @@ static void appendSelectQuery(std::stringstream &ss,
                               const std::string &table_name, int delete_flag)
 {
   ss << "SELECT UNNEST(r) FROM (SELECT LAST(ROW(" << select_list
-     << ") ORDER BY `#mdb_row_no`) AS r, "
-        "LAST(`#mdb_delete_flag` ORDER BY `#mdb_row_no`) AS "
-        "`#mdb_delete_flag` FROM main.`"
-     << table_name << "` GROUP BY " << pk_list << ")";
+     << ") ORDER BY \"#mdb_row_no\") AS r, "
+        "LAST(\"#mdb_delete_flag\" ORDER BY \"#mdb_row_no\") AS "
+        "\"#mdb_delete_flag\" FROM main.\""
+     << table_name << "\" GROUP BY " << pk_list << ")";
   if (!delete_flag)
-    ss << " WHERE `#mdb_delete_flag` = " << delete_flag;
+    ss << " WHERE \"#mdb_delete_flag\" = " << delete_flag;
 }
 
 void DeltaAppender::generateQuery(std::stringstream &ss, bool delete_flag)
 {
   ss.str("");
-  ss << "USE `" << m_schema_name << "`; ";
+  ss << "USE \"" << m_schema_name << "\"; ";
 
   if (!delete_flag)
   {
-    ss << "INSERT INTO `" << m_schema_name << "`.`" << m_table_name << "` ";
+    ss << "INSERT INTO \"" << m_schema_name << "\".\"" << m_table_name
+       << "\" ";
     appendSelectQuery(ss, m_col_list, m_pk_list, m_tmp_table_name,
                       delete_flag);
     ss << ";";
   }
   else
   {
-    ss << "DELETE FROM `" << m_schema_name << "`.`" << m_table_name
-       << "` WHERE (" << m_pk_list << ") IN (";
+    ss << "DELETE FROM \"" << m_schema_name << "\".\"" << m_table_name
+       << "\" WHERE (" << m_pk_list << ") IN (";
     appendSelectQuery(ss, m_pk_list, m_pk_list, m_tmp_table_name, delete_flag);
     ss << ");";
   }
@@ -523,7 +524,7 @@ bool DeltaAppender::flush(bool idempotent_flag)
     }
 
     ss.str("");
-    ss << "DROP TABLE main.`" << m_tmp_table_name << "`";
+    ss << "DROP TABLE main.\"" << m_tmp_table_name << "\"";
     auto ret= myduck::duckdb_query(*m_con, ss.str());
     if (ret->HasError())
       return true;
@@ -538,8 +539,8 @@ bool DeltaAppender::rollback(ulonglong trx_no)
   {
     m_appender->Flush();
     std::stringstream ss;
-    ss << "DELETE FROM main.`" << m_tmp_table_name
-       << "` WHERE `#mdb_trx_no` = " << trx_no;
+    ss << "DELETE FROM main.\"" << m_tmp_table_name
+       << "\" WHERE \"#mdb_trx_no\" = " << trx_no;
     auto ret= myduck::duckdb_query(*m_con, ss.str());
     if (ret->HasError())
       return true;
@@ -553,7 +554,7 @@ void DeltaAppender::cleanup()
   {
     my_bitmap_free(&m_pk_bitmap);
     std::stringstream ss;
-    ss << "DROP TABLE IF EXISTS main.`" << m_tmp_table_name << "`;";
+    ss << "DROP TABLE IF EXISTS main.\"" << m_tmp_table_name << "\";";
     myduck::duckdb_query(*m_con, ss.str());
   }
 }

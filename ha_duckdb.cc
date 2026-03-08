@@ -187,9 +187,9 @@ static void duckdb_drop_database(handlerton *hton, char *path)
 
   Databasename db(path);
 
-  std::string query= "DROP SCHEMA IF EXISTS `";
+  std::string query= "DROP SCHEMA IF EXISTS \"";
   query.append(db.name);
-  query.append("`");
+  query.append("\"");
 
   duckdb_register_trx(thd);
   auto *ctx= get_duckdb_context(thd);
@@ -618,7 +618,7 @@ int ha_duckdb::rnd_init(bool)
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
 
   std::string query=
-      "SELECT * FROM `" + schema_name + "`.`" + table_name + "`";
+      "SELECT * FROM \"" + schema_name + "\".\"" + table_name + "\"";
 
   auto *ctx= get_duckdb_context(thd);
   query_result= myduck::duckdb_query(ctx->get_connection(), query);
@@ -769,15 +769,15 @@ int ha_duckdb::delete_all_rows()
   /* Discard any pending batch rows for this table */
   ctx->delete_appender(table->s->db.str, table->s->table_name.str);
 
-  /* Execute DELETE FROM `schema`.`table` */
+  /* Execute DELETE FROM "schema"."table" */
   char buf[256];
   String query(buf, sizeof(buf), &my_charset_bin);
   query.length(0);
-  query.append(STRING_WITH_LEN("DELETE FROM `"));
+  query.append(STRING_WITH_LEN("DELETE FROM \""));
   query.append(table->s->db.str, table->s->db.length);
-  query.append(STRING_WITH_LEN("`.`"));
+  query.append(STRING_WITH_LEN("\".\""));
   query.append(table->s->table_name.str, table->s->table_name.length);
-  query.append(STRING_WITH_LEN("`"));
+  query.append(STRING_WITH_LEN("\""));
 
   auto query_result= myduck::duckdb_query(
       ctx->get_connection(), std::string(query.c_ptr_safe(), query.length()));
@@ -967,8 +967,8 @@ int ha_duckdb::delete_table(const char *name)
   DatabaseTableNames dt(name);
 
   std::ostringstream query;
-  query << "USE `" << dt.db_name << "`;";
-  query << "DROP TABLE IF EXISTS `" << dt.table_name << "`;";
+  query << "USE \"" << dt.db_name << "\";";
+  query << "DROP TABLE IF EXISTS \"" << dt.table_name << "\";";
 
   auto *ctx= get_duckdb_context(thd);
   auto query_result= myduck::duckdb_query(ctx->get_connection(), query.str());
@@ -1027,8 +1027,8 @@ int ha_duckdb::truncate()
                          table->s->table_name.length);
 
   std::ostringstream query;
-  query << "USE `" << schema_name << "`;";
-  query << "TRUNCATE TABLE `" << table_name << "`;";
+  query << "USE \"" << schema_name << "\";";
+  query << "TRUNCATE TABLE \"" << table_name << "\";";
 
   auto *ctx= get_duckdb_context(thd);
   auto query_result= myduck::duckdb_query(ctx->get_connection(), query.str());
