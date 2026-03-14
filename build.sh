@@ -8,7 +8,9 @@ MDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION"/../../)
 DUCKDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION")
 BUILD_PATH=$(realpath "$MDB_SOURCE_PATH"/../DuckdbBuildOf_$(basename "$MDB_SOURCE_PATH"))
 CPUS=$(getconf _NPROCESSORS_ONLN)
-BUILD_TYPE="${BUILD_TYPE:-Debug}"
+BUILD_TYPE_OPTIONS=("Debug" "RelWithDebInfo")
+BUILD_TYPE="${BUILD_TYPE:-}"
+DISTRO_OPTIONS=("ubuntu:22.04" "ubuntu:24.04" "debian:12" "rockylinux:8" "rockylinux:9")
 DEFAULT_MDB_DATADIR="/var/lib/mysql"
 USER="mysql"
 GROUP="mysql"
@@ -16,9 +18,11 @@ INSTALL_PREFIX="/usr/"
 
 usage() {
     echo "Usage: $0 [options]"
-    echo "  -t <type>   Build type: Debug|RelWithDebInfo (default: Debug)"
+    echo "  -t <type>   Build type: ${BUILD_TYPE_OPTIONS[*]} (interactive if omitted)"
+    echo "  -d <distro> Distro: ${DISTRO_OPTIONS[*]} (auto-detected if omitted)"
     echo "  -j <N>      Number of parallel jobs (default: $CPUS)"
     echo "  -c          CI mode: only build, skip install"
+    echo "  -p          Build packages (DEB or RPM)"
     echo "  -S          Start MariaDB after build"
     echo "  -n          No clean: keep existing data files"
     echo "  -h          Show this help"
@@ -28,12 +32,16 @@ usage() {
 CI_MODE=false
 START_MDB=false
 NO_CLEAN=false
+BUILD_PACKAGES=false
+OS=""
 
-while getopts "t:j:cSnh" opt; do
+while getopts "t:d:j:cpSnh" opt; do
     case $opt in
         t) BUILD_TYPE="$OPTARG" ;;
+        d) OS="$OPTARG" ;;
         j) CPUS="$OPTARG" ;;
         c) CI_MODE=true ;;
+        p) BUILD_PACKAGES=true ;;
         S) START_MDB=true ;;
         n) NO_CLEAN=true ;;
         h) usage ;;
@@ -41,11 +49,66 @@ while getopts "t:j:cSnh" opt; do
     esac
 done
 
+if [[ ! " ${BUILD_TYPE_OPTIONS[*]} " =~ " ${BUILD_TYPE} " ]]; then
+    echo "Select build type:"
+    select BUILD_TYPE in "${BUILD_TYPE_OPTIONS[@]}"; do
+        if [[ -n "$BUILD_TYPE" ]]; then
+            break
+        fi
+        echo "Invalid selection, try again."
+    done
+fi
+
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        local os_name=$(echo "$NAME" | cut -f1 -d" " | tr '[:upper:]' '[:lower:]')
+        OS="${os_name}:${VERSION_ID}"
+    elif [ -f /etc/lsb-release ]; then
+        . /etc/lsb-release
+        OS=$(echo "$DISTRIB_ID" | tr '[:upper:]' '[:lower:]'):"$DISTRIB_RELEASE"
+    else
+        echo "!!!! Cannot detect distro, specify with -d !!!!"
+        exit 1
+    fi
+    echo "  Detected distro: $OS"
+}
+
+select_pkg_format() {
+    if [[ "$1" == *rocky* ]]; then
+        PKG_FORMAT="rpm"
+    else
+        PKG_FORMAT="deb"
+    fi
+}
+
+if [[ $BUILD_PACKAGES = true ]]; then
+    if [[ ! " ${DISTRO_OPTIONS[*]} " =~ " ${OS} " ]]; then
+        if [[ -z "$OS" ]]; then
+            echo "Distro not specified, detecting..."
+            detect_distro
+        fi
+        if [[ ! " ${DISTRO_OPTIONS[*]} " =~ " ${OS} " ]]; then
+            echo "Select distro:"
+            select OS in "${DISTRO_OPTIONS[@]}"; do
+                if [[ -n "$OS" ]]; then
+                    break
+                fi
+                echo "Invalid selection, try again."
+            done
+        fi
+    fi
+    select_pkg_format "$OS"
+fi
+
 echo "=== DuckDB Storage Engine Build ==="
 echo "  Source:     $MDB_SOURCE_PATH"
 echo "  Build dir:  $BUILD_PATH"
 echo "  Build type: $BUILD_TYPE"
 echo "  Jobs:       $CPUS"
+if [[ $BUILD_PACKAGES = true ]]; then
+    echo "  Packages:   $PKG_FORMAT ($OS)"
+fi
 echo ""
 
 check_user_and_group() {
@@ -123,48 +186,101 @@ create_config() {
     cp "$DUCKDB_SOURCE_PATH/duckdb.cnf" /etc/my.cnf.d/duckdb.cnf
 }
 
-MDB_CMAKE_FLAGS=(
-    -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-    -DCMAKE_INSTALL_PREFIX:PATH=$INSTALL_PREFIX
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=1
-    -DPLUGIN_ARCHIVE=NO
-    -DPLUGIN_BLACKHOLE=NO
-    -DPLUGIN_FEDERATED=NO
-    -DPLUGIN_FEDERATEDX=NO
-    -DPLUGIN_CONNECT=NO
-    -DPLUGIN_MROONGA=NO
-    -DPLUGIN_OQGRAPH=NO
-    -DPLUGIN_ROCKSDB=NO
-    -DPLUGIN_SPHINX=NO
-    -DPLUGIN_SPIDER=NO
-    -DPLUGIN_TOKUDB=NO
-    -DPLUGIN_COLUMNSTORE=NO
-    -DWITH_EMBEDDED_SERVER=NO
-    -DWITH_WSREP=NO
-    -DWITH_SSL=system
-    -DWITH_SAFEMALLOC=OFF
-    -DMYSQL_MAINTAINER_MODE=OFF
-    -DPLUGIN_DUCKDB=YES
-    -DWITH_SBOM=0
-    -DDEB=noble
-    -DINSTALL_LAYOUT=DEB
-    -DDBUG_ON=1
-)
+construct_cmake_flags() {
+    MDB_CMAKE_FLAGS=(
+        -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+        -DCMAKE_INSTALL_PREFIX:PATH=$INSTALL_PREFIX
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+        -DPLUGIN_ARCHIVE=NO
+        -DPLUGIN_BLACKHOLE=NO
+        -DPLUGIN_FEDERATED=NO
+        -DPLUGIN_FEDERATEDX=NO
+        -DPLUGIN_CONNECT=NO
+        -DPLUGIN_MROONGA=NO
+        -DPLUGIN_OQGRAPH=NO
+        -DPLUGIN_ROCKSDB=NO
+        -DPLUGIN_SPHINX=NO
+        -DPLUGIN_SPIDER=NO
+        -DPLUGIN_TOKUDB=NO
+        -DPLUGIN_COLUMNSTORE=NO
+        -DWITH_EMBEDDED_SERVER=NO
+        -DWITH_WSREP=NO
+        -DWITH_SSL=system
+        -DWITH_SAFEMALLOC=OFF
+        -DMYSQL_MAINTAINER_MODE=OFF
+        -DPLUGIN_DUCKDB=YES
+        -DWITH_SBOM=0
+        -DDBUG_ON=1
+    )
 
-echo "--- Configuring ---"
-cmake "${MDB_CMAKE_FLAGS[@]}" -S"$MDB_SOURCE_PATH" -B"$BUILD_PATH"
+    if [[ $BUILD_PACKAGES = true ]]; then
+        if [[ "$PKG_FORMAT" == "rpm" ]]; then
+            local os_version=${OS//[^0-9]/}
+            if [[ "$OS" == *rocky* ]]; then
+                MDB_CMAKE_FLAGS+=(-DRPM=rockylinux${os_version})
+            fi
+        else
+            local codename=""
+            case "$OS" in
+                debian:12*)   codename="bookworm" ;;
+                ubuntu:22.04) codename="jammy" ;;
+                ubuntu:24.04) codename="noble" ;;
+                *)            echo "!!!! Unknown DEB codename for $OS !!!!"; exit 1 ;;
+            esac
+            MDB_CMAKE_FLAGS+=(-DDEB=${codename} -DINSTALL_LAYOUT=DEB)
+        fi
+    else
+        MDB_CMAKE_FLAGS+=(-DDEB=noble -DINSTALL_LAYOUT=DEB)
+    fi
+}
 
-echo "--- Building ---"
-cmake --build "$BUILD_PATH" -j "$CPUS"
+construct_cmake_flags
 
-if [ $? -ne 0 ]; then
-    echo "!!!! BUILD FAILED !!!!"
-    exit 1
+build_binary() {
+    echo "--- Configuring ---"
+    cmake "${MDB_CMAKE_FLAGS[@]}" -S"$MDB_SOURCE_PATH" -B"$BUILD_PATH"
+
+    echo "--- Building ---"
+    cmake --build "$BUILD_PATH" -j "$CPUS"
+
+    if [ $? -ne 0 ]; then
+        echo "!!!! BUILD FAILED !!!!"
+        exit 1
+    fi
+
+    echo ""
+    echo "--- Adding compile_commands.json symlink ---"
+    ln -sf "$BUILD_PATH/compile_commands.json" "$MDB_SOURCE_PATH"
+}
+
+build_package() {
+    echo "--- Building $PKG_FORMAT package for $OS ---"
+
+    if [[ "$PKG_FORMAT" == "rpm" ]]; then
+        cd "$BUILD_PATH"
+        make -j "$CPUS" package
+    else
+        cd "$MDB_SOURCE_PATH"
+        export DEBIAN_FRONTEND="noninteractive"
+        export DEB_BUILD_OPTIONS="parallel=$CPUS"
+        export BUILDPACKAGE_FLAGS="-b"
+        CMAKEFLAGS="${MDB_CMAKE_FLAGS[*]}" debian/autobake-deb.sh
+    fi
+
+    if [ $? -ne 0 ]; then
+        echo "!!!! PACKAGE BUILD FAILED !!!!"
+        exit 1
+    fi
+    echo "--- Packages ready ---"
+}
+
+build_binary
+
+if [[ $BUILD_PACKAGES = true ]]; then
+    build_package
+    echo "=== BUILD FINISHED ==="
+    exit 0
 fi
-
-echo ""
-echo "--- Adding compile_commands.json symlink ---"
-ln -sf "$BUILD_PATH/compile_commands.json" "$MDB_SOURCE_PATH"
 
 if [[ $CI_MODE = false ]]; then
     check_user_and_group "$USER"
@@ -187,9 +303,8 @@ if [[ $START_MDB = true ]]; then
     start_mdb
     setup_dev_user
 
-    echo "--- Creating duckdb_query_udf ---"
-    "$INSTALL_PREFIX/bin/mariadb" -e \
-        "CREATE FUNCTION IF NOT EXISTS duckdb_query_udf RETURNS STRING SONAME 'ha_duckdb.so';"
+    echo "--- Registering DuckDB UDFs ---"
+    "$INSTALL_PREFIX/bin/mariadb" < "$DUCKDB_SOURCE_PATH/scripts/install.sql"
 fi
 
 echo "=== BUILD FINISHED ==="
