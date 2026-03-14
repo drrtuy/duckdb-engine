@@ -710,9 +710,9 @@ test	t	id	NULL	NO	int
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = DuckDB;
 CREATE TABLE t1(id INT PRIMARY KEY, a INT INVISIBLE) ENGINE = DuckDB;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'a'
 ALTER TABLE t ADD COLUMN d INT INVISIBLE, ALGORITHM = INSTANT;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'd'
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INSTANT;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INSTANT' at line 1
 ALTER TABLE t MODIFY COLUMN c INT AUTO_INCREMENT KEY, ALGORITHM = INSTANT;
@@ -1585,9 +1585,9 @@ test	t	id	NULL	NO	int
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = DuckDB;
 CREATE TABLE t1(id INT PRIMARY KEY, a INT INVISIBLE) ENGINE = DuckDB;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'a'
 ALTER TABLE t ADD COLUMN d INT INVISIBLE, ALGORITHM = INPLACE;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'd'
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INPLACE;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INPLACE' at line 1
 ALTER TABLE t MODIFY COLUMN c INT AUTO_INCREMENT KEY, ALGORITHM = INPLACE;
@@ -2460,9 +2460,9 @@ test	t	id	NULL	NO	int
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = DuckDB;
 CREATE TABLE t1(id INT PRIMARY KEY, a INT INVISIBLE) ENGINE = DuckDB;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'a'
 ALTER TABLE t ADD COLUMN d INT INVISIBLE, ALGORITHM = COPY;
-ERROR 0A000: invisible column is not supported is not supported for this operation. Try invisible column is not supported
+ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'd'
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = COPY;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = COPY' at line 1
 ALTER TABLE t MODIFY COLUMN c INT AUTO_INCREMENT KEY, ALGORITHM = COPY;

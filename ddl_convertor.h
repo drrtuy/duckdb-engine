@@ -352,4 +352,6 @@ private:
 std::string toHex(const char *data, size_t length);
 
 /* Report DuckDB table structure error */
-bool report_duckdb_table_struct_error(const std::string &err_msg);
+bool report_duckdb_table_struct_error(const char *err_msg,
+                                      const char *try_instead,
+                                      const char *column);

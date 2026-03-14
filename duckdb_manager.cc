@@ -64,6 +64,7 @@ bool DuckdbManager::Initialize()
     config.options.maximum_swap_space= global_max_temp_directory_size;
 
   config.options.checkpoint_wal_size= checkpoint_threshold;
+  config.options.scheduler_process_partial= global_scheduler_process_partial;
 
   /* Temp directory: user-specified or default (data directory) */
   {
@@ -81,10 +82,26 @@ bool DuckdbManager::Initialize()
   /* Store all tables in one file in the data directory */
   char path[FN_REFLEN];
   fn_format(path, DUCKDB_FILE_NAME, mysql_real_data_home, "", MYF(0));
-  m_database= new duckdb::DuckDB(path, &config);
 
-  if (m_database == nullptr)
+  try
+  {
+    m_database= new duckdb::DuckDB(path, &config);
+  }
+  catch (const std::exception &e)
+  {
+    sql_print_error("DuckDB: failed to open database at '%s': %s", path,
+                    e.what());
+    m_database= nullptr;
     return true;
+  }
+  catch (...)
+  {
+    sql_print_error("DuckDB: failed to open database at '%s': "
+                    "unknown exception",
+                    path);
+    m_database= nullptr;
+    return true;
+  }
 
   sql_print_information("DuckDB: DuckdbManager::Initialize succeed, path=%s",
                         path);
@@ -101,6 +118,18 @@ bool DuckdbManager::CreateInstance()
     sql_print_error("DuckDB: DuckdbManager::CreateInstance failed");
     return true;
   }
+
+  /* Eagerly initialize DuckDB so that errors are caught during plugin init
+     rather than later when the first query arrives. */
+  if (m_instance->Initialize())
+  {
+    sql_print_error("DuckDB: DuckdbManager::Initialize failed during "
+                    "CreateInstance");
+    delete m_instance;
+    m_instance= nullptr;
+    return true;
+  }
+
   return false;
 }
 
@@ -108,7 +137,14 @@ DuckdbManager::~DuckdbManager()
 {
   if (m_database != nullptr)
   {
-    delete m_database;
+    try
+    {
+      delete m_database;
+    }
+    catch (...)
+    {
+      sql_print_error("DuckDB: exception during DuckDB database destruction");
+    }
     m_database= nullptr;
   }
 }

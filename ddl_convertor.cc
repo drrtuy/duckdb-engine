@@ -33,9 +33,13 @@
 
 /* ----- Helpers ----- */
 
-bool report_duckdb_table_struct_error(const std::string &err_msg)
+bool report_duckdb_table_struct_error(const char *not_supported,
+                                      const char *try_instead,
+                                      const char *column)
 {
-  my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), err_msg.c_str());
+  char buf[512];
+  snprintf(buf, sizeof(buf), "%s '%s'", try_instead, column);
+  my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), not_supported, buf);
   return true;
 }
 
@@ -342,12 +346,15 @@ bool FieldConvertor::check()
 {
   /* not support auto_increment */
   if (m_field->flags & AUTO_INCREMENT_FLAG)
-    return report_duckdb_table_struct_error("AUTO_INCREMENT is not supported");
+    return report_duckdb_table_struct_error(
+        "AUTO_INCREMENT", "removing AUTO_INCREMENT from column",
+        m_field->field_name.str);
 
   /* No support for INVISIBLE columns. */
   if (m_field->invisible >= INVISIBLE_USER)
-    return report_duckdb_table_struct_error(
-        "invisible column is not supported");
+    return report_duckdb_table_struct_error("INVISIBLE column",
+                                            "removing INVISIBLE from column",
+                                            m_field->field_name.str);
 
   /* No support for non-utf8 charset. */
   if (m_field->has_charset())
@@ -358,7 +365,8 @@ bool FieldConvertor::check()
         strcmp(cs->cs_name.str, "utf8mb4") && strcmp(cs->cs_name.str, "ascii"))
     {
       return report_duckdb_table_struct_error(
-          "DuckDB only supports utf8, utf8mb4 and ascii character sets");
+          "non-utf8 charset", "using utf8mb4 charset for column",
+          m_field->field_name.str);
     }
   }
 
@@ -609,7 +617,8 @@ bool RenameTableConvertor::check()
   if (m_new_schema_name != m_schema_name)
   {
     return report_duckdb_table_struct_error(
-        "DuckDB does not support rename between different schema");
+        "cross-schema rename", "renaming within the same schema, not to",
+        m_new_schema_name.c_str());
   }
   return false;
 }

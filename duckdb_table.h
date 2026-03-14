@@ -19,12 +19,7 @@
 #ifndef DUCKDB_TABLE_H
 #define DUCKDB_TABLE_H
 
-#include <string>
-
 class TABLE;
-class THD;
-struct HA_CREATE_INFO;
-class Alter_info;
 
 namespace myduck
 {
@@ -34,11 +29,6 @@ namespace myduck
   @return true if the table is a DuckDB table, false otherwise
 */
 bool is_duckdb_table(const TABLE *table);
-
-/** Report error message of DuckDB table struct to user.
-  @param[in]  err_msg   error message
-  @return true always */
-bool report_duckdb_table_struct_error(const std::string &err_msg);
 
 } // namespace myduck
 

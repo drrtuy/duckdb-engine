@@ -22,21 +22,26 @@ SET(DUCKDB_SOURCES
 MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_SOURCES}
   STORAGE_ENGINE
   MODULE_ONLY
+  COMPONENT duckdb-engine
+  CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/duckdb.cnf
   LINK_LIBRARIES ${DUCKDB_LIBRARY}
 )
 
-# The pre-built libduckdb_bundle.a is compiled without debug STL wrappers
-# and with the old std::string ABI.  Strip the flags that MariaDB's debug
-# build adds so that our plugin's object files link cleanly against the lib.
+# libduckdb_bundle.a is built without debug STL wrappers.
+# Strip the flags that MariaDB's debug build adds so that our plugin's
+# object files see the same STL container layout as the library.
 IF(TARGET duckdb)
-  TARGET_COMPILE_DEFINITIONS(duckdb PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  GET_TARGET_PROPERTY(_duckdb_cxx_flags duckdb COMPILE_FLAGS)
-  IF(_duckdb_cxx_flags)
-    STRING(REPLACE "-D_GLIBCXX_DEBUG" "" _duckdb_cxx_flags "${_duckdb_cxx_flags}")
-    STRING(REPLACE "-D_GLIBCXX_ASSERTIONS" "" _duckdb_cxx_flags "${_duckdb_cxx_flags}")
-    SET_TARGET_PROPERTIES(duckdb PROPERTIES COMPILE_FLAGS "${_duckdb_cxx_flags}")
-  ENDIF()
-  # Also strip from the global DEBUG flags applied to this directory
-  STRING(REPLACE "-D_GLIBCXX_DEBUG" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-  STRING(REPLACE "-D_GLIBCXX_ASSERTIONS" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+  # libduckdb_bundle.a is built without debug STL wrappers.
+  # -U unconditionally undefines the macro no matter how it was inherited
+  # (CMAKE_CXX_FLAGS_DEBUG, directory properties, generator expressions, etc.).
+  # Mismatched _GLIBCXX_DEBUG changes sizeof(std::vector) and friends → SIGSEGV.
+  TARGET_COMPILE_OPTIONS(duckdb PRIVATE -U_GLIBCXX_DEBUG -U_GLIBCXX_ASSERTIONS)
+ENDIF()
+
+IF(TARGET duckdb)
+  INSTALL(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/install.sql
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/uninstall.sql
+    DESTINATION ${INSTALL_MYSQLSHAREDIR}/duckdb
+    COMPONENT duckdb-engine)
 ENDIF()

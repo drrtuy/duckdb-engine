@@ -3,7 +3,7 @@
 #
 # Test case for creating tables with various MySQL field types in DuckDB.
 #
---source include/have_debug.inc
+#--source include/have_debug.inc
 
 --disable_query_log
 SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;

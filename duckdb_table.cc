@@ -18,7 +18,6 @@
 
 #define MYSQL_SERVER 1
 #include <my_global.h>
-#include "mysqld_error.h"
 #include "handler.h"
 #include "table.h"
 
@@ -35,12 +34,6 @@ bool is_duckdb_table(const TABLE *table)
     return false;
 
   return (table->file->ht == duckdb_hton);
-}
-
-bool report_duckdb_table_struct_error(const std::string &err_msg)
-{
-  my_error(ER_UNKNOWN_ERROR, MYF(0), err_msg.c_str());
-  return true;
 }
 
 } // namespace myduck
