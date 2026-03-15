@@ -79,9 +79,6 @@ ExternalProject_Add(duckdb_build
   PREFIX          "${CMAKE_CURRENT_BINARY_DIR}/duckdb-prefix"
   SOURCE_DIR      "${DUCKDB_SUBMODULE_DIR}"
   BINARY_DIR      "${_DUCKDB_BUILD_DIR}"
-  PATCH_COMMAND   git -C "${DUCKDB_SUBMODULE_DIR}" checkout -- . &&
-                  git -C "${DUCKDB_SUBMODULE_DIR}" apply --whitespace=nowarn
-                    "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-octet_length-varchar.patch"
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=${_DUCKDB_BUILD_TYPE}
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
