@@ -82,7 +82,10 @@ duckdb_query(THD *thd, const std::string &query, bool need_config)
   auto *ctx=
       static_cast<DuckdbThdContext *>(thd_get_ha_data(thd, duckdb_hton));
   if (!ctx)
-    return duckdb_query(query);
+  {
+    ctx= new DuckdbThdContext();
+    thd_set_ha_data(thd, duckdb_hton, ctx);
+  }
 
   if (need_config)
     ctx->config_duckdb_env(thd);

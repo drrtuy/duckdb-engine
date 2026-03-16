@@ -100,22 +100,14 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
 {
   query_string.length(0);
 
-  if (get_pushdown_type() == select_pushdown_type::SINGLE_SELECT)
-  {
-    /*
-      Use SELECT_LEX_UNIT::print() to include possible CTEs
-      stored at SELECT_LEX_UNIT::with_clause.
-    */
-    sel_lex->master_unit()->print(&query_string, PRINT_QUERY_TYPE);
-  }
-  else if (get_pushdown_type() == select_pushdown_type::PART_OF_UNIT)
-  {
-    sel_lex->print(thd_arg, &query_string, PRINT_QUERY_TYPE);
-  }
-  else
-  {
-    DBUG_ASSERT(0);
-  }
+  /*
+    Use the original SQL text from THD instead of SELECT_LEX::print().
+    SELECT_LEX::print() converts implicit (comma) joins into explicit
+    "JOIN" without ON clauses, which DuckDB's parser rejects.
+    The select_handler intercepts the full query in all cases
+    (simple SELECT and UNION), so the original text is always usable.
+  */
+  query_string.append(thd_arg->query(), thd_arg->query_length());
 }
 
 ha_duckdb_select_handler::~ha_duckdb_select_handler()= default;
@@ -126,8 +118,12 @@ int ha_duckdb_select_handler::init_scan()
 
   std::string sql(query_string.ptr(), query_string.length());
 
-  // SELECT_LEX::print() quotes identifiers with backticks (MySQL style).
-  // DuckDB uses double quotes for identifiers, so convert them.
+  /*
+    SELECT_LEX::print() quotes identifiers with backticks (MySQL style).
+    DuckDB uses double quotes for identifiers, so convert them.
+    When using the original SQL, backticks may also appear if the user
+    quoted identifiers that way, so convert in both cases.
+  */
   std::replace(sql.begin(), sql.end(), '`', '"');
 
   query_result= myduck::duckdb_query(thd, sql, true);

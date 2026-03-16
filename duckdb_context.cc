@@ -16,6 +16,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335 USA
 */
 
+#define MYSQL_SERVER 1
 #include <my_global.h>
 #include "sql_class.h"
 #include "log.h"
@@ -27,9 +28,7 @@
 #include "duckdb_types.h"
 #include "ha_duckdb.h"
 #include "duckdb_timezone.h"
-#include "duckdb_charset_collation.h"
 
-#include <sstream>
 #include <vector>
 
 namespace myduck
@@ -53,6 +52,18 @@ static std::string disabled_optimizers_to_string(ulonglong val)
 void DuckdbThdContext::config_duckdb_env(THD *thd)
 {
   std::vector<std::string> config_sql;
+
+  /* Set current schema to match MariaDB's current database */
+  if (thd->db.str && thd->db.length > 0)
+  {
+    std::string schema(thd->db.str, thd->db.length);
+    if (schema != m_current_schema)
+    {
+      config_sql.push_back("CREATE SCHEMA IF NOT EXISTS \"" + schema + "\"");
+      config_sql.push_back("USE \"" + schema + "\"");
+      m_current_schema= schema;
+    }
+  }
 
   /* Timezone */
   std::string warn_msg;

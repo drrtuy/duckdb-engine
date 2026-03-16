@@ -411,9 +411,13 @@ std::string FieldConvertor::translate()
       if (!expr_str.empty())
         result << " DEFAULT (" << expr_str << ")";
     }
-    else
+    else if (field->table->s->default_values && field->table->record[0])
     {
-      /* Simple literal default — extract from record[1] (s->default_values) */
+      /*
+        Simple literal default — extract from s->default_values.
+        At ha_create() time these pointers may not be initialised yet
+        (e.g. nullable column without explicit DEFAULT), so guard.
+      */
       my_ptrdiff_t offset=
           field->table->s->default_values - field->table->record[0];
       std::string def= get_field_default_for_duckdb(field, offset);

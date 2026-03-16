@@ -150,6 +150,7 @@ private:
   ulonglong m_merge_join_threshold= 4611686018427387904ULL;
   ulonglong m_disabled_optimizers= 0;
   std::string m_explain_output_str;
+  std::string m_current_schema;
 };
 
 } // namespace myduck
