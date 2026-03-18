@@ -49,28 +49,38 @@ static std::string disabled_optimizers_to_string(ulonglong val)
   return result;
 }
 
-void DuckdbThdContext::config_duckdb_env(THD *thd)
+void DuckdbThdContext::config_duckdb_env(const std::string &schema)
+{
+  if (schema.empty() || schema == m_current_schema)
+    return;
+
+  std::string sql1= "CREATE SCHEMA IF NOT EXISTS \"" + schema + "\"";
+  std::string sql2= "USE \"" + schema + "\"";
+  m_current_schema= schema;
+
+  for (auto &sql : {sql1, sql2})
+  {
+    auto res= duckdb_query(get_connection(), sql);
+    if (res && res->HasError())
+      sql_print_warning("DuckDB: config_duckdb_env failed: %s (sql=%s)",
+                        res->GetError().c_str(), sql.c_str());
+  }
+}
+
+void DuckdbThdContext::config_duckdb_session(THD *thd)
 {
   std::vector<std::string> config_sql;
-
-  /* Set current schema to match MariaDB's current database */
-  if (thd->db.str && thd->db.length > 0)
-  {
-    std::string schema(thd->db.str, thd->db.length);
-    if (schema != m_current_schema)
-    {
-      config_sql.push_back("CREATE SCHEMA IF NOT EXISTS \"" + schema + "\"");
-      config_sql.push_back("USE \"" + schema + "\"");
-      m_current_schema= schema;
-    }
-  }
 
   /* Timezone */
   std::string warn_msg;
   std::string tz_name= get_timezone_according_thd(thd, warn_msg);
   if (!warn_msg.empty())
     sql_print_warning("DuckDB: %s", warn_msg.c_str());
-  config_sql.push_back("SET TimeZone = '" + tz_name + "'");
+  if (tz_name != m_current_timezone)
+  {
+    config_sql.push_back("SET TimeZone = '" + tz_name + "'");
+    m_current_timezone= tz_name;
+  }
 
   /* merge_join_threshold (session) */
   ulonglong mjt= get_thd_merge_join_threshold(thd);
@@ -103,7 +113,7 @@ void DuckdbThdContext::config_duckdb_env(THD *thd)
   {
     auto res= duckdb_query(get_connection(), sql);
     if (res && res->HasError())
-      sql_print_warning("DuckDB: config_duckdb_env failed: %s (sql=%s)",
+      sql_print_warning("DuckDB: config_duckdb_session failed: %s (sql=%s)",
                         res->GetError().c_str(), sql.c_str());
   }
 }

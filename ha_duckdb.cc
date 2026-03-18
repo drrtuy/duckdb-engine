@@ -628,6 +628,9 @@ int ha_duckdb::rnd_init(bool)
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
 
+  for (auto *field= table->field; *field; ++field)
+    bitmap_set_bit(table->write_set, (*field)->field_index);
+
   DBUG_RETURN(0);
 }
 
@@ -648,11 +651,6 @@ int ha_duckdb::rnd_next(uchar *buf)
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
 
   memset(buf, 0, table->s->reclength);
-
-  for (auto *field= table->field; *field; ++field)
-  {
-    bitmap_set_bit(table->write_set, (*field)->field_index);
-  }
 
   /* fetch new chunk when current chunk is empty */
   if (!current_chunk || current_row_index >= current_chunk->size())
@@ -767,20 +765,14 @@ int ha_duckdb::delete_all_rows()
   auto *ctx= get_duckdb_context(thd);
 
   /* Discard any pending batch rows for this table */
-  ctx->delete_appender(table->s->db.str, table->s->table_name.str);
+  DatabaseTableNames dt(table->s->normalized_path.str);
+  ctx->delete_appender(dt.db_name, dt.table_name);
 
   /* Execute DELETE FROM "schema"."table" */
-  char buf[256];
-  String query(buf, sizeof(buf), &my_charset_bin);
-  query.length(0);
-  query.append(STRING_WITH_LEN("DELETE FROM \""));
-  query.append(table->s->db.str, table->s->db.length);
-  query.append(STRING_WITH_LEN("\".\""));
-  query.append(table->s->table_name.str, table->s->table_name.length);
-  query.append(STRING_WITH_LEN("\""));
+  std::string query=
+      "DELETE FROM \"" + dt.db_name + "\".\"" + dt.table_name + "\"";
 
-  auto query_result= myduck::duckdb_query(
-      ctx->get_connection(), std::string(query.c_ptr_safe(), query.length()));
+  auto query_result= myduck::duckdb_query(ctx->get_connection(), query);
   if (query_result->HasError())
   {
     my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
@@ -829,7 +821,7 @@ int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
   /* Execute the original DELETE statement in DuckDB */
   LEX_STRING *qs= thd_query_string(thd);
   std::string query(qs->str, qs->length);
-  auto result= myduck::duckdb_query(ctx->get_connection(), query);
+  auto result= myduck::duckdb_query(thd, query, true);
   if (result->HasError())
   {
     my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
@@ -876,7 +868,7 @@ int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
   /* Execute the original UPDATE statement in DuckDB */
   LEX_STRING *qs= thd_query_string(thd);
   std::string query(qs->str, qs->length);
-  auto result= myduck::duckdb_query(ctx->get_connection(), query);
+  auto result= myduck::duckdb_query(thd, query, true);
   if (result->HasError())
   {
     my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
@@ -966,14 +958,13 @@ int ha_duckdb::delete_table(const char *name)
 
   DatabaseTableNames dt(name);
 
-  std::ostringstream query;
-  query << "USE \"" << dt.db_name << "\";";
-  query << "DROP TABLE IF EXISTS \"" << dt.table_name << "\";";
+  std::string query=
+      "DROP TABLE IF EXISTS \"" + dt.db_name + "\".\"" + dt.table_name + "\"";
 
   auto *ctx= get_duckdb_context(thd);
-  auto query_result= myduck::duckdb_query(ctx->get_connection(), query.str());
+  auto query_result= myduck::duckdb_query(ctx->get_connection(), query);
 
-  if (query_result == nullptr)
+  if (query_result == nullptr || query_result->HasError())
     DBUG_RETURN(HA_DUCKDB_DROP_TABLE_ERROR);
 
   DBUG_RETURN(0);
@@ -1047,7 +1038,7 @@ int ha_duckdb::truncate()
 static inline bool database_changed(const char *old_schema,
                                     const char *new_schema)
 {
-  return strncasecmp(old_schema, new_schema, strlen(old_schema)) != 0;
+  return strcasecmp(old_schema, new_schema) != 0;
 }
 
 enum_alter_inplace_result

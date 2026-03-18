@@ -76,6 +76,13 @@ duckdb_query(duckdb::Connection &connection, const std::string &query)
   }
 }
 
+static std::string get_thd_schema(THD *thd)
+{
+  if (thd->db.str && thd->db.length > 0)
+    return std::string(thd->db.str, thd->db.length);
+  return {};
+}
+
 std::unique_ptr<duckdb::QueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config)
 {
@@ -88,7 +95,10 @@ duckdb_query(THD *thd, const std::string &query, bool need_config)
   }
 
   if (need_config)
-    ctx->config_duckdb_env(thd);
+  {
+    ctx->config_duckdb_env(get_thd_schema(thd));
+    ctx->config_duckdb_session(thd);
+  }
 
   return duckdb_query(ctx->get_connection(), query);
 }

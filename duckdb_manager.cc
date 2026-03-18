@@ -160,8 +160,6 @@ void DuckdbManager::Cleanup()
 DuckdbManager &DuckdbManager::Get()
 {
   DBUG_ASSERT(m_instance != nullptr);
-  bool ret= m_instance->Initialize();
-  DBUG_ASSERT(!ret);
   return *m_instance;
 }
 

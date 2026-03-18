@@ -51,9 +51,9 @@ void store_duckdb_field_in_mysql_format(Field *field, duckdb::Value &value,
 {
   if (value.IsNull())
   {
-    DBUG_ASSERT(field->real_maybe_null());
     field->set_default();
-    field->set_null();
+    if (field->real_maybe_null())
+      field->set_null();
   }
   else
   {

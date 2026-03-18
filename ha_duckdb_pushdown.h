@@ -52,10 +52,6 @@ private:
   size_t current_row_index;
 
   StringBuffer<4096> query_string;
-
-  static constexpr auto PRINT_QUERY_TYPE=
-      enum_query_type(QT_VIEW_INTERNAL | QT_SELECT_ONLY |
-                      QT_ITEM_ORIGINAL_FUNC_NULLIF | QT_PARSABLE);
 };
 
 /**

@@ -26,7 +26,7 @@
 #include <my_bitmap.h>
 
 class THD;
-class TABLE;
+struct TABLE;
 
 namespace myduck
 {
@@ -104,8 +104,12 @@ public:
 
   duckdb::Connection &get_connection() { return *m_con; }
 
-  /** Configure DuckDB environment (timezone, charset) for this thread. */
-  void config_duckdb_env(THD *thd);
+  /** Set DuckDB current schema (CREATE SCHEMA IF NOT EXISTS + USE). */
+  void config_duckdb_env(const std::string &schema);
+
+  /** Configure DuckDB session variables (timezone, optimizer flags) from THD.
+   */
+  void config_duckdb_session(THD *thd);
 
   void delete_appender(const std::string &schema, const std::string &table)
   {
@@ -151,6 +155,7 @@ private:
   ulonglong m_disabled_optimizers= 0;
   std::string m_explain_output_str;
   std::string m_current_schema;
+  std::string m_current_timezone;
 };
 
 } // namespace myduck

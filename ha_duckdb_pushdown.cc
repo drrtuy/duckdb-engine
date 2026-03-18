@@ -16,7 +16,6 @@
 */
 
 #define MYSQL_SERVER 1
-#include <algorithm>
 #include <my_global.h>
 #include "sql_class.h"
 #include "sql_select.h"
@@ -117,14 +116,6 @@ int ha_duckdb_select_handler::init_scan()
   DBUG_ENTER("ha_duckdb_select_handler::init_scan");
 
   std::string sql(query_string.ptr(), query_string.length());
-
-  /*
-    SELECT_LEX::print() quotes identifiers with backticks (MySQL style).
-    DuckDB uses double quotes for identifiers, so convert them.
-    When using the original SQL, backticks may also appear if the user
-    quoted identifiers that way, so convert in both cases.
-  */
-  std::replace(sql.begin(), sql.end(), '`', '"');
 
   query_result= myduck::duckdb_query(thd, sql, true);
 
