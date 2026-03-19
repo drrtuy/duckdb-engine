@@ -38,7 +38,4 @@ duckdb_query(THD *thd, const std::string &query, bool need_config= true);
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query);
 
-bool duckdb_query_and_send(THD *thd, const std::string &query,
-                           bool send_result, bool push_error);
-
 } // namespace myduck

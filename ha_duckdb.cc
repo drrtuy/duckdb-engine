@@ -36,7 +36,7 @@
 #include "ddl_convertor.h"
 #include "dml_convertor.h"
 #include "delta_appender.h"
-#include "row_mysql.h"
+#include "row_helpers.h"
 #include "ha_duckdb_pushdown.h"
 #include "duckdb_log.h"
 

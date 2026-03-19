@@ -12,9 +12,7 @@ SET(DUCKDB_SOURCES
   delta_appender.cc
   duckdb_log.cc
   duckdb_config.cc
-  duckdb_charset_collation.cc
   duckdb_timezone.cc
-  duckdb_table.cc
   ha_duckdb_pushdown.cc
   duckdb_udf.cc
 )

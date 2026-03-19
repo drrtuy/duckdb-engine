@@ -19,7 +19,6 @@
 #ifndef DUCKDB_LOG_H
 #define DUCKDB_LOG_H
 
-#include <cstdint>
 #include <my_global.h>
 
 namespace myduck
@@ -28,8 +27,6 @@ extern ulonglong duckdb_log_options;
 
 enum enum_duckdb_log_types
 {
-  DUCKDB_MULTI_TRX_BATCH_COMMIT,
-  DUCKDB_MULTI_TRX_BATCH_DETAIL,
   DUCKDB_QUERY,
   DUCKDB_QUERY_RESULT
 };
@@ -37,19 +34,9 @@ enum enum_duckdb_log_types
 extern const char *duckdb_log_types[];
 extern TYPELIB log_options_typelib;
 
-#define LOG_DUCKDB_MULTI_TRX_BATCH_COMMIT                                     \
-  (1ULL << myduck::enum_duckdb_log_types::DUCKDB_MULTI_TRX_BATCH_COMMIT)
-#define LOG_DUCKDB_MULTI_TRX_BATCH_DETAIL                                     \
-  (1ULL << myduck::enum_duckdb_log_types::DUCKDB_MULTI_TRX_BATCH_DETAIL)
 #define LOG_DUCKDB_QUERY (1ULL << myduck::enum_duckdb_log_types::DUCKDB_QUERY)
 #define LOG_DUCKDB_QUERY_RESULT                                               \
   (1ULL << myduck::enum_duckdb_log_types::DUCKDB_QUERY_RESULT)
-
-bool log_duckdb_multi_trx_batch_commit(const char *reason);
-
-bool log_duckdb_apply_event_type(const char *type);
-
-bool log_duckdb_gtid(const char *prefix, int type, int sidno, int64_t gno);
 } // namespace myduck
 
 #endif // DUCKDB_LOG_H

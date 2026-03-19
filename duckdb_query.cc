@@ -109,27 +109,4 @@ std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query)
   return duckdb_query(*connection, query);
 }
 
-bool duckdb_query_and_send(THD *thd, const std::string &query,
-                           bool send_result, bool push_error)
-{
-  if (thd->killed)
-  {
-    if (push_error)
-      my_error(ER_UNKNOWN_ERROR, MYF(0),
-               "current query or connection was killed");
-    return true;
-  }
-
-  auto res= duckdb_query(thd, query, true);
-
-  if (res->HasError())
-  {
-    if (push_error)
-      my_error(ER_UNKNOWN_ERROR, MYF(0), res->GetError().c_str());
-    return true;
-  }
-  /* TODO: implement send_result for SELECT pushdown */
-  return false;
-}
-
 } // namespace myduck

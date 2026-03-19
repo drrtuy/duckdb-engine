@@ -57,8 +57,6 @@ public:
 
   bool flush(bool idempotent_flag);
 
-  bool rollback(ulonglong trx_no);
-
   void cleanup();
 
 private:
@@ -97,10 +95,6 @@ public:
   void delete_appender(std::string &db, std::string &tb);
 
   bool flush_all(bool idempotent_flag, std::string &error_msg);
-
-  void reset_all();
-
-  bool rollback_trx(ulonglong trx_no);
 
   bool is_empty() { return m_append_infos.empty(); }
 

@@ -533,21 +533,6 @@ bool DeltaAppender::flush(bool idempotent_flag)
   return false;
 }
 
-bool DeltaAppender::rollback(ulonglong trx_no)
-{
-  if (m_use_tmp_table)
-  {
-    m_appender->Flush();
-    std::stringstream ss;
-    ss << "DELETE FROM main.\"" << m_tmp_table_name
-       << "\" WHERE \"#mdb_trx_no\" = " << trx_no;
-    auto ret= myduck::duckdb_query(*m_con, ss.str());
-    if (ret->HasError())
-      return true;
-  }
-  return false;
-}
-
 void DeltaAppender::cleanup()
 {
   if (m_use_tmp_table)
@@ -586,18 +571,6 @@ bool DeltaAppenders::flush_all(bool idempotent_flag, std::string &error_msg)
     return true;
   }
   m_append_infos.clear();
-  return false;
-}
-
-void DeltaAppenders::reset_all() { m_append_infos.clear(); }
-
-bool DeltaAppenders::rollback_trx(ulonglong trx_no)
-{
-  for (auto &pair : m_append_infos)
-  {
-    if (pair.second->rollback(trx_no))
-      return true;
-  }
   return false;
 }
 
