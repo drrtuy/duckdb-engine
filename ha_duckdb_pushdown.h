@@ -1,6 +1,6 @@
 /*
   Copyright (c) 2026, MariaDB Foundation.
-  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Roman Nozdrin <drrtuy@gmail.com>
   Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
