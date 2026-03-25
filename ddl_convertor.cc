@@ -1,6 +1,7 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
