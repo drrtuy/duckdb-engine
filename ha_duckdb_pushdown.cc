@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, MariaDB Corporation.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by

@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -24,16 +26,18 @@
 
 class THD;
 
-namespace myduck {
-constexpr long days_at_timestart = 719528;
+namespace myduck
+{
+constexpr long days_at_timestart= 719528;
 
-class TimeZoneOffsetHelper {
- public:
+class TimeZoneOffsetHelper
+{
+public:
   static void init_timezone();
 
   static std::string get_name_by_offset(int64_t offset, std::string &warn_msg);
 
- private:
+private:
   static void add_timezone(int64_t offset, const std::string &name);
   static std::map<int64_t, std::string> timezone_offset_map;
 };
@@ -45,6 +49,6 @@ class TimeZoneOffsetHelper {
 */
 std::string get_timezone_according_thd(THD *thd, std::string &warn_msg);
 
-}  // namespace myduck
+} // namespace myduck
 
 #endif // DUCKDB_TIMEZONE_H

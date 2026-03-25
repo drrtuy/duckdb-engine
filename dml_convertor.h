@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,16 +24,17 @@
 
 void append_field_value_to_sql(String &target_str, Field *field);
 
-class DMLConvertor : public BaseConvertor {
- public:
+class DMLConvertor : public BaseConvertor
+{
+public:
   DMLConvertor(TABLE *table) : m_table(table) {}
 
   bool check() override { return false; }
 
   std::string translate() override;
 
- protected:
-  virtual void generate_prefix(String &query) = 0;
+protected:
+  virtual void generate_prefix(String &query)= 0;
 
   virtual void generate_fields_and_values(String &query) {}
 
@@ -41,68 +44,82 @@ class DMLConvertor : public BaseConvertor {
 
   TABLE *m_table;
 
- private:
+private:
   void fill_index_fields_for_where(std::vector<Field *> &fields);
 };
 
-class InsertConvertor : public DMLConvertor {
- public:
+class InsertConvertor : public DMLConvertor
+{
+public:
   InsertConvertor(TABLE *table, bool flag)
-      : DMLConvertor(table), idempotent_flag(flag) {}
+      : DMLConvertor(table), idempotent_flag(flag)
+  {
+  }
 
- protected:
+protected:
   void generate_prefix(String &query) override;
 
   void generate_fields_and_values(String &query) override;
 
   void generate_where_clause(String &query) override {}
 
- private:
+private:
   bool idempotent_flag;
 };
 
-class UpdateConvertor : public DMLConvertor {
- public:
+class UpdateConvertor : public DMLConvertor
+{
+public:
   UpdateConvertor(TABLE *table, const uchar *old_row)
-      : DMLConvertor(table), m_old_row(old_row) {}
+      : DMLConvertor(table), m_old_row(old_row)
+  {
+  }
 
- protected:
+protected:
   void generate_prefix(String &query) override;
 
   void generate_fields_and_values(String &query) override;
 
-  void append_where_value(String &query, Field *field) override {
-    uchar *saved_ptr = field->ptr;
-    field->ptr =
+  void append_where_value(String &query, Field *field) override
+  {
+    uchar *saved_ptr= field->ptr;
+    field->ptr=
         const_cast<uchar *>(m_old_row + field->offset(m_table->record[0]));
     append_field_value_to_sql(query, field);
-    field->ptr = saved_ptr;
+    field->ptr= saved_ptr;
   }
 
- private:
+private:
   const uchar *m_old_row;
 };
 
-class DeleteConvertor : public DMLConvertor {
- public:
-  DeleteConvertor(TABLE *table, const uchar *old_row = nullptr)
-      : DMLConvertor(table), m_old_row(old_row) {}
+class DeleteConvertor : public DMLConvertor
+{
+public:
+  DeleteConvertor(TABLE *table, const uchar *old_row= nullptr)
+      : DMLConvertor(table), m_old_row(old_row)
+  {
+  }
 
- protected:
+protected:
   void generate_prefix(String &query) override;
 
-  void append_where_value(String &query, Field *field) override {
-    if (!m_old_row) {
+  void append_where_value(String &query, Field *field) override
+  {
+    if (!m_old_row)
+    {
       append_field_value_to_sql(query, field);
-    } else {
-      uchar *saved_ptr = field->ptr;
-      field->ptr =
+    }
+    else
+    {
+      uchar *saved_ptr= field->ptr;
+      field->ptr=
           const_cast<uchar *>(m_old_row + field->offset(m_table->record[0]));
       append_field_value_to_sql(query, field);
-      field->ptr = saved_ptr;
+      field->ptr= saved_ptr;
     }
   }
 
- private:
+private:
   const uchar *m_old_row;
 };

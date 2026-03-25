@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -24,7 +26,8 @@
   Utility class to parse a full path like "./db/table" into db_name and
   table_name components. Handles escape characters in names.
 */
-class DatabaseTableNames {
+class DatabaseTableNames
+{
 public:
   DatabaseTableNames(const char *name);
   std::string db_name;
@@ -34,7 +37,8 @@ public:
 /**
   Utility class to extract the database name from a path like "./db/".
 */
-class Databasename {
+class Databasename
+{
 public:
   Databasename(const char *path_name);
   std::string name;

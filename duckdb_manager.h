@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -24,15 +26,17 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/table_description.hpp"
 
-namespace myduck {
+namespace myduck
+{
 
-constexpr char DUCKDB_FILE_NAME[] = "duckdb.db";
-constexpr char DUCKDB_DEFAULT_TMP_NAME[] = "duckdb_tmp";
+constexpr char DUCKDB_FILE_NAME[]= "duckdb.db";
+constexpr char DUCKDB_DEFAULT_TMP_NAME[]= "duckdb_tmp";
 
-class DuckdbManager {
+class DuckdbManager
+{
 public:
-  DuckdbManager(const DuckdbManager &) = delete;
-  DuckdbManager &operator=(const DuckdbManager &) = delete;
+  DuckdbManager(const DuckdbManager &)= delete;
+  DuckdbManager &operator=(const DuckdbManager &)= delete;
 
   static bool CreateInstance();
   static void Cleanup();
@@ -47,8 +51,8 @@ private:
 
   bool Initialize();
 
-  duckdb::DuckDB *m_database = nullptr;
+  duckdb::DuckDB *m_database= nullptr;
   std::mutex m_mutex;
 };
 
-}  // namespace myduck
+} // namespace myduck

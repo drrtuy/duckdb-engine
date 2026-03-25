@@ -1,6 +1,8 @@
 /*
   Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin
+  Copyright (c) 2026, Leonid Fedorov.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -24,14 +26,17 @@
 /** The following function is used to fetch data from one byte.
 @param[in]      b       pointer to a byte to read
 @return ulint integer, >= 0, < 256 */
-static inline uchar mach_read_from_1(const uchar *b) { return ((uchar)(b[0])); }
+static inline uchar mach_read_from_1(const uchar *b)
+{
+  return ((uchar) (b[0]));
+}
 
 /** Reads a ulint stored in the little-endian format.
  @return unsigned long int */
-static inline ulong mach_read_from_2_little_endian(
-    const uchar *buf) /*!< in: from where to read */
+static inline ulong
+mach_read_from_2_little_endian(const uchar *buf) /*!< in: from where to read */
 {
-  return ((ulong)(buf[0]) | ((ulong)(buf[1]) << 8));
+  return ((ulong) (buf[0]) | ((ulong) (buf[1]) << 8));
 }
 
 /** Reads a ulint stored in the little-endian format.
@@ -39,20 +44,23 @@ static inline ulong mach_read_from_2_little_endian(
 @param[in] buf_size From how many bytes to read.
 @return unsigned long int */
 static inline ulong mach_read_from_n_little_endian(const uchar *buf,
-                                                   ulong buf_size) {
-  ulong n = 0;
+                                                   ulong buf_size)
+{
+  ulong n= 0;
   const uchar *ptr;
 
-  ptr = buf + buf_size;
+  ptr= buf + buf_size;
 
-  for (;;) {
+  for (;;)
+  {
     ptr--;
 
-    n = n << 8;
+    n= n << 8;
 
-    n += (ulong)(*ptr);
+    n+= (ulong) (*ptr);
 
-    if (ptr == buf) {
+    if (ptr == buf)
+    {
       break;
     }
   }
@@ -70,13 +78,14 @@ static inline const uchar *row_mysql_read_true_varchar(
     ulong lenlen)       /*!< in: storage length of len: either 1
                         or 2 bytes */
 {
-  if (lenlen == 2) {
-    *len = mach_read_from_2_little_endian(field);
+  if (lenlen == 2)
+  {
+    *len= mach_read_from_2_little_endian(field);
 
     return (field + 2);
   }
 
-  *len = mach_read_from_1(field);
+  *len= mach_read_from_1(field);
 
   return (field + 1);
 }
@@ -86,11 +95,12 @@ static inline const uchar *row_mysql_read_true_varchar(
 @param[in] ref                  BLOB reference in the MySQL format.
 @param[in] col_len              BLOB reference length (not BLOB length).
 @return pointer to BLOB data */
-static inline const uchar *row_mysql_read_blob_ref(ulong *len, const uchar *ref,
-                                            ulong col_len) {
+static inline const uchar *
+row_mysql_read_blob_ref(ulong *len, const uchar *ref, ulong col_len)
+{
   uchar *data;
 
-  *len = mach_read_from_n_little_endian(ref, col_len - 8);
+  *len= mach_read_from_n_little_endian(ref, col_len - 8);
 
   memcpy(&data, ref + col_len - 8, sizeof data);
 
