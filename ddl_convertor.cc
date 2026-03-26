@@ -27,6 +27,7 @@
 
 #include <my_global.h>
 #undef UNKNOWN
+#include "duckdb_charset_collation.h"
 #include "duckdb_config.h"
 #include "sql_class.h"
 #include "sql_alter.h"
@@ -520,6 +521,14 @@ std::string FieldConvertor::convert_type(const Field *field)
   default:
     ret= "__unknown_type";
     break;
+  }
+
+  /* Append DuckDB collation for varchar columns */
+  if (ret == "varchar" && field->has_charset())
+  {
+    std::string warn_msg;
+    std::string co= myduck::get_duckdb_collation(field->charset(), warn_msg);
+    ret.append(" COLLATE ").append(co);
   }
 
   /* MariaDB does not have MYSQL_TYPE_JSON; JSON is stored as LONG_BLOB with

@@ -25,6 +25,7 @@
 #undef UNKNOWN
 
 #include "duckdb_context.h"
+#include "duckdb_charset_collation.h"
 #include "duckdb_config.h"
 #include "duckdb_types.h"
 #include "ha_duckdb.h"
@@ -34,6 +35,15 @@
 
 namespace myduck
 {
+
+static void push_duckdb_warning(THD *thd, std::string &warn_msg)
+{
+  if (warn_msg.empty())
+    return;
+  push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                      "DuckDB: %s", warn_msg.c_str());
+  warn_msg.clear();
+}
 
 static std::string disabled_optimizers_to_string(ulonglong val)
 {
@@ -75,12 +85,28 @@ void DuckdbThdContext::config_duckdb_session(THD *thd)
   /* Timezone */
   std::string warn_msg;
   std::string tz_name= get_timezone_according_thd(thd, warn_msg);
-  if (!warn_msg.empty())
-    sql_print_warning("DuckDB: %s", warn_msg.c_str());
   if (tz_name != m_current_timezone)
   {
     config_sql.push_back("SET TimeZone = '" + tz_name + "'");
+    push_duckdb_warning(thd, warn_msg);
     m_current_timezone= tz_name;
+  }
+
+  /* Collation: force_no_collation overrides to binary (POSIX) */
+  warn_msg.clear();
+  std::string collation;
+  if (get_thd_force_no_collation(thd))
+    collation= COLLATION_BINARY;
+  else
+    collation=
+        get_duckdb_collation(thd->variables.collation_connection, warn_msg);
+  if (collation != m_collation)
+  {
+    config_sql.push_back("SET default_collation = '" + collation + "'");
+    /* Only warn when collation is explicitly changed, not on initial setup */
+    if (!m_collation.empty())
+      push_duckdb_warning(thd, warn_msg);
+    m_collation= collation;
   }
 
   /* merge_join_threshold (session) */
