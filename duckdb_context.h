@@ -158,6 +158,7 @@ private:
   std::string m_explain_output_str;
   std::string m_current_schema;
   std::string m_current_timezone;
+  std::string m_collation;
 };
 
 } // namespace myduck
