@@ -32,6 +32,12 @@ std::string get_duckdb_collation(const CHARSET_INFO *cs, std::string &warn_msg)
      only the collation behavior (case/accent sensitivity) is relevant.
      Map using CHARSET_INFO flags which work for any charset. */
 
+  if (strcmp(cs->cs_name.str, "utf8mb3") &&
+      strcmp(cs->cs_name.str, "utf8mb4") && strcmp(cs->cs_name.str, "ascii"))
+  {
+    return COLLATION_BINARY;
+  }
+
   /* _bin Collation */
   if (cs->state & MY_CS_BINSORT)
     return COLLATION_BINARY;
