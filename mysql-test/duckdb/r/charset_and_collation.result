@@ -1,6 +1,8 @@
 #
 # check collation config when execute
 #
+create database if not exists charset_and_collation;
+use charset_and_collation;
 CREATE TABLE t_duckdb  (a varchar(32) PRIMARY KEY, b varchar(32), c varchar(32)) engine=duckdb;
 CREATE TABLE t_innodb  (a varchar(32) PRIMARY KEY, b varchar(32), c varchar(32)) engine=innodb;
 INSERT INTO t_duckdb VALUES ('a', 'A', 'á');
@@ -62,14 +64,14 @@ ai	ci	ai_ci
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	0	0
-SET NAMES 'utf8mb4' COLLATE 'utf8mb4_zh_0900_as_cs';
+SET NAMES 'utf8mb4' COLLATE 'utf8mb4_uca1400_as_cs';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
 0	0	0
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	0	0
-SET NAMES 'utf8mb4' COLLATE 'utf8mb4_ja_0900_as_cs_ks';
+SET NAMES 'utf8mb4' COLLATE 'utf8mb4_uca1400_as_cs';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
 0	0	0
@@ -98,7 +100,7 @@ ai	ci	ai_ci
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	0	0
-SET NAMES 'utf8mb3' COLLATE 'utf8mb3_tolower_ci';
+SET NAMES 'utf8mb3' COLLATE 'utf8mb3_uca1400_as_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
 0	1	0
@@ -140,7 +142,7 @@ ai	ci	ai_ci
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	0	0
-SET NAMES 'utf8' COLLATE 'utf8_tolower_ci';
+SET NAMES 'utf8mb3' COLLATE 'utf8mb3_uca1400_as_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
 0	1	0
@@ -152,8 +154,6 @@ SET NAMES 'latin1' COLLATE 'latin1_general_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
 0	0	0
-Warnings:
-Warning	7508	[DuckDB] Exception when setting duckdb session variables. Variable 'collation_connection' is set to latin1_general_ci BINARY Collation is used for literal string in DuckDB. Recommend using collations of 'utf8mb3', 'utf8mb4' or 'ascii'.
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	1	0
@@ -231,22 +231,8 @@ SELECT d FROM t_innodb where d = 'á';
 d
 DROP TABLE t_duckdb, t_innodb;
 # 2.2 define collation for table with utf8mb3
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8_tolower_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_mysql500_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_tolower_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8_tolower_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_mysql500_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_tolower_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8mb3_general_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8mb3_general_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 SELECT a FROM t_duckdb where a = 'a';
@@ -331,8 +317,10 @@ e
 a
 SELECT e FROM t_duckdb where e = 'á';
 e
+a
 SELECT e FROM t_innodb where e = 'á';
 e
+a
 DROP TABLE t_duckdb, t_innodb;
 #
 # Test 3. ALTER COLUMN COLLATION
@@ -360,8 +348,8 @@ a
 SELECT a FROM t_innodb where a = 'á';
 a
 a
-CALL dbms_duckdb.query("DELETE FROM test.t_duckdb");
-RESULT
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -387,9 +375,11 @@ a
 a
 SELECT a FROM t_duckdb where a = 'A';
 a
+a
 SELECT a FROM t_innodb where a = 'A';
 a
 SELECT a FROM t_duckdb where a = 'á';
+a
 a
 SELECT a FROM t_innodb where a = 'á';
 a
@@ -444,15 +434,7 @@ d
 DROP TABLE t_duckdb, t_innodb;
 # 3.2 define collation for table with utf8mb3
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8_general_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8_general_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
-Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 INSERT INTO t_duckdb VALUES (1, 'a');
 INSERT INTO t_innodb VALUES (1, 'a');
 SELECT a FROM t_duckdb where a = 'a';
@@ -473,8 +455,8 @@ a
 SELECT a FROM t_innodb where a = 'á';
 a
 a
-CALL dbms_duckdb.query("DELETE FROM test.t_duckdb");
-RESULT
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -486,22 +468,12 @@ ALTER TABLE t_duckdb MODIFY a varchar(32),
 ADD COLUMN b varchar(32) COLLATE utf8mb3_general_mysql500_ci,
 ADD COLUMN c varchar(32) COLLATE utf8mb3_bin,
 ADD COLUMN d varchar(32) COLLATE utf8mb3_unicode_ci,
-ADD COLUMN e varchar(32) COLLATE utf8_tolower_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_mysql500_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_tolower_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+ADD COLUMN e varchar(32) COLLATE utf8mb3_uca1400_as_ci;
 ALTER TABLE t_innodb MODIFY a varchar(32),
 ADD COLUMN b varchar(32) COLLATE utf8mb3_general_mysql500_ci,
 ADD COLUMN c varchar(32) COLLATE utf8mb3_bin,
 ADD COLUMN d varchar(32) COLLATE utf8mb3_unicode_ci,
-ADD COLUMN e varchar(32) COLLATE utf8_tolower_ci;
-Warnings:
-Warning	3778	'utf8mb3_general_mysql500_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
-Warning	3778	'utf8mb3_tolower_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+ADD COLUMN e varchar(32) COLLATE utf8mb3_uca1400_as_ci;
 INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 SELECT a FROM t_duckdb where a = 'a';
@@ -605,8 +577,8 @@ a
 SELECT a FROM t_innodb where a = 'A';
 a
 a
-CALL dbms_duckdb.query("DELETE FROM test.t_duckdb");
-RESULT
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -661,24 +633,26 @@ SET NAMES utf8mb4;
 #
 # 4.1 CREATE TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+mysqltest: At line 314: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+mysqltest: At line 316: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+mysqltest: At line 318: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
-Warnings:
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'c'
+mysqltest: At line 324: query 'ALTER TABLE t_duckdb ADD COLUMN c varchar(32)' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'c'', instead of HA_WRONG_CREATE_OPTION (140)...
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
-Warnings:
-Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+mysqltest: At line 328: query 'ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32)' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'b'
+mysqltest: At line 330: query 'ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'b'', instead of HA_WRONG_CREATE_OPTION (140)...
 #
 # Test 5. UTF8MB4 with Emoji
 #
@@ -711,4 +685,4 @@ id	a	e	b	c	d
 1	a	NULL	b	c	d
 2	😄	NULL	😄	😄	😭h😄h😭
 3	😄	NULL	😄	😄	😭h😄h😭
-DROP TABLE t_duckdb, t_mb4;
+DROP DATABASE charset_and_collation;

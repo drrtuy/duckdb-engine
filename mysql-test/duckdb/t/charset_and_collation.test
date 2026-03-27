@@ -3,6 +3,13 @@
 --echo # check collation config when execute
 --echo #
 
+--disable_query_log
+SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;
+--enable_query_log
+
+create database if not exists charset_and_collation;
+use charset_and_collation;
+
 # Test 1. SELECT 'a' = 'A'
 # a. duckdb: uses the default_collation configuration of the session variable
 # b. mysql: uses the collation_connection configuration of the sesison variable
@@ -53,11 +60,11 @@ SET NAMES 'utf8mb4' COLLATE 'utf8mb4_bin';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
-SET NAMES 'utf8mb4' COLLATE 'utf8mb4_zh_0900_as_cs';
+SET NAMES 'utf8mb4' COLLATE 'utf8mb4_uca1400_as_cs';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
-SET NAMES 'utf8mb4' COLLATE 'utf8mb4_ja_0900_as_cs_ks';
+SET NAMES 'utf8mb4' COLLATE 'utf8mb4_uca1400_as_cs';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
@@ -76,7 +83,7 @@ SET NAMES 'utf8mb3' COLLATE 'utf8mb3_bin';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
-SET NAMES 'utf8mb3' COLLATE 'utf8mb3_tolower_ci';
+SET NAMES 'utf8mb3' COLLATE 'utf8mb3_uca1400_as_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
@@ -100,7 +107,7 @@ SET NAMES 'utf8' COLLATE 'utf8_bin';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
-SET NAMES 'utf8' COLLATE 'utf8_tolower_ci';
+SET NAMES 'utf8mb3' COLLATE 'utf8mb3_uca1400_as_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 
@@ -142,8 +149,8 @@ SELECT d FROM t_duckdb where d = 'á'; SELECT d FROM t_innodb where d = 'á';
 DROP TABLE t_duckdb, t_innodb;
 
 --echo # 2.2 define collation for table with utf8mb3
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8_tolower_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8_tolower_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8mb3_general_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32), b varchar(32) COLLATE utf8mb3_general_mysql500_ci, c varchar(32) COLLATE utf8mb3_bin, d varchar(32) COLLATE utf8mb3_unicode_ci, e varchar(32) COLLATE utf8mb3_general_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a', 'a');
@@ -182,7 +189,7 @@ SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 SELECT a FROM t_duckdb where a = 'á'; SELECT a FROM t_innodb where a = 'á';
 
-SELECT duckdb_query_udf("DELETE FROM test.t_duckdb");
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -225,7 +232,7 @@ SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 SELECT a FROM t_duckdb where a = 'á'; SELECT a FROM t_innodb where a = 'á';
 
-SELECT duckdb_query_udf("DELETE FROM test.t_duckdb");
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -233,12 +240,12 @@ ALTER TABLE t_duckdb MODIFY a varchar(32),
                      ADD COLUMN b varchar(32) COLLATE utf8mb3_general_mysql500_ci,
                      ADD COLUMN c varchar(32) COLLATE utf8mb3_bin,
                      ADD COLUMN d varchar(32) COLLATE utf8mb3_unicode_ci,
-                     ADD COLUMN e varchar(32) COLLATE utf8_tolower_ci;
+                     ADD COLUMN e varchar(32) COLLATE utf8mb3_uca1400_as_ci;
 ALTER TABLE t_innodb MODIFY a varchar(32),
                      ADD COLUMN b varchar(32) COLLATE utf8mb3_general_mysql500_ci,
                      ADD COLUMN c varchar(32) COLLATE utf8mb3_bin,
                      ADD COLUMN d varchar(32) COLLATE utf8mb3_unicode_ci,
-                     ADD COLUMN e varchar(32) COLLATE utf8_tolower_ci;
+                     ADD COLUMN e varchar(32) COLLATE utf8mb3_uca1400_as_ci;
 
 INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a', 'a');
 INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a', 'a');
@@ -274,7 +281,7 @@ INSERT INTO t_innodb VALUES (1, 'a');
 SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 
-SELECT duckdb_query_udf("DELETE FROM test.t_duckdb");
+SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -303,23 +310,23 @@ SET NAMES utf8mb4;
 --echo # Test 4. NON-UTF8 CHARSET
 --echo #
 --echo # 4.1 CREATE TABLE
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
 
 --echo # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error HA_WRONG_CREATE_OPTION
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
 
 
@@ -353,4 +360,10 @@ SELECT * from t_mb4;
 ALTER TABLE t_mb4 ENGINE=innodb;
 SELECT * from t_mb4;
 
-DROP TABLE t_duckdb, t_mb4;
+DROP DATABASE charset_and_collation;
+
+--disable_query_log
+SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
+--enable_query_log
+
+--source ../include/cleanup_duckdb_udf.inc
