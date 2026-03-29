@@ -634,25 +634,19 @@ SET NAMES utf8mb4;
 # 4.1 CREATE TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
-mysqltest: At line 314: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
-mysqltest: At line 316: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
-mysqltest: At line 318: query 'CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'c'
-mysqltest: At line 324: query 'ALTER TABLE t_duckdb ADD COLUMN c varchar(32)' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'c'', instead of HA_WRONG_CREATE_OPTION (140)...
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
-mysqltest: At line 328: query 'ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32)' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'', instead of HA_WRONG_CREATE_OPTION (140)...
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
 ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'b'
-mysqltest: At line 330: query 'ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1' failed with wrong errno ER_ALTER_OPERATION_NOT_SUPPORTED (1845): 'non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'b'', instead of HA_WRONG_CREATE_OPTION (140)...
 #
 # Test 5. UTF8MB4 with Emoji
 #
@@ -667,7 +661,6 @@ INSERT INTO t_mb4 VALUES (1, 'a', 'b', 'c', 'd');
 INSERT INTO t_mb4 VALUES (2, UNHEX('F09F9884'), UNHEX('F09F9884'), UNHEX('F09F9884'), '😭h😄h😭');
 SET GLOBAL duckdb_dml_in_batch = on;
 INSERT INTO t_mb4 VALUES (3, UNHEX('F09F9884'), UNHEX('F09F9884'), UNHEX('F09F9884'), '😭h😄h😭');
-SET GLOBAL duckdb_dml_in_batch = default;
 SELECT * from t_mb4;
 id	a	b	c	d
 1	a	b	c	d
