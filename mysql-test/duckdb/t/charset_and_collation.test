@@ -310,23 +310,23 @@ SET NAMES utf8mb4;
 --echo # Test 4. NON-UTF8 CHARSET
 --echo #
 --echo # 4.1 CREATE TABLE
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
 
 --echo # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
---error HA_WRONG_CREATE_OPTION
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
 
 
@@ -348,7 +348,6 @@ INSERT INTO t_mb4 VALUES (2, UNHEX('F09F9884'), UNHEX('F09F9884'), UNHEX('F09F98
 
 SET GLOBAL duckdb_dml_in_batch = on;
 INSERT INTO t_mb4 VALUES (3, UNHEX('F09F9884'), UNHEX('F09F9884'), UNHEX('F09F9884'), '😭h😄h😭');
-SET GLOBAL duckdb_dml_in_batch = default;
 
 # check emoji can be selected successfully
 SELECT * from t_mb4;

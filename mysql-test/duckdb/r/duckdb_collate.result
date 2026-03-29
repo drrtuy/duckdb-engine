@@ -11,7 +11,7 @@ SET collation_connection = 'utf8mb4_0900_as_ci';
 connection con1;
 SELECT 'a' = 'A' FROM t1 LIMIT 1;
 'a' = 'A'
-1
+0
 [ connection default ]
 connection default;
 SET collation_connection = 'utf8mb4_0900_as_cs';
@@ -19,7 +19,7 @@ SET collation_connection = 'utf8mb4_0900_as_cs';
 connection con1;
 SELECT 'a' = 'A' FROM t1 LIMIT 1;
 'a' = 'A'
-1
+0
 SET collation_connection = 'utf8mb4_0900_as_ci';
 SELECT 'a' = 'A' FROM t1 LIMIT 1;
 'a' = 'A'
