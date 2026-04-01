@@ -38,11 +38,17 @@
 
 bool report_duckdb_table_struct_error(const char *not_supported,
                                       const char *try_instead,
-                                      const char *column)
+                                      const char *column,
+                                      ddl_error_context ctx)
 {
-  char buf[512];
-  snprintf(buf, sizeof(buf), "%s '%s'", try_instead, column);
-  my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), not_supported, buf);
+  if (ctx == ddl_error_context::CREATE)
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0), "DuckDB", not_supported);
+  else
+  {
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s '%s'", try_instead, column);
+    my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), not_supported, buf);
+  }
   return true;
 }
 
@@ -351,13 +357,13 @@ bool FieldConvertor::check()
   if (m_field->flags & AUTO_INCREMENT_FLAG)
     return report_duckdb_table_struct_error(
         "AUTO_INCREMENT", "removing AUTO_INCREMENT from column",
-        m_field->field_name.str);
+        m_field->field_name.str, m_ctx);
 
   /* No support for INVISIBLE columns. */
   if (m_field->invisible >= INVISIBLE_USER)
     return report_duckdb_table_struct_error("INVISIBLE column",
                                             "removing INVISIBLE from column",
-                                            m_field->field_name.str);
+                                            m_field->field_name.str, m_ctx);
 
   /* No support for non-utf8 charset. */
   if (m_field->has_charset())
@@ -369,7 +375,7 @@ bool FieldConvertor::check()
     {
       return report_duckdb_table_struct_error(
           "non-utf8 charset", "using utf8mb4 charset for column",
-          m_field->field_name.str);
+          m_field->field_name.str, m_ctx);
     }
   }
 
@@ -549,7 +555,7 @@ bool CreateTableConvertor::check()
 
   for (ptr= first_field; (field= *ptr); ptr++)
   {
-    if (FieldConvertor(field).check())
+    if (FieldConvertor(field, ddl_error_context::CREATE).check())
       return true;
   }
 

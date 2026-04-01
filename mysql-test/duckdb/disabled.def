@@ -3,7 +3,7 @@ alter_duckdb_index : 2026-03-07 drrtuy@gmail.com
 alter_engine_duckdb : 2026-03-07 drrtuy@gmail.com
 bugfix_crash_after_commit_error : 2026-03-07 drrtuy@gmail.com
 bugfix_temp_and_system_database : 2026-03-07 drrtuy@gmail.com
-#charset_and_collation : 2026-03-07 drrtuy@gmail.com
+charset_and_collation : 2026-03-07 drrtuy@gmail.com
 create_table_column_timestamp : 2026-03-07 drrtuy@gmail.com
 create_table_constraint : 2026-03-07 drrtuy@gmail.com
 decimal_high_precision : 2026-03-07 drrtuy@gmail.com

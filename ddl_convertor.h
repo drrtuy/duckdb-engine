@@ -63,10 +63,19 @@ enum enum_ddl_convertor_type
   DDL_CONVERTOR_TYPE_END
 };
 
+enum class ddl_error_context
+{
+  ALTER,
+  CREATE
+};
+
 class FieldConvertor : public BaseConvertor
 {
 public:
-  FieldConvertor(Field *field) : m_field(field) {}
+  FieldConvertor(Field *field, ddl_error_context ctx= ddl_error_context::ALTER)
+      : m_field(field), m_ctx(ctx)
+  {
+  }
 
   bool check() override;
 
@@ -76,6 +85,7 @@ public:
 
 private:
   Field *m_field;
+  ddl_error_context m_ctx;
 };
 
 /** Convertor to translate "ALTER TABLE ..." */
@@ -354,6 +364,6 @@ private:
 std::string toHex(const char *data, size_t length);
 
 /* Report DuckDB table structure error */
-bool report_duckdb_table_struct_error(const char *err_msg,
-                                      const char *try_instead,
-                                      const char *column);
+bool report_duckdb_table_struct_error(
+    const char *err_msg, const char *try_instead, const char *column,
+    ddl_error_context ctx= ddl_error_context::ALTER);

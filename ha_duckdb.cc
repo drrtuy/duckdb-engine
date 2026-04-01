@@ -1317,7 +1317,7 @@ maria_declare_plugin(duckdb){
     MYSQL_STORAGE_ENGINE_PLUGIN,
     &duckdb_storage_engine,
     "DUCKDB",
-    "Alibaba (ported to MariaDB)",
+    "drrtuy,lfedorov",
     "DuckDB storage engine",
     PLUGIN_LICENSE_GPL,
     duckdb_init_func,                    /* Plugin Init */
