@@ -3,8 +3,17 @@
 # 3. Some set functions are not support yet, such as CHAR(), ELT(), EXPORT_SET(), FIELD(), FORMAT(), MAKE_SET().
 # 4. Character set and collation related functions are not supported, such as SOUNDEX(), WEIGHT_STRING().
 
+--source ../include/have_duckdb_udf.inc
+
+--disable_query_log
+SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;
+--enable_query_log
+
 CREATE DATABASE test_duckdb;
 USE test_duckdb;
+
+SET NAMES utf8mb4;
+
 CREATE TABLE t_innodb(col1 VARCHAR(20) PRIMARY KEY, col2 BLOB);
 CREATE TABLE t_duckdb(col1 VARCHAR(20) PRIMARY KEY, col2 BLOB) ENGINE=DuckDB;
 insert into t_innodb values ('MySQL', 0x4D7953514CF09FA686);

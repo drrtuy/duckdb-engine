@@ -4,6 +4,8 @@
 
 # Setup: create tables in both engines
 
+CREATE DATABASE IF NOT EXISTS cross_engine_join;
+USE cross_engine_join;
 CREATE TABLE t_duck (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE=DuckDB;
 CREATE TABLE t_inno (id INT PRIMARY KEY, name VARCHAR(50)) ENGINE=InnoDB;
 INSERT INTO t_duck VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');
@@ -123,3 +125,4 @@ DROP TABLE t_duck_types;
 DROP TABLE t_inno_types;
 DROP TABLE t_duck_null;
 DROP TABLE t_inno_null;
+DROP DATABASE cross_engine_join;

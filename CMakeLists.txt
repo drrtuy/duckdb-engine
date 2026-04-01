@@ -15,6 +15,7 @@ SET(DUCKDB_SOURCES
   duckdb_charset_collation.cc
   duckdb_timezone.cc
   ha_duckdb_pushdown.cc
+  cross_engine_scan.cc
   duckdb_udf.cc
 )
 

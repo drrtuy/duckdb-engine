@@ -216,6 +216,7 @@ static int duckdb_init_func(void *p)
   duckdb_hton->drop_database= duckdb_drop_database;
 
   duckdb_hton->create_select= create_duckdb_select_handler;
+  duckdb_hton->create_unit= create_duckdb_unit_handler;
 
   myduck::TimeZoneOffsetHelper::init_timezone();
 

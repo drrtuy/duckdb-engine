@@ -60,7 +60,34 @@ static bool can_pushdown_to_duckdb(SELECT_LEX *sel_lex,
   return has_duckdb_table;
 }
 
-/* ----- Factory function ----- */
+/**
+  Check whether a SELECT_LEX_UNIT (UNION/EXCEPT/INTERSECT) can be
+  pushed down to DuckDB.  Walks every SELECT_LEX in the unit.
+*/
+
+static bool
+can_pushdown_unit_to_duckdb(SELECT_LEX_UNIT *unit,
+                            std::vector<std::string> &external_tables,
+                            bool &has_duckdb_table)
+{
+  for (SELECT_LEX *sl= unit->first_select(); sl; sl= sl->next_select())
+  {
+    for (TABLE_LIST *tbl= sl->get_table_list(); tbl; tbl= tbl->next_global)
+    {
+      if (tbl->derived || !tbl->table)
+        continue;
+
+      if (tbl->table->file->ht == duckdb_hton)
+        has_duckdb_table= true;
+      else
+        external_tables.emplace_back(tbl->table_name.str);
+    }
+  }
+
+  return has_duckdb_table;
+}
+
+/* ----- Factory functions ----- */
 
 select_handler *create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
                                              SELECT_LEX_UNIT *sel_unit)
@@ -102,6 +129,40 @@ select_handler *create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
   return handler;
 }
 
+select_handler *create_duckdb_unit_handler(THD *thd, SELECT_LEX_UNIT *sel_unit)
+{
+  if (thd->lex->sql_command == SQLCOM_CREATE_VIEW)
+    return nullptr;
+
+  if (thd->stmt_arena && thd->stmt_arena->is_stmt_prepare())
+    return nullptr;
+
+  if (!sel_unit)
+    return nullptr;
+
+  std::vector<std::string> external_tables;
+  bool has_duckdb_table= false;
+
+  if (!can_pushdown_unit_to_duckdb(sel_unit, external_tables,
+                                   has_duckdb_table))
+    return nullptr;
+
+  if (!has_duckdb_table)
+    return nullptr;
+
+  auto *handler= new ha_duckdb_select_handler(thd, sel_unit);
+  if (!external_tables.empty())
+  {
+    handler->set_cross_engine(std::move(external_tables));
+
+    if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
+      sql_print_information("DuckDB: cross-engine UNION pushdown with %zu "
+                            "external table(s)",
+                            handler->external_table_count());
+  }
+  return handler;
+}
+
 /* ----- ha_duckdb_select_handler implementation ----- */
 
 ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
@@ -119,6 +180,15 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
     The select_handler intercepts the full query in all cases
     (simple SELECT and UNION), so the original text is always usable.
   */
+  query_string.append(thd_arg->query(), thd_arg->query_length());
+}
+
+ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
+                                                   SELECT_LEX_UNIT *sel_unit)
+    : select_handler(thd_arg, duckdb_hton, sel_unit), current_row_index(0),
+      query_string(thd_arg->charset())
+{
+  query_string.length(0);
   query_string.append(thd_arg->query(), thd_arg->query_length());
 }
 
@@ -144,13 +214,24 @@ int ha_duckdb_select_handler::init_scan()
    */
   if (has_cross_engine)
   {
-    for (TABLE_LIST *tbl= select_lex->get_table_list(); tbl;
-         tbl= tbl->next_global)
+    auto register_tables_from_sel= [](SELECT_LEX *sl) {
+      for (TABLE_LIST *tbl= sl->get_table_list(); tbl; tbl= tbl->next_global)
+      {
+        if (tbl->derived || !tbl->table)
+          continue;
+        if (tbl->table->file->ht != duckdb_hton)
+          myduck::register_external_table(tbl->table_name.str, tbl->table);
+      }
+    };
+
+    if (select_lex)
     {
-      if (tbl->derived || !tbl->table)
-        continue;
-      if (tbl->table->file->ht != duckdb_hton)
-        myduck::register_external_table(tbl->table_name.str, tbl->table);
+      register_tables_from_sel(select_lex);
+    }
+    else if (lex_unit)
+    {
+      for (SELECT_LEX *sl= lex_unit->first_select(); sl; sl= sl->next_select())
+        register_tables_from_sel(sl);
     }
   }
 

@@ -6,6 +6,9 @@
 --echo # Setup: create tables in both engines
 --echo
 
+CREATE DATABASE IF NOT EXISTS cross_engine_join;
+USE cross_engine_join;
+
 CREATE TABLE t_duck (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE=DuckDB;
 CREATE TABLE t_inno (id INT PRIMARY KEY, name VARCHAR(50)) ENGINE=InnoDB;
 
@@ -16,6 +19,7 @@ INSERT INTO t_inno VALUES (1, 'Alice'), (2, 'Bob'), (4, 'Dave');
 --echo # (1) Basic INNER JOIN
 --echo
 
+--sorted_result
 SELECT d.id, d.val, i.name
   FROM t_duck d JOIN t_inno i ON d.id = i.id
   ORDER BY d.id;
@@ -24,6 +28,7 @@ SELECT d.id, d.val, i.name
 --echo # (2) LEFT JOIN — DuckDB left, InnoDB right
 --echo
 
+--sorted_result
 SELECT d.id, d.val, i.name
   FROM t_duck d LEFT JOIN t_inno i ON d.id = i.id
   ORDER BY d.id;
@@ -32,6 +37,7 @@ SELECT d.id, d.val, i.name
 --echo # (3) RIGHT JOIN — InnoDB left, DuckDB right
 --echo
 
+--sorted_result
 SELECT d.id, d.val, i.name
   FROM t_duck d RIGHT JOIN t_inno i ON d.id = i.id
   ORDER BY i.id;
@@ -40,6 +46,7 @@ SELECT d.id, d.val, i.name
 --echo # (4) Cross join (cartesian product)
 --echo
 
+--sorted_result
 SELECT d.id AS did, i.id AS iid
   FROM t_duck d, t_inno i
   ORDER BY did, iid;
@@ -48,6 +55,7 @@ SELECT d.id AS did, i.id AS iid
 --echo # (5) Aggregation over cross-engine join
 --echo
 
+--sorted_result
 SELECT COUNT(*), SUM(d.id)
   FROM t_duck d JOIN t_inno i ON d.id = i.id;
 
@@ -55,6 +63,7 @@ SELECT COUNT(*), SUM(d.id)
 --echo # (6) Subquery with InnoDB table in WHERE
 --echo
 
+--sorted_result
 SELECT d.id, d.val
   FROM t_duck d
   WHERE d.id IN (SELECT id FROM t_inno)
@@ -91,6 +100,7 @@ CREATE TABLE t_inno_types (
 INSERT INTO t_duck_types VALUES (1, 10, 1000000, 1.5, 2.5, 99.99, '2025-01-15', '2025-01-15 10:30:00', 'duck');
 INSERT INTO t_inno_types VALUES (1, 20, 2000000, 3.5, 4.5, 88.88, '2025-06-20', '2025-06-20 14:00:00', 'inno');
 
+--sorted_result
 SELECT d.id, d.ti, d.bi, d.f, d.dc, d.txt, i.ti, i.bi, i.f, i.dc, i.txt
   FROM t_duck_types d JOIN t_inno_types i ON d.id = i.id;
 
@@ -104,6 +114,7 @@ CREATE TABLE t_inno_null (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE=InnoDB;
 INSERT INTO t_duck_null VALUES (1, 'a'), (2, NULL);
 INSERT INTO t_inno_null VALUES (1, NULL), (2, 'b');
 
+--sorted_result
 SELECT d.id, d.val AS dval, i.val AS ival
   FROM t_duck_null d JOIN t_inno_null i ON d.id = i.id
   ORDER BY d.id;
@@ -118,3 +129,4 @@ DROP TABLE t_duck_types;
 DROP TABLE t_inno_types;
 DROP TABLE t_duck_null;
 DROP TABLE t_inno_null;
+DROP DATABASE cross_engine_join;
