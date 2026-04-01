@@ -230,6 +230,7 @@ struct MdbScanGlobalState : duckdb::GlobalTableFunctionState
   bool scan_started= false;
   bool finished= false;
   TABLE *table= nullptr;
+  duckdb::vector<duckdb::idx_t> column_ids;
 
   idx_t MaxThreads() const override { return 1; }
 };
@@ -267,6 +268,7 @@ mdb_scan_init_global(duckdb::ClientContext &context,
   auto &bind_data= input.bind_data->Cast<MdbScanBindData>();
   auto state= duckdb::make_uniq<MdbScanGlobalState>();
   state->table= bind_data.table;
+  state->column_ids= input.column_ids;
   return state;
 }
 
@@ -298,6 +300,10 @@ static void mdb_scan_function(duckdb::ClientContext &context,
 
   if (!state.scan_started)
   {
+    bitmap_clear_all(tbl->read_set);
+    for (auto col_idx : state.column_ids)
+      bitmap_set_bit(tbl->read_set, static_cast<uint>(col_idx));
+
     if (tbl->file->ha_rnd_init(true))
     {
       state.finished= true;
@@ -310,7 +316,7 @@ static void mdb_scan_function(duckdb::ClientContext &context,
   }
 
   duckdb::idx_t count= 0;
-  duckdb::idx_t ncols= output.ColumnCount();
+  duckdb::idx_t ncols= state.column_ids.size();
 
   while (count < STANDARD_VECTOR_SIZE)
   {
@@ -322,11 +328,11 @@ static void mdb_scan_function(duckdb::ClientContext &context,
       break;
     }
 
-    for (duckdb::idx_t col= 0; col < ncols; col++)
+    for (duckdb::idx_t i= 0; i < ncols; i++)
     {
-      Field *field= tbl->field[col];
+      Field *field= tbl->field[state.column_ids[i]];
       duckdb::Value val= field_to_duckdb_value(field);
-      output.data[col].SetValue(count, val);
+      output.data[i].SetValue(count, val);
     }
     count++;
   }
@@ -376,7 +382,7 @@ void register_cross_engine_scan(duckdb::DatabaseInstance &db)
   duckdb::TableFunction mdb_scan("_mdb_scan", {duckdb::LogicalType::VARCHAR},
                                  mdb_scan_function, mdb_scan_bind,
                                  mdb_scan_init_global);
-  mdb_scan.projection_pushdown= false;
+  mdb_scan.projection_pushdown= true;
   mdb_scan.filter_pushdown= false;
 
   duckdb::ExtensionUtil::RegisterFunction(db, std::move(mdb_scan));

@@ -14,7 +14,6 @@ duckdb_allow_encryption : 2026-03-07 drrtuy@gmail.com
 duckdb_alter_table_engine : 2026-03-07 drrtuy@gmail.com
 duckdb_appender_allocator_flush_threshold : 2026-03-07 drrtuy@gmail.com
 duckdb_bit_string : 2026-03-07 drrtuy@gmail.com
-duckdb_cte : 2026-03-07 drrtuy@gmail.com
 duckdb_db_table_strconvert : 2026-03-07 drrtuy@gmail.com
 duckdb_ddl_during_transaction : 2026-03-07 drrtuy@gmail.com
 duckdb_fix_sql : 2026-03-07 drrtuy@gmail.com
