@@ -28,13 +28,18 @@
 
 #include "duckdb.hpp"
 
+#include <vector>
+#include <string>
+
 extern handlerton *duckdb_hton;
 
 /**
   select_handler implementation for DuckDB.
 
-  Pushes entire SELECT queries down to the DuckDB engine when all
-  referenced tables belong to DuckDB.
+  Pushes SELECT queries down to the DuckDB engine.  Supports both
+  pure-DuckDB queries and cross-engine joins where some tables belong
+  to other engines (e.g. InnoDB).  External tables are exposed to
+  DuckDB via the _mdb_scan table function and replacement scan.
 */
 class ha_duckdb_select_handler : public select_handler
 {
@@ -42,6 +47,9 @@ public:
   ha_duckdb_select_handler(THD *thd_arg, SELECT_LEX *sel_lex,
                            SELECT_LEX_UNIT *sel_unit);
   ~ha_duckdb_select_handler() override;
+
+  void set_cross_engine(std::vector<std::string> &&tables);
+  size_t external_table_count() const;
 
 protected:
   int init_scan() override;
@@ -54,12 +62,19 @@ private:
   size_t current_row_index;
 
   StringBuffer<4096> query_string;
+
+  /** true when the query mixes DuckDB and non-DuckDB tables */
+  bool has_cross_engine= false;
+
+  /** Names of external tables registered for the current query */
+  std::vector<std::string> external_table_names;
 };
 
 /**
   Factory function registered in hton->create_select.
-  Returns a new ha_duckdb_select_handler if all tables in the query
-  are DuckDB tables, otherwise returns nullptr.
+  Returns a new ha_duckdb_select_handler if the query can be pushed
+  down to DuckDB — either all tables are DuckDB, or at least one is
+  DuckDB and the rest can be scanned via the cross-engine mechanism.
 */
 select_handler *create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
                                              SELECT_LEX_UNIT *sel_unit);

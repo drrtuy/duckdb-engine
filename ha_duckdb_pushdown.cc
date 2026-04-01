@@ -1,5 +1,4 @@
 /*
-  Copyright (c) 2025, MariaDB Corporation.
   Copyright (c) 2026, MariaDB Foundation.
   Copyright (c) 2026, Roman Nozdrin <drrtuy@gmail.com>
   Copyright (c) 2026, Leonid Fedorov.
@@ -30,41 +29,35 @@
 #include "duckdb_select.h"
 #include "duckdb_query.h"
 #include "duckdb_context.h"
+#include "cross_engine_scan.h"
+#include "duckdb_log.h"
 
 extern handlerton *duckdb_hton;
 
-/* ----- Helper: check all tables in a SELECT_LEX are DuckDB ----- */
+/**
+  Check whether a SELECT_LEX can be pushed down to DuckDB.
 
-static bool all_tables_are_duckdb(SELECT_LEX *sel_lex)
+  Returns true if at least one table is DuckDB.  Non-DuckDB tables are
+  collected in @p external_tables so they can be registered with the
+  replacement-scan mechanism before executing the DuckDB query.
+*/
+
+static bool can_pushdown_to_duckdb(SELECT_LEX *sel_lex,
+                                   std::vector<std::string> &external_tables,
+                                   bool &has_duckdb_table)
 {
-  if (!sel_lex->join)
-    return false;
-
-  for (TABLE_LIST *tbl= sel_lex->join->tables_list; tbl; tbl= tbl->next_local)
+  for (TABLE_LIST *tbl= sel_lex->get_table_list(); tbl; tbl= tbl->next_global)
   {
-    if (!tbl->table)
-      return false;
-
-    /* Skip derived tables — they will be checked recursively */
-    if (tbl->derived)
+    if (tbl->derived || !tbl->table)
       continue;
 
-    if (tbl->table->file->ht != duckdb_hton)
-      return false;
+    if (tbl->table->file->ht == duckdb_hton)
+      has_duckdb_table= true;
+    else
+      external_tables.emplace_back(tbl->table_name.str);
   }
 
-  /* Check inner units (subqueries) recursively */
-  for (SELECT_LEX_UNIT *un= sel_lex->first_inner_unit(); un;
-       un= un->next_unit())
-  {
-    for (SELECT_LEX *sl= un->first_select(); sl; sl= sl->next_select())
-    {
-      if (!all_tables_are_duckdb(sl))
-        return false;
-    }
-  }
-
-  return true;
+  return has_duckdb_table;
 }
 
 /* ----- Factory function ----- */
@@ -82,14 +75,31 @@ select_handler *create_duckdb_select_handler(THD *thd, SELECT_LEX *sel_lex,
   if (!sel_lex)
     return nullptr;
 
-  if (!all_tables_are_duckdb(sel_lex))
+  std::vector<std::string> external_tables;
+  bool has_duckdb_table= false;
+
+  if (!can_pushdown_to_duckdb(sel_lex, external_tables, has_duckdb_table))
+    return nullptr;
+
+  /* At least one DuckDB table must participate */
+  if (!has_duckdb_table)
     return nullptr;
 
   /* Do not push down queries with side-effects (e.g. user variables) */
   if (sel_lex->uncacheable & UNCACHEABLE_SIDEEFFECT)
     return nullptr;
 
-  return new ha_duckdb_select_handler(thd, sel_lex, sel_unit);
+  auto *handler= new ha_duckdb_select_handler(thd, sel_lex, sel_unit);
+  if (!external_tables.empty())
+  {
+    handler->set_cross_engine(std::move(external_tables));
+
+    if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
+      sql_print_information("DuckDB: cross-engine pushdown with %zu "
+                            "external table(s)",
+                            handler->external_table_count());
+  }
+  return handler;
 }
 
 /* ----- ha_duckdb_select_handler implementation ----- */
@@ -114,9 +124,35 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
 
 ha_duckdb_select_handler::~ha_duckdb_select_handler()= default;
 
+void ha_duckdb_select_handler::set_cross_engine(
+    std::vector<std::string> &&tables)
+{
+  has_cross_engine= true;
+  external_table_names= std::move(tables);
+}
+
+size_t ha_duckdb_select_handler::external_table_count() const
+{
+  return external_table_names.size();
+}
+
 int ha_duckdb_select_handler::init_scan()
 {
   DBUG_ENTER("ha_duckdb_select_handler::init_scan");
+
+  /* Register external tables with the thread-local replacement scan registry
+   */
+  if (has_cross_engine)
+  {
+    for (TABLE_LIST *tbl= select_lex->get_table_list(); tbl;
+         tbl= tbl->next_global)
+    {
+      if (tbl->derived || !tbl->table)
+        continue;
+      if (tbl->table->file->ht != duckdb_hton)
+        myduck::register_external_table(tbl->table_name.str, tbl->table);
+    }
+  }
 
   std::string sql(query_string.ptr(), query_string.length());
 
@@ -183,6 +219,9 @@ int ha_duckdb_select_handler::next_row()
 int ha_duckdb_select_handler::end_scan()
 {
   DBUG_ENTER("ha_duckdb_select_handler::end_scan");
+
+  if (has_cross_engine)
+    myduck::clear_external_tables();
 
   current_chunk.reset();
   query_result.reset();

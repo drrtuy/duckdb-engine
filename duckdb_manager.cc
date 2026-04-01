@@ -25,6 +25,10 @@
 #include "log.h"
 #include "duckdb_config.h"
 
+#undef UNKNOWN
+
+#include "cross_engine_scan.h"
+
 namespace myduck
 {
 
@@ -104,6 +108,9 @@ bool DuckdbManager::Initialize()
     m_database= nullptr;
     return true;
   }
+
+  /* Register cross-engine scan support (_mdb_scan + replacement scan) */
+  register_cross_engine_scan(*m_database->instance);
 
   sql_print_information("DuckDB: DuckdbManager::Initialize succeed, path=%s",
                         path);
