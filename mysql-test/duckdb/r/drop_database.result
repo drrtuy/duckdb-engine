@@ -2,7 +2,7 @@
 # DuckDB DROP DATABASE operations test
 #
 # Test 1: Basic CREATE/DROP DATABASE with DuckDB table
-CREATE DATABASE IF NOT EXISTS db_duck1;
+CREATE DATABASE IF NOT EXISTS db_duck1 CHARACTER SET utf8mb4;
 USE db_duck1;
 CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (1, 'one'), (2, 'two'), (3, 'three');
@@ -16,7 +16,7 @@ DROP DATABASE db_duck1;
 USE db_duck1;
 ERROR 42000: Unknown database 'db_duck1'
 # Test 2: Re-create same database after DROP
-CREATE DATABASE db_duck1;
+CREATE DATABASE db_duck1 CHARACTER SET utf8mb4;
 USE db_duck1;
 CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (10, 'ten');
@@ -26,7 +26,7 @@ id	val
 USE test;
 DROP DATABASE db_duck1;
 # Test 3: DROP DATABASE with multiple DuckDB tables
-CREATE DATABASE db_duck2;
+CREATE DATABASE db_duck2 CHARACTER SET utf8mb4;
 USE db_duck2;
 CREATE TABLE t1 (id INT PRIMARY KEY, a INT) ENGINE = DuckDB;
 CREATE TABLE t2 (id INT PRIMARY KEY, b VARCHAR(20)) ENGINE = DuckDB;
@@ -48,7 +48,7 @@ id	c
 2	2.22
 USE test;
 DROP DATABASE db_duck2;
-CREATE DATABASE db_duck2;
+CREATE DATABASE db_duck2 CHARACTER SET utf8mb4;
 USE db_duck2;
 CREATE TABLE t1 (id INT PRIMARY KEY, x INT) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (1, 999);
@@ -58,7 +58,7 @@ id	x
 USE test;
 DROP DATABASE db_duck2;
 # Test 4: DROP DATABASE with special name
-CREATE DATABASE `my-duck-db`;
+CREATE DATABASE `my-duck-db` CHARACTER SET utf8mb4;
 USE `my-duck-db`;
 CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (1, 'special');
@@ -72,7 +72,7 @@ DROP DATABASE IF EXISTS db_nonexistent_duck;
 Warnings:
 Note	1008	Can't drop database 'db_nonexistent_duck'; database doesn't exist
 # Test 6: CREATE/DROP DATABASE interleaved with DML on test
-CREATE DATABASE db_duck3;
+CREATE DATABASE db_duck3 CHARACTER SET utf8mb4;
 USE db_duck3;
 CREATE TABLE t1 (id INT PRIMARY KEY, val INT) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (1, 10);

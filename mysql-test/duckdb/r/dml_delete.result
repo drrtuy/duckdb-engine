@@ -54,7 +54,7 @@ INSERT INTO t1 VALUES (3, 'three');
 INSERT INTO t1 VALUES (4, 'four');
 INSERT INTO t1 VALUES (5, 'five');
 DELETE FROM t1 WHERE id IN (SELECT id FROM t2);
-ERROR HY000: Storage engine DUCKDB of the table `test`.`t2` doesn't have this option
+ERROR HY000: Storage engine DUCKDB of the table `db_dml_delete`.`t2` doesn't have this option
 SELECT * FROM t1 ORDER BY id;
 id	val
 1	one

@@ -6,7 +6,7 @@
 --echo # Setup: create tables in both engines
 --echo
 
-CREATE DATABASE IF NOT EXISTS cross_engine_join;
+CREATE DATABASE IF NOT EXISTS cross_engine_join CHARACTER SET utf8mb4;
 USE cross_engine_join;
 
 CREATE TABLE t_duck (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE=DuckDB;

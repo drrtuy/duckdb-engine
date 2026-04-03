@@ -6,7 +6,7 @@
 --echo # Setup
 --echo
 
-CREATE DATABASE IF NOT EXISTS cross_engine_union;
+CREATE DATABASE IF NOT EXISTS cross_engine_union CHARACTER SET utf8mb4;
 USE cross_engine_union;
 
 CREATE TABLE t_duck (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE=DuckDB;

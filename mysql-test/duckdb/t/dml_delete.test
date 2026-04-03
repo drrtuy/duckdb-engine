@@ -3,7 +3,8 @@
 --echo #
 
 --disable_query_log
-use test;
+CREATE DATABASE IF NOT EXISTS db_dml_delete CHARACTER SET utf8mb4;
+USE db_dml_delete;
 SET GLOBAL duckdb_dml_in_batch = OFF;
 --enable_query_log
 
@@ -127,4 +128,6 @@ SELECT * FROM t1 ORDER BY id;
 --disable_query_log
 DROP TABLE t1;
 DROP TABLE t2;
+DROP DATABASE db_dml_delete;
+USE test;
 --enable_query_log

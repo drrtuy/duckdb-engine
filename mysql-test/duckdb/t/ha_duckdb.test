@@ -3,7 +3,8 @@
 --echo #
 
 --disable_query_log
-use test;
+CREATE DATABASE IF NOT EXISTS db_ha_duckdb CHARACTER SET utf8mb4;
+USE db_ha_duckdb;
 --enable_query_log
 
 # -----------------------------------------------------------------
@@ -41,4 +42,6 @@ SELECT * FROM t1;
 # -----------------------------------------------------------------
 --disable_query_log
 DROP TABLE t1;
+DROP DATABASE db_ha_duckdb;
+USE test;
 --enable_query_log

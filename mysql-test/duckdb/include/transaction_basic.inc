@@ -7,7 +7,8 @@
 --source include/have_innodb.inc
 
 --disable_query_log
-use test;
+CREATE DATABASE IF NOT EXISTS db_transaction CHARACTER SET utf8mb4;
+USE db_transaction;
 --enable_query_log
 
 # -----------------------------------------------------------------
@@ -36,6 +37,9 @@ SELECT * FROM t1;
 --echo # Test 2: Durability after restart
 
 --source include/restart_mysqld.inc
+--disable_query_log
+USE db_transaction;
+--enable_query_log
 SELECT * FROM t1;
 
 # -----------------------------------------------------------------
@@ -47,6 +51,9 @@ BEGIN;
 INSERT INTO t1 (id, name) VALUES (4, '4');
 INSERT INTO t1 (id, name) VALUES (5, '5');
 --source include/restart_mysqld.inc
+--disable_query_log
+USE db_transaction;
+--enable_query_log
 SELECT * FROM t1;
 
 # -----------------------------------------------------------------
@@ -57,6 +64,9 @@ SELECT * FROM t1;
 SET autocommit = 1;
 INSERT INTO t1 (id, name) VALUES (3, '3');
 --source include/restart_mysqld.inc
+--disable_query_log
+USE db_transaction;
+--enable_query_log
 SELECT * FROM t1;
 
 # -----------------------------------------------------------------
@@ -72,8 +82,8 @@ CREATE TABLE t1 (
 ) ENGINE = DuckDB;
 --enable_query_log
 
-connect (con1,localhost,root,,test);
-connect (con2,localhost,root,,test);
+connect (con1,localhost,root,,db_transaction);
+connect (con2,localhost,root,,db_transaction);
 
 connection con1;
 BEGIN;
@@ -169,6 +179,9 @@ disconnect con1;
 disconnect con2;
 
 --source include/restart_mysqld.inc
+--disable_query_log
+USE db_transaction;
+--enable_query_log
 SELECT * FROM t_duck;
 SELECT * FROM t_inno;
 
@@ -178,5 +191,7 @@ SELECT * FROM t_inno;
 --disable_query_log
 DROP TABLE t_duck;
 DROP TABLE t_inno;
+DROP DATABASE db_transaction;
+USE test;
 --enable_query_log
 

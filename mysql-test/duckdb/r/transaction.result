@@ -38,8 +38,8 @@ id	name
 1	1
 3	3
 # Test 5: Isolation
-connect  con1,localhost,root,,test;
-connect  con2,localhost,root,,test;
+connect  con1,localhost,root,,db_transaction;
+connect  con2,localhost,root,,db_transaction;
 connection con1;
 BEGIN;
 INSERT INTO t1 (id, name) VALUES (1, '1');
@@ -149,8 +149,8 @@ id	name
 1	1
 3	3
 # Test 5: Isolation
-connect  con1,localhost,root,,test;
-connect  con2,localhost,root,,test;
+connect  con1,localhost,root,,db_transaction;
+connect  con2,localhost,root,,db_transaction;
 connection con1;
 BEGIN;
 INSERT INTO t1 (id, name) VALUES (1, '1');
