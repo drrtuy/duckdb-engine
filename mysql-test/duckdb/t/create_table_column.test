@@ -12,9 +12,14 @@ SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;
 --echo # 1) Prepare
 --echo
 
+--disable_query_log
+CREATE DATABASE IF NOT EXISTS db_create_col CHARACTER SET utf8mb4;
+USE db_create_col;
+--enable_query_log
+
 --echo # 2) Create table
 --echo
---let $DB_NAME=test
+--let $DB_NAME=db_create_col
 
 CREATE TABLE test_table (
   id INT PRIMARY KEY,
@@ -472,5 +477,7 @@ set global duckdb_use_double_for_decimal=default;
 
 --disable_query_log
 SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
+DROP DATABASE db_create_col;
+USE test;
 --enable_query_log
 --source ../include/cleanup_duckdb_udf.inc

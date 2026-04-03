@@ -1,10 +1,10 @@
 # Test the compatibility of duckdb engine fields and compare with innodb_db engine
 --disable_query_log
-CREATE DATABASE IF NOT EXISTS innodb_db;
-CREATE DATABASE IF NOT EXISTS duckdb_db;
-CREATE DATABASE IF NOT EXISTS duckdb_db_batch_insert;
-CREATE DATABASE IF NOT EXISTS innotoduck;
-CREATE DATABASE IF NOT EXISTS ducktoinno;
+CREATE DATABASE IF NOT EXISTS innodb_db CHARACTER SET utf8mb4;
+CREATE DATABASE IF NOT EXISTS duckdb_db CHARACTER SET utf8mb4;
+CREATE DATABASE IF NOT EXISTS duckdb_db_batch_insert CHARACTER SET utf8mb4;
+CREATE DATABASE IF NOT EXISTS innotoduck CHARACTER SET utf8mb4;
+CREATE DATABASE IF NOT EXISTS ducktoinno CHARACTER SET utf8mb4;
 
 # create table with engine innodb and duckdb.
 USE innodb_db;

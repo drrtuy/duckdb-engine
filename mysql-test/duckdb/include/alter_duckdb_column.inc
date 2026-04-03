@@ -1,3 +1,8 @@
+--disable_query_log
+CREATE DATABASE IF NOT EXISTS db_alter_col CHARACTER SET utf8mb4;
+USE db_alter_col;
+--enable_query_log
+
 --write_file $MYSQL_TMP_DIR/duckdb_column_meta.inc
   SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
   --sorted_result
@@ -84,7 +89,7 @@ SELECT * FROM t;
 
 # DELETE FROM t WHERE c1 IS NULL;
 --disable_result_log
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c1 IS NULL");
 --enable_result_log
 eval ALTER TABLE t MODIFY COLUMN a1 BIGINT COMMENT "col a1",
                    MODIFY COLUMN b1 BIGINT DEFAULT 100 COMMENT "",
@@ -99,7 +104,7 @@ SELECT * FROM t;
 
 # DELETE FROM t WHERE b1 IS NULL;
 --disable_result_log
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE b1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE b1 IS NULL");
 --enable_result_log
 eval ALTER TABLE t CHANGE a1 a INT COMMENT "col a",
                    CHANGE b1 b INT NOT NULL DEFAULT 1000,
@@ -114,7 +119,7 @@ SELECT * FROM t;
 
 # DELETE FROM t WHERE c IS NULL;
 --disable_result_log
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c IS NULL");
 --enable_result_log
 eval ALTER TABLE t RENAME COLUMN a TO a1,
                    MODIFY COLUMN b BIGINT DEFAULT 10000 COMMENT "col b",
@@ -198,19 +203,19 @@ SELECT * FROM t;
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT DEFAULT (1+1), b VARCHAR(100) DEFAULT ('1+1'), c VARCHAR(100) DEFAULT (1+1)) ENGINE = DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
 
 eval ALTER TABLE t ADD COLUMN d INT DEFAULT (2+2),
                    ADD COLUMN e VARCHAR(100) DEFAULT ('2+2'),
                    ADD COLUMN f VARCHAR(100) DEFAULT (2+2), ALGORITHM = $algorithm;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
 
 eval ALTER TABLE t MODIFY COLUMN a INT DEFAULT (3+3),
                    MODIFY COLUMN b VARCHAR(100) DEFAULT ('3+3'),
                    MODIFY COLUMN c VARCHAR(100) DEFAULT (3+3), ALGORITHM = $algorithm;
 INSERT INTO t(id) VALUES(5);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(6)");
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(6)");
 
 SELECT * FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
@@ -222,12 +227,12 @@ SELECT * FROM t;
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, B0 BIT(1) NOT NULL DEFAULT 0, B1 BIT(32) NOT NULL DEFAULT b'1111') ENGINE=DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
 
 eval ALTER TABLE t ADD COLUMN B2 BIT(64) NOT NULL DEFAULT b'11111',
                    ALTER COLUMN B1 SET DEFAULT 3333, ALGORITHM = $algorithm;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
 
 SELECT id, hex(B0), hex(B1), hex(B2) FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
@@ -397,3 +402,8 @@ DROP TABLE t;
 --echo # 16) Cleanup
 --echo #
 --remove_file $MYSQL_TMP_DIR/duckdb_column_meta.inc
+
+--disable_query_log
+DROP DATABASE db_alter_col;
+USE test;
+--enable_query_log

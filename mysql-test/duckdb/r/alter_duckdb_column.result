@@ -16,18 +16,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ADD COLUMN d INT NOT NULL DEFAULT 100 COMMENT "col d", 
 ADD COLUMN e INT NULL DEFAULT 1000 COMMENT "",
@@ -49,24 +49,24 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 7]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	d	'100'	NO	INTEGER	NULL
-test	t	e	'1000'	YES	INTEGER	NULL
-test	t	f	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	d	'100'	NO	INTEGER	NULL
+db_alter_col	t	e	'1000'	YES	INTEGER	NULL
+db_alter_col	t	f	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	d	100	NO	int	col d
-test	t	e	1000	YES	int	
-test	t	f	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	d	100	NO	int	col d
+db_alter_col	t	e	1000	YES	int	
+db_alter_col	t	f	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t DROP COLUMN a, DROP COLUMN d, ALGORITHM = INSTANT;
 INSERT INTO t VALUES(6, 6, 6, 6, 6);
@@ -85,20 +85,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	e	'1000'	YES	INTEGER	NULL
-test	t	f	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	e	'1000'	YES	INTEGER	NULL
+db_alter_col	t	f	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	e	1000	YES	int	
-test	t	f	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	e	1000	YES	int	
+db_alter_col	t	f	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 3) SET AND DROP DEFAULT VALUE
@@ -116,18 +116,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b SET DEFAULT 100,
 ALTER COLUMN c SET DEFAULT 100, ALGORITHM = INSTANT;
@@ -144,18 +144,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'100'	YES	INTEGER	NULL
-test	t	c	'100'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'100'	YES	INTEGER	NULL
+db_alter_col	t	c	'100'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	100	YES	int	
-test	t	c	100	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	100	YES	int	
+db_alter_col	t	c	100	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b DROP DEFAULT, 
 ALTER COLUMN c SET DEFAULT 1000, ALGORITHM = INSTANT;
@@ -174,18 +174,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	'1000'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	'1000'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	1000	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	1000	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b SET DEFAULT 10000, 
 ALTER COLUMN c DROP DEFAULT, ALGORITHM = INSTANT;
@@ -206,18 +206,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'10000'	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'10000'	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	10000	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	10000	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 3) RENAME, MODIFY AND CHANGE
@@ -235,18 +235,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t RENAME COLUMN a TO a1, 
 RENAME COLUMN b TO b1,
@@ -262,20 +262,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b1	NULL	YES	INTEGER	NULL
-test	t	c1	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b1	NULL	YES	INTEGER	NULL
+db_alter_col	t	c1	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	int	
-test	t	b1	NULL	YES	int	
-test	t	c1	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	int	
+db_alter_col	t	b1	NULL	YES	int	
+db_alter_col	t	c1	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c1 IS NULL");
 ALTER TABLE t MODIFY COLUMN a1 BIGINT COMMENT "col a1",
 MODIFY COLUMN b1 BIGINT DEFAULT 100 COMMENT "",
 MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 100, ALGORITHM = INSTANT;
@@ -296,20 +296,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b1	'100'	YES	INTEGER	NULL
-test	t	c1	'100'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b1	'100'	YES	INTEGER	NULL
+db_alter_col	t	c1	'100'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	bigint	col a1
-test	t	b1	100	YES	bigint	
-test	t	c1	100	NO	bigint	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	bigint	col a1
+db_alter_col	t	b1	100	YES	bigint	
+db_alter_col	t	c1	100	NO	bigint	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE b1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE b1 IS NULL");
 ALTER TABLE t CHANGE a1 a INT COMMENT "col a",
 CHANGE b1 b INT NOT NULL DEFAULT 1000,
 CHANGE c1 c INT COMMENT "", ALGORITHM = INSTANT;
@@ -332,20 +332,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'1000'	NO	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'1000'	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	col a
-test	t	b	1000	NO	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	col a
+db_alter_col	t	b	1000	NO	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c IS NULL");
 ALTER TABLE t RENAME COLUMN a TO a1,
 MODIFY COLUMN b BIGINT DEFAULT 10000 COMMENT "col b",
 CHANGE c c1 BIGINT NOT NULL DEFAULT 10000 COMMENT "col c1", ALGORITHM = INSTANT;
@@ -369,18 +369,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b	'10000'	YES	INTEGER	NULL
-test	t	c1	'10000'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'10000'	YES	INTEGER	NULL
+db_alter_col	t	c1	'10000'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	int	col a
-test	t	b	10000	YES	bigint	col b
-test	t	c1	10000	NO	bigint	col c1
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	int	col a
+db_alter_col	t	b	10000	YES	bigint	col b
+db_alter_col	t	c1	10000	NO	bigint	col c1
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 4) DEFAULT NULL
@@ -402,20 +402,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'1'	YES	INTEGER	NULL
-test	t	b	'1'	YES	INTEGER	NULL
-test	t	c	'1'	YES	INTEGER	NULL
-test	t	d	'1'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'1'	YES	INTEGER	NULL
+db_alter_col	t	c	'1'	YES	INTEGER	NULL
+db_alter_col	t	d	'1'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	1	YES	int	col a
-test	t	b	1	YES	int	col b
-test	t	c	1	YES	int	col c
-test	t	d	1	YES	int	col d
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	1	YES	int	col a
+db_alter_col	t	b	1	YES	int	col b
+db_alter_col	t	c	1	YES	int	col c
+db_alter_col	t	d	1	YES	int	col d
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN a SET DEFAULT NULL,
 ALTER COLUMN b DROP DEFAULT,
@@ -434,20 +434,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	'10'	YES	INTEGER	NULL
-test	t	d	'10'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	'10'	YES	INTEGER	NULL
+db_alter_col	t	d	'10'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	col a
-test	t	b	NULL	YES	int	col b
-test	t	c	10	YES	int	col c
-test	t	d	10	YES	int	col d
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	col a
+db_alter_col	t	b	NULL	YES	int	col b
+db_alter_col	t	c	10	YES	int	col c
+db_alter_col	t	d	10	YES	int	col d
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t MODIFY a BIGINT,
 CHANGE b b BIGINT DEFAULT NULL,
@@ -466,20 +466,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	d	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	d	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	bigint	
-test	t	b	NULL	YES	bigint	
-test	t	c	NULL	YES	bigint	
-test	t	d	NULL	YES	bigint	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	bigint	
+db_alter_col	t	b	NULL	YES	bigint	
+db_alter_col	t	c	NULL	YES	bigint	
+db_alter_col	t	d	NULL	YES	bigint	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 5) DEFAULT TIMESTAMP
@@ -519,8 +519,8 @@ id	a	b
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT DEFAULT (1+1), b VARCHAR(100) DEFAULT ('1+1'), c VARCHAR(100) DEFAULT (1+1)) ENGINE = DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -531,8 +531,8 @@ ALTER TABLE t ADD COLUMN d INT DEFAULT (2+2),
 ADD COLUMN e VARCHAR(100) DEFAULT ('2+2'),
 ADD COLUMN f VARCHAR(100) DEFAULT (2+2), ALGORITHM = INSTANT;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -543,8 +543,8 @@ ALTER TABLE t MODIFY COLUMN a INT DEFAULT (3+3),
 MODIFY COLUMN b VARCHAR(100) DEFAULT ('3+3'),
 MODIFY COLUMN c VARCHAR(100) DEFAULT (3+3), ALGORITHM = INSTANT;
 INSERT INTO t(id) VALUES(5);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(6)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(6)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(6)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(6)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -564,24 +564,24 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 7]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'6'	YES	INTEGER	NULL
-test	t	b	'3+3'	YES	VARCHAR	NULL
-test	t	c	'6'	YES	VARCHAR	NULL
-test	t	d	'4'	YES	INTEGER	NULL
-test	t	e	'2+2'	YES	VARCHAR	NULL
-test	t	f	'4'	YES	VARCHAR	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'6'	YES	INTEGER	NULL
+db_alter_col	t	b	'3+3'	YES	VARCHAR	NULL
+db_alter_col	t	c	'6'	YES	VARCHAR	NULL
+db_alter_col	t	d	'4'	YES	INTEGER	NULL
+db_alter_col	t	e	'2+2'	YES	VARCHAR	NULL
+db_alter_col	t	f	'4'	YES	VARCHAR	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	(3 + 3)	YES	int	
-test	t	b	'3+3'	YES	varchar	
-test	t	c	(3 + 3)	YES	varchar	
-test	t	d	(2 + 2)	YES	int	
-test	t	e	'2+2'	YES	varchar	
-test	t	f	(2 + 2)	YES	varchar	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	(3 + 3)	YES	int	
+db_alter_col	t	b	'3+3'	YES	varchar	
+db_alter_col	t	c	(3 + 3)	YES	varchar	
+db_alter_col	t	d	(2 + 2)	YES	int	
+db_alter_col	t	e	'2+2'	YES	varchar	
+db_alter_col	t	f	(2 + 2)	YES	varchar	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 7) DEFAULT VALUE OF BIT
@@ -589,8 +589,8 @@ test	t	id	NULL	NO	int
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, B0 BIT(1) NOT NULL DEFAULT 0, B1 BIT(32) NOT NULL DEFAULT b'1111') ENGINE=DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -600,8 +600,8 @@ BIGINT
 ALTER TABLE t ADD COLUMN B2 BIT(64) NOT NULL DEFAULT b'11111',
 ALTER COLUMN B1 SET DEFAULT 3333, ALGORITHM = INSTANT;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -619,18 +619,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	B0	'\x00'::BLOB	NO	BLOB	NULL
-test	t	B1	'\x00\x00\x0D\x05'::BLOB	NO	BLOB	NULL
-test	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'::BLOB	NO	BLOB	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	B0	'\x00'::BLOB	NO	BLOB	NULL
+db_alter_col	t	B1	'\x00\x00\x0D\x05'::BLOB	NO	BLOB	NULL
+db_alter_col	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'::BLOB	NO	BLOB	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	B0	b'0'	NO	bit	
-test	t	B1	b'110100000101'	NO	bit	
-test	t	B2	b'11111'	NO	bit	
-test	t	id	NULL	NO	int	
+db_alter_col	t	B0	b'0'	NO	bit	
+db_alter_col	t	B1	b'110100000101'	NO	bit	
+db_alter_col	t	B2	b'11111'	NO	bit	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 8) MULTIPLE DDL ABOUT COLUMNS
@@ -649,26 +649,26 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 8]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'1'	YES	INTEGER	NULL
-test	t	b	'1'	YES	INTEGER	NULL
-test	t	c	'1'	YES	INTEGER	NULL
-test	t	d	'1'	YES	INTEGER	NULL
-test	t	e	'1'	YES	INTEGER	NULL
-test	t	f	'1'	YES	INTEGER	NULL
-test	t	g	'1'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'1'	YES	INTEGER	NULL
+db_alter_col	t	c	'1'	YES	INTEGER	NULL
+db_alter_col	t	d	'1'	YES	INTEGER	NULL
+db_alter_col	t	e	'1'	YES	INTEGER	NULL
+db_alter_col	t	f	'1'	YES	INTEGER	NULL
+db_alter_col	t	g	'1'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	1	YES	int	col a
-test	t	b	1	YES	int	col b
-test	t	c	1	YES	int	col c
-test	t	d	1	YES	int	col d
-test	t	e	1	YES	int	col e
-test	t	f	1	YES	int	col f
-test	t	g	1	YES	int	col g
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	1	YES	int	col a
+db_alter_col	t	b	1	YES	int	col b
+db_alter_col	t	c	1	YES	int	col c
+db_alter_col	t	d	1	YES	int	col d
+db_alter_col	t	e	1	YES	int	col e
+db_alter_col	t	f	1	YES	int	col f
+db_alter_col	t	g	1	YES	int	col g
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ADD COLUMN h INT NOT NULL DEFAULT 2 COMMENT 'col h1',
 DROP COLUMN g,
@@ -683,26 +683,26 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 8]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	'1'	YES	INTEGER	NULL
-test	t	b	'2'	YES	INTEGER	NULL
-test	t	c1	'2'	NO	INTEGER	NULL
-test	t	d	NULL	YES	INTEGER	NULL
-test	t	e	NULL	YES	INTEGER	NULL
-test	t	f	'2'	YES	INTEGER	NULL
-test	t	h	'2'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'2'	YES	INTEGER	NULL
+db_alter_col	t	c1	'2'	NO	INTEGER	NULL
+db_alter_col	t	d	NULL	YES	INTEGER	NULL
+db_alter_col	t	e	NULL	YES	INTEGER	NULL
+db_alter_col	t	f	'2'	YES	INTEGER	NULL
+db_alter_col	t	h	'2'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	1	YES	int	col a
-test	t	b	2	YES	bigint	col b1
-test	t	c1	2	NO	bigint	col c1
-test	t	d	NULL	YES	int	col d
-test	t	e	NULL	YES	int	col e
-test	t	f	2	YES	int	col f
-test	t	h	2	NO	int	col h1
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	1	YES	int	col a
+db_alter_col	t	b	2	YES	bigint	col b1
+db_alter_col	t	c1	2	NO	bigint	col c1
+db_alter_col	t	d	NULL	YES	int	col d
+db_alter_col	t	e	NULL	YES	int	col e
+db_alter_col	t	f	2	YES	int	col f
+db_alter_col	t	h	2	NO	int	col h1
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 9) Not supported
@@ -762,7 +762,7 @@ t	CREATE TABLE `t` (
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 #
 # 11) Drop primary key column which leads to drop primary key.
 #
@@ -797,22 +797,22 @@ t	CREATE TABLE `t` (
   `b` int(11) NOT NULL,
   `c` int(11) NOT NULL,
   PRIMARY KEY (`a`,`b`,`c`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 3]
-test	t	a	NULL	NO	INTEGER	NULL
-test	t	b	NULL	NO	INTEGER	NULL
-test	t	c	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	NO	int	
-test	t	b	NULL	NO	int	
-test	t	c	NULL	NO	int	
+db_alter_col	t	a	NULL	NO	int	
+db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	c	NULL	NO	int	
 
 DROP TABLE t;
 #
@@ -827,20 +827,20 @@ t	CREATE TABLE `t` (
   `b` int(11) NOT NULL,
   `d` int(11) NOT NULL,
   PRIMARY KEY (`d`,`b`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-test	t	b	NULL	NO	INTEGER	NULL
-test	t	d	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	d	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	b	NULL	NO	int	
-test	t	d	NULL	NO	int	
+db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	d	NULL	NO	int	
 
 DROP TABLE t;
 #
@@ -854,20 +854,20 @@ t	CREATE TABLE `t` (
   `a` varchar(10) NOT NULL,
   `b` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-test	t	a	NULL	NO	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	a	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	NO	varchar	
-test	t	b	NULL	YES	int	
+db_alter_col	t	a	NULL	NO	varchar	
+db_alter_col	t	b	NULL	YES	int	
 
 DROP TABLE t;
 #
@@ -891,18 +891,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ADD COLUMN d INT NOT NULL DEFAULT 100 COMMENT "col d", 
 ADD COLUMN e INT NULL DEFAULT 1000 COMMENT "",
@@ -924,24 +924,24 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 7]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	d	'100'	NO	INTEGER	NULL
-test	t	e	'1000'	YES	INTEGER	NULL
-test	t	f	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	d	'100'	NO	INTEGER	NULL
+db_alter_col	t	e	'1000'	YES	INTEGER	NULL
+db_alter_col	t	f	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	d	100	NO	int	col d
-test	t	e	1000	YES	int	
-test	t	f	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	d	100	NO	int	col d
+db_alter_col	t	e	1000	YES	int	
+db_alter_col	t	f	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t DROP COLUMN a, DROP COLUMN d, ALGORITHM = INPLACE;
 INSERT INTO t VALUES(6, 6, 6, 6, 6);
@@ -960,20 +960,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	e	'1000'	YES	INTEGER	NULL
-test	t	f	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	e	'1000'	YES	INTEGER	NULL
+db_alter_col	t	f	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	e	1000	YES	int	
-test	t	f	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	e	1000	YES	int	
+db_alter_col	t	f	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 3) SET AND DROP DEFAULT VALUE
@@ -991,18 +991,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b SET DEFAULT 100,
 ALTER COLUMN c SET DEFAULT 100, ALGORITHM = INPLACE;
@@ -1019,18 +1019,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'100'	YES	INTEGER	NULL
-test	t	c	'100'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'100'	YES	INTEGER	NULL
+db_alter_col	t	c	'100'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	100	YES	int	
-test	t	c	100	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	100	YES	int	
+db_alter_col	t	c	100	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b DROP DEFAULT, 
 ALTER COLUMN c SET DEFAULT 1000, ALGORITHM = INPLACE;
@@ -1049,18 +1049,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	'1000'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	'1000'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	1000	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	1000	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN b SET DEFAULT 10000, 
 ALTER COLUMN c DROP DEFAULT, ALGORITHM = INPLACE;
@@ -1081,18 +1081,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'10000'	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'10000'	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	10000	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	10000	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 3) RENAME, MODIFY AND CHANGE
@@ -1110,18 +1110,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	
-test	t	b	NULL	YES	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	
+db_alter_col	t	b	NULL	YES	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t RENAME COLUMN a TO a1, 
 RENAME COLUMN b TO b1,
@@ -1137,20 +1137,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b1	NULL	YES	INTEGER	NULL
-test	t	c1	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b1	NULL	YES	INTEGER	NULL
+db_alter_col	t	c1	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	int	
-test	t	b1	NULL	YES	int	
-test	t	c1	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	int	
+db_alter_col	t	b1	NULL	YES	int	
+db_alter_col	t	c1	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c1 IS NULL");
 ALTER TABLE t MODIFY COLUMN a1 BIGINT COMMENT "col a1",
 MODIFY COLUMN b1 BIGINT DEFAULT 100 COMMENT "",
 MODIFY COLUMN c1 BIGINT NOT NULL DEFAULT 100, ALGORITHM = INPLACE;
@@ -1171,20 +1171,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b1	'100'	YES	INTEGER	NULL
-test	t	c1	'100'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b1	'100'	YES	INTEGER	NULL
+db_alter_col	t	c1	'100'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	bigint	col a1
-test	t	b1	100	YES	bigint	
-test	t	c1	100	NO	bigint	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	bigint	col a1
+db_alter_col	t	b1	100	YES	bigint	
+db_alter_col	t	c1	100	NO	bigint	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE b1 IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE b1 IS NULL");
 ALTER TABLE t CHANGE a1 a INT COMMENT "col a",
 CHANGE b1 b INT NOT NULL DEFAULT 1000,
 CHANGE c1 c INT COMMENT "", ALGORITHM = INPLACE;
@@ -1207,20 +1207,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	'1000'	NO	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'1000'	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	col a
-test	t	b	1000	NO	int	
-test	t	c	NULL	YES	int	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	col a
+db_alter_col	t	b	1000	NO	int	
+db_alter_col	t	c	NULL	YES	int	
+db_alter_col	t	id	NULL	NO	int	
 
-SELECT duckdb_query_udf("DELETE FROM test.t WHERE c IS NULL");
+SELECT duckdb_query_udf("DELETE FROM db_alter_col.t WHERE c IS NULL");
 ALTER TABLE t RENAME COLUMN a TO a1,
 MODIFY COLUMN b BIGINT DEFAULT 10000 COMMENT "col b",
 CHANGE c c1 BIGINT NOT NULL DEFAULT 10000 COMMENT "col c1", ALGORITHM = INPLACE;
@@ -1244,18 +1244,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	NULL	YES	INTEGER	NULL
-test	t	b	'10000'	YES	INTEGER	NULL
-test	t	c1	'10000'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	'10000'	YES	INTEGER	NULL
+db_alter_col	t	c1	'10000'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	NULL	YES	int	col a
-test	t	b	10000	YES	bigint	col b
-test	t	c1	10000	NO	bigint	col c1
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	NULL	YES	int	col a
+db_alter_col	t	b	10000	YES	bigint	col b
+db_alter_col	t	c1	10000	NO	bigint	col c1
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 4) DEFAULT NULL
@@ -1277,20 +1277,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'1'	YES	INTEGER	NULL
-test	t	b	'1'	YES	INTEGER	NULL
-test	t	c	'1'	YES	INTEGER	NULL
-test	t	d	'1'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'1'	YES	INTEGER	NULL
+db_alter_col	t	c	'1'	YES	INTEGER	NULL
+db_alter_col	t	d	'1'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	1	YES	int	col a
-test	t	b	1	YES	int	col b
-test	t	c	1	YES	int	col c
-test	t	d	1	YES	int	col d
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	1	YES	int	col a
+db_alter_col	t	b	1	YES	int	col b
+db_alter_col	t	c	1	YES	int	col c
+db_alter_col	t	d	1	YES	int	col d
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ALTER COLUMN a SET DEFAULT NULL,
 ALTER COLUMN b DROP DEFAULT,
@@ -1309,20 +1309,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	'10'	YES	INTEGER	NULL
-test	t	d	'10'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	'10'	YES	INTEGER	NULL
+db_alter_col	t	d	'10'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	int	col a
-test	t	b	NULL	YES	int	col b
-test	t	c	10	YES	int	col c
-test	t	d	10	YES	int	col d
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	int	col a
+db_alter_col	t	b	NULL	YES	int	col b
+db_alter_col	t	c	10	YES	int	col c
+db_alter_col	t	d	10	YES	int	col d
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t MODIFY a BIGINT,
 CHANGE b b BIGINT DEFAULT NULL,
@@ -1341,20 +1341,20 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 5]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	NULL	YES	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
-test	t	c	NULL	YES	INTEGER	NULL
-test	t	d	NULL	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
+db_alter_col	t	d	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	YES	bigint	
-test	t	b	NULL	YES	bigint	
-test	t	c	NULL	YES	bigint	
-test	t	d	NULL	YES	bigint	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	NULL	YES	bigint	
+db_alter_col	t	b	NULL	YES	bigint	
+db_alter_col	t	c	NULL	YES	bigint	
+db_alter_col	t	d	NULL	YES	bigint	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 5) DEFAULT TIMESTAMP
@@ -1394,8 +1394,8 @@ id	a	b
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY, a INT DEFAULT (1+1), b VARCHAR(100) DEFAULT ('1+1'), c VARCHAR(100) DEFAULT (1+1)) ENGINE = DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -1406,8 +1406,8 @@ ALTER TABLE t ADD COLUMN d INT DEFAULT (2+2),
 ADD COLUMN e VARCHAR(100) DEFAULT ('2+2'),
 ADD COLUMN f VARCHAR(100) DEFAULT (2+2), ALGORITHM = INPLACE;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -1418,8 +1418,8 @@ ALTER TABLE t MODIFY COLUMN a INT DEFAULT (3+3),
 MODIFY COLUMN b VARCHAR(100) DEFAULT ('3+3'),
 MODIFY COLUMN c VARCHAR(100) DEFAULT (3+3), ALGORITHM = INPLACE;
 INSERT INTO t(id) VALUES(5);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(6)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(6)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(6)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(6)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -1439,24 +1439,24 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 7]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'6'	YES	INTEGER	NULL
-test	t	b	'3+3'	YES	VARCHAR	NULL
-test	t	c	'6'	YES	VARCHAR	NULL
-test	t	d	'4'	YES	INTEGER	NULL
-test	t	e	'2+2'	YES	VARCHAR	NULL
-test	t	f	'4'	YES	VARCHAR	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'6'	YES	INTEGER	NULL
+db_alter_col	t	b	'3+3'	YES	VARCHAR	NULL
+db_alter_col	t	c	'6'	YES	VARCHAR	NULL
+db_alter_col	t	d	'4'	YES	INTEGER	NULL
+db_alter_col	t	e	'2+2'	YES	VARCHAR	NULL
+db_alter_col	t	f	'4'	YES	VARCHAR	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	(3 + 3)	YES	int	
-test	t	b	'3+3'	YES	varchar	
-test	t	c	(3 + 3)	YES	varchar	
-test	t	d	(2 + 2)	YES	int	
-test	t	e	'2+2'	YES	varchar	
-test	t	f	(2 + 2)	YES	varchar	
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	(3 + 3)	YES	int	
+db_alter_col	t	b	'3+3'	YES	varchar	
+db_alter_col	t	c	(3 + 3)	YES	varchar	
+db_alter_col	t	d	(2 + 2)	YES	int	
+db_alter_col	t	e	'2+2'	YES	varchar	
+db_alter_col	t	f	(2 + 2)	YES	varchar	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 7) DEFAULT VALUE OF BIT
@@ -1464,8 +1464,8 @@ test	t	id	NULL	NO	int
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, B0 BIT(1) NOT NULL DEFAULT 0, B1 BIT(32) NOT NULL DEFAULT b'1111') ENGINE=DuckDB;
 INSERT INTO t(id) VALUES(1);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(2)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(2)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -1475,8 +1475,8 @@ BIGINT
 ALTER TABLE t ADD COLUMN B2 BIT(64) NOT NULL DEFAULT b'11111',
 ALTER COLUMN B1 SET DEFAULT 3333, ALGORITHM = INPLACE;
 INSERT INTO t(id) VALUES(3);
-SELECT duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)");
-duckdb_query_udf("INSERT INTO test.t(id) VALUES(4)")
+SELECT duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)");
+duckdb_query_udf("INSERT INTO db_alter_col.t(id) VALUES(4)")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -1494,18 +1494,18 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	B0	'\x00'::BLOB	NO	BLOB	NULL
-test	t	B1	'\x00\x00\x0D\x05'::BLOB	NO	BLOB	NULL
-test	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'::BLOB	NO	BLOB	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	B0	'\x00'::BLOB	NO	BLOB	NULL
+db_alter_col	t	B1	'\x00\x00\x0D\x05'::BLOB	NO	BLOB	NULL
+db_alter_col	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'::BLOB	NO	BLOB	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	B0	b'0'	NO	bit	
-test	t	B1	b'110100000101'	NO	bit	
-test	t	B2	b'11111'	NO	bit	
-test	t	id	NULL	NO	int	
+db_alter_col	t	B0	b'0'	NO	bit	
+db_alter_col	t	B1	b'110100000101'	NO	bit	
+db_alter_col	t	B2	b'11111'	NO	bit	
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 8) MULTIPLE DDL ABOUT COLUMNS
@@ -1524,26 +1524,26 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 8]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a	'1'	YES	INTEGER	NULL
-test	t	b	'1'	YES	INTEGER	NULL
-test	t	c	'1'	YES	INTEGER	NULL
-test	t	d	'1'	YES	INTEGER	NULL
-test	t	e	'1'	YES	INTEGER	NULL
-test	t	f	'1'	YES	INTEGER	NULL
-test	t	g	'1'	YES	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'1'	YES	INTEGER	NULL
+db_alter_col	t	c	'1'	YES	INTEGER	NULL
+db_alter_col	t	d	'1'	YES	INTEGER	NULL
+db_alter_col	t	e	'1'	YES	INTEGER	NULL
+db_alter_col	t	f	'1'	YES	INTEGER	NULL
+db_alter_col	t	g	'1'	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	1	YES	int	col a
-test	t	b	1	YES	int	col b
-test	t	c	1	YES	int	col c
-test	t	d	1	YES	int	col d
-test	t	e	1	YES	int	col e
-test	t	f	1	YES	int	col f
-test	t	g	1	YES	int	col g
-test	t	id	NULL	NO	int	
+db_alter_col	t	a	1	YES	int	col a
+db_alter_col	t	b	1	YES	int	col b
+db_alter_col	t	c	1	YES	int	col c
+db_alter_col	t	d	1	YES	int	col d
+db_alter_col	t	e	1	YES	int	col e
+db_alter_col	t	f	1	YES	int	col f
+db_alter_col	t	g	1	YES	int	col g
+db_alter_col	t	id	NULL	NO	int	
 
 ALTER TABLE t ADD COLUMN h INT NOT NULL DEFAULT 2 COMMENT 'col h1',
 DROP COLUMN g,
@@ -1558,26 +1558,26 @@ duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, 
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 8]
-test	t	id	NULL	NO	INTEGER	NULL
-test	t	a1	'1'	YES	INTEGER	NULL
-test	t	b	'2'	YES	INTEGER	NULL
-test	t	c1	'2'	NO	INTEGER	NULL
-test	t	d	NULL	YES	INTEGER	NULL
-test	t	e	NULL	YES	INTEGER	NULL
-test	t	f	'2'	YES	INTEGER	NULL
-test	t	h	'2'	NO	INTEGER	NULL
+db_alter_col	t	id	NULL	NO	INTEGER	NULL
+db_alter_col	t	a1	'1'	YES	INTEGER	NULL
+db_alter_col	t	b	'2'	YES	INTEGER	NULL
+db_alter_col	t	c1	'2'	NO	INTEGER	NULL
+db_alter_col	t	d	NULL	YES	INTEGER	NULL
+db_alter_col	t	e	NULL	YES	INTEGER	NULL
+db_alter_col	t	f	'2'	YES	INTEGER	NULL
+db_alter_col	t	h	'2'	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a1	1	YES	int	col a
-test	t	b	2	YES	bigint	col b1
-test	t	c1	2	NO	bigint	col c1
-test	t	d	NULL	YES	int	col d
-test	t	e	NULL	YES	int	col e
-test	t	f	2	YES	int	col f
-test	t	h	2	NO	int	col h1
-test	t	id	NULL	NO	int	
+db_alter_col	t	a1	1	YES	int	col a
+db_alter_col	t	b	2	YES	bigint	col b1
+db_alter_col	t	c1	2	NO	bigint	col c1
+db_alter_col	t	d	NULL	YES	int	col d
+db_alter_col	t	e	NULL	YES	int	col e
+db_alter_col	t	f	2	YES	int	col f
+db_alter_col	t	h	2	NO	int	col h1
+db_alter_col	t	id	NULL	NO	int	
 
 #
 # 9) Not supported
@@ -1637,7 +1637,7 @@ t	CREATE TABLE `t` (
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 #
 # 11) Drop primary key column which leads to drop primary key.
 #
@@ -1672,22 +1672,22 @@ t	CREATE TABLE `t` (
   `b` int(11) NOT NULL,
   `c` int(11) NOT NULL,
   PRIMARY KEY (`a`,`b`,`c`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 3]
-test	t	a	NULL	NO	INTEGER	NULL
-test	t	b	NULL	NO	INTEGER	NULL
-test	t	c	NULL	NO	INTEGER	NULL
+db_alter_col	t	a	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	NO	int	
-test	t	b	NULL	NO	int	
-test	t	c	NULL	NO	int	
+db_alter_col	t	a	NULL	NO	int	
+db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	c	NULL	NO	int	
 
 DROP TABLE t;
 #
@@ -1702,20 +1702,20 @@ t	CREATE TABLE `t` (
   `b` int(11) NOT NULL,
   `d` int(11) NOT NULL,
   PRIMARY KEY (`d`,`b`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-test	t	b	NULL	NO	INTEGER	NULL
-test	t	d	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	d	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	b	NULL	NO	int	
-test	t	d	NULL	NO	int	
+db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	d	NULL	NO	int	
 
 DROP TABLE t;
 #
@@ -1729,20 +1729,20 @@ t	CREATE TABLE `t` (
   `a` varchar(10) NOT NULL,
   `b` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
 duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-test	t	a	NULL	NO	INTEGER	NULL
-test	t	b	NULL	YES	INTEGER	NULL
+db_alter_col	t	a	NULL	NO	INTEGER	NULL
+db_alter_col	t	b	NULL	YES	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-test	t	a	NULL	NO	varchar	
-test	t	b	NULL	YES	int	
+db_alter_col	t	a	NULL	NO	varchar	
+db_alter_col	t	b	NULL	YES	int	
 
 DROP TABLE t;
 #
