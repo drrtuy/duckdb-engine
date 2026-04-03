@@ -83,7 +83,11 @@ static myduck::DuckdbThdContext *get_duckdb_context(THD *thd)
 
 /* ----- Transaction callbacks ----- */
 
+#if MYSQL_VERSION_ID >= 110800
 static int duckdb_prepare(THD *thd, bool all)
+#else
+static int duckdb_prepare(handlerton *hton, THD *thd, bool all)
+#endif
 {
   if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))
   {
@@ -110,7 +114,11 @@ static void push_duckdb_query_error(const std::string &err)
   my_error(ER_UNKNOWN_ERROR, MYF(0), err.c_str());
 }
 
+#if MYSQL_VERSION_ID >= 110800
 static int duckdb_commit(THD *thd, bool commit_trx)
+#else
+static int duckdb_commit(handlerton *hton, THD *thd, bool commit_trx)
+#endif
 {
   if (commit_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)))
@@ -139,7 +147,11 @@ static int duckdb_commit(THD *thd, bool commit_trx)
   return 0;
 }
 
+#if MYSQL_VERSION_ID >= 110800
 static int duckdb_rollback(THD *thd, bool rollback_trx)
+#else
+static int duckdb_rollback(handlerton *hton, THD *thd, bool rollback_trx)
+#endif
 {
   if (rollback_trx ||
       !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))
@@ -157,7 +169,11 @@ static int duckdb_rollback(THD *thd, bool rollback_trx)
   return 0;
 }
 
+#if MYSQL_VERSION_ID >= 110800
 static int duckdb_close_connection(THD *thd)
+#else
+static int duckdb_close_connection(handlerton *hton, THD *thd)
+#endif
 {
   auto *ctx= static_cast<myduck::DuckdbThdContext *>(
       thd_get_ha_data(thd, duckdb_hton));
@@ -742,11 +758,11 @@ int ha_duckdb::extra(enum ha_extra_function operation)
 
   switch (operation)
   {
-  case HA_EXTRA_BEGIN_ALTER_COPY:
+  case HA_EXTRA_BEGIN_COPY:
     ctx->set_in_copy_ddl(true);
     break;
-  case HA_EXTRA_END_ALTER_COPY:
-  case HA_EXTRA_ABORT_ALTER_COPY:
+  case HA_EXTRA_END_COPY:
+  case HA_EXTRA_ABORT_COPY:
     ctx->set_in_copy_ddl(false);
     break;
   default:

@@ -31,6 +31,8 @@ MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_SOURCES}
 # Strip the flags that MariaDB's debug build adds so that our plugin's
 # object files see the same STL container layout as the library.
 IF(TARGET duckdb)
+  # DuckDB headers and plugin code require C++17.
+  SET_TARGET_PROPERTIES(duckdb PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
   # libduckdb_bundle.a is built without debug STL wrappers.
   # -U unconditionally undefines the macro no matter how it was inherited
   # (CMAKE_CXX_FLAGS_DEBUG, directory properties, generator expressions, etc.).

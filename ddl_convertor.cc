@@ -751,7 +751,11 @@ void DropColumnConvertor::prepare_columns()
       for (Field **old_ptr= m_old_table->field; *old_ptr; old_ptr++)
       {
         Field *old_field= *old_ptr;
+#if MYSQL_VERSION_ID >= 110501
         if (strcasecmp(old_field->field_name.str, drop->name.str) == 0)
+#else
+        if (strcasecmp(old_field->field_name.str, drop->name) == 0)
+#endif
         {
           m_columns_to_drop.emplace_back(nullptr, old_field);
           break;
