@@ -104,7 +104,6 @@ ExternalProject_Add_Step(duckdb_build bundle
   COMMAND sh "${CMAKE_CURRENT_BINARY_DIR}/bundle_duckdb.sh"
              "${_DUCKDB_BUILD_DIR}" "${DUCKDB_LIB}" "${CMAKE_AR}"
   DEPENDEES   build
-  BYPRODUCTS  "${DUCKDB_LIB}"
   COMMENT     "Bundling DuckDB static libraries into libduckdb_bundle.a"
 )
 
