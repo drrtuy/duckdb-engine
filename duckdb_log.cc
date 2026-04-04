@@ -19,6 +19,7 @@
 */
 
 #include "duckdb_log.h"
+#include "typelib.h"
 
 #include <my_global.h>
 
@@ -30,7 +31,6 @@ ulonglong duckdb_log_options= 0;
 const char *duckdb_log_types[]= {"DUCKDB_QUERY", "DUCKDB_QUERY_RESULT",
                                  nullptr};
 
-TYPELIB log_options_typelib= {array_elements(duckdb_log_types) - 1, "",
-                              duckdb_log_types, NULL};
+TYPELIB log_options_typelib= CREATE_TYPELIB_FOR(duckdb_log_types);
 
 } // namespace myduck

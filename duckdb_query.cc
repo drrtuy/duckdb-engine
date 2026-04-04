@@ -45,7 +45,7 @@ static std::string backticks_to_double_quotes(const std::string &sql)
   return out;
 }
 
-std::unique_ptr<duckdb::QueryResult>
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query)
 {
   const std::string q= backticks_to_double_quotes(query);
@@ -85,7 +85,7 @@ static std::string get_thd_schema(THD *thd)
   return {};
 }
 
-std::unique_ptr<duckdb::QueryResult>
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config)
 {
   auto *ctx=
@@ -105,7 +105,8 @@ duckdb_query(THD *thd, const std::string &query, bool need_config)
   return duckdb_query(ctx->get_connection(), query);
 }
 
-std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query)
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb_query(const std::string &query)
 {
   auto connection= DuckdbManager::CreateConnection();
   return duckdb_query(*connection, query);

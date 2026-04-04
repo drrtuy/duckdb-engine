@@ -41,8 +41,7 @@ my_bool require_primary_key= TRUE;
 const char *explain_output_names[]= {"ALL", "OPTIMIZED_ONLY", "PHYSICAL_ONLY",
                                      NullS};
 
-TYPELIB explain_output_typelib= {array_elements(explain_output_names) - 1, "",
-                                 explain_output_names, NULL};
+TYPELIB explain_output_typelib= CREATE_TYPELIB_FOR(explain_output_names);
 
 const char *disabled_optimizers_names[]= {"EXPRESSION_REWRITER",
                                           "FILTER_PULLUP",
@@ -73,9 +72,8 @@ const char *disabled_optimizers_names[]= {"EXPRESSION_REWRITER",
                                           "LATE_MATERIALIZATION",
                                           NullS};
 
-TYPELIB disabled_optimizers_typelib= {
-    array_elements(disabled_optimizers_names) - 1, "",
-    disabled_optimizers_names, NULL};
+TYPELIB disabled_optimizers_typelib=
+    CREATE_TYPELIB_FOR(disabled_optimizers_names);
 
 std::string BytesToHumanReadableString(uint64_t bytes, uint64_t multiplier)
 {

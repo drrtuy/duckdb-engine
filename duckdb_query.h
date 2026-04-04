@@ -32,12 +32,13 @@ class THD;
 namespace myduck
 {
 
-std::unique_ptr<duckdb::QueryResult>
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query);
 
-std::unique_ptr<duckdb::QueryResult>
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config= true);
 
-std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query);
+duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb_query(const std::string &query);
 
 } // namespace myduck

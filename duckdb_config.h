@@ -23,6 +23,7 @@
 
 #include "duckdb/common/types.hpp"
 #include <my_global.h>
+#include "typelib.h"
 
 class THD;
 
