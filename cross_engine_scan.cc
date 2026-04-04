@@ -216,7 +216,7 @@ struct MdbScanBindData : duckdb::FunctionData
     auto copy= duckdb::make_uniq<MdbScanBindData>();
     copy->table_key= table_key;
     copy->table= table;
-    return copy;
+    return duckdb::unique_ptr<duckdb::FunctionData>(std::move(copy));
   }
 
   bool Equals(const duckdb::FunctionData &other) const override
@@ -258,7 +258,7 @@ mdb_scan_bind(duckdb::ClientContext &context,
   auto data= duckdb::make_uniq<MdbScanBindData>();
   data->table_key= key;
   data->table= tbl;
-  return data;
+  return duckdb::unique_ptr<duckdb::FunctionData>(std::move(data));
 }
 
 static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
@@ -269,7 +269,8 @@ mdb_scan_init_global(duckdb::ClientContext &context,
   auto state= duckdb::make_uniq<MdbScanGlobalState>();
   state->table= bind_data.table;
   state->column_ids= input.column_ids;
-  return state;
+  return duckdb::unique_ptr<duckdb::GlobalTableFunctionState>(
+      std::move(state));
 }
 
 static void mdb_scan_function(duckdb::ClientContext &context,
@@ -370,7 +371,7 @@ duckdb::unique_ptr<duckdb::TableRef> mariadb_replacement_scan(
         "DuckDB cross-engine: replacement scan redirected '%s' to _mdb_scan",
         input.table_name.c_str());
 
-  return ref;
+  return duckdb::unique_ptr<duckdb::TableRef>(std::move(ref));
 }
 
 /* ----------------------------------------------------------------
