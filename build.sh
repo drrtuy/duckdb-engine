@@ -7,7 +7,7 @@ SCRIPT_LOCATION=$(dirname "$0")
 MDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION"/../../../)
 DUCKDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION")
 BUILD_PATH=$(realpath "$MDB_SOURCE_PATH"/../DuckdbBuildOf_$(basename "$MDB_SOURCE_PATH"))
-CPUS=$(getconf _NPROCESSORS_ONLN)
+CPUS=8
 BUILD_TYPE_OPTIONS=("Debug" "RelWithDebInfo")
 BUILD_TYPE="${BUILD_TYPE:-}"
 DISTRO_OPTIONS=("ubuntu:22.04" "ubuntu:24.04" "debian:12" "rockylinux:8" "rockylinux:9")
@@ -212,6 +212,10 @@ construct_cmake_flags() {
         -DWITH_SBOM=0
         -DDBUG_ON=1
     )
+
+    if [[ "$BUILD_TYPE" == "Debug" ]]; then
+        MDB_CMAKE_FLAGS+=(-DDUCKDB_WERROR=ON)
+    fi
 
     if [[ $BUILD_PACKAGES = true ]]; then
         if [[ "$PKG_FORMAT" == "rpm" ]]; then

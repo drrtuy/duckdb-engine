@@ -38,6 +38,9 @@ IF(TARGET duckdb)
   # (CMAKE_CXX_FLAGS_DEBUG, directory properties, generator expressions, etc.).
   # Mismatched _GLIBCXX_DEBUG changes sizeof(std::vector) and friends → SIGSEGV.
   TARGET_COMPILE_OPTIONS(duckdb PRIVATE -U_GLIBCXX_DEBUG -U_GLIBCXX_ASSERTIONS)
+  IF(DUCKDB_WERROR)
+    TARGET_COMPILE_OPTIONS(duckdb PRIVATE -Werror)
+  ENDIF()
 ENDIF()
 
 IF(TARGET duckdb)
