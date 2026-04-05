@@ -2,12 +2,22 @@
 --echo # DuckDB DROP DATABASE operations test
 --echo #
 
+# Cleanup from possible previous failed run
+--disable_query_log
+--disable_warnings
+DROP DATABASE IF EXISTS db_duck1;
+DROP DATABASE IF EXISTS db_duck2;
+DROP DATABASE IF EXISTS db_duck3;
+DROP DATABASE IF EXISTS `my-duck-db`;
+--enable_warnings
+--enable_query_log
+
 # -----------------------------------------------------------------
 # Test 1: CREATE DATABASE, create DuckDB table, DROP DATABASE
 # -----------------------------------------------------------------
 --echo # Test 1: Basic CREATE/DROP DATABASE with DuckDB table
 
-CREATE DATABASE IF NOT EXISTS db_duck1;
+CREATE DATABASE db_duck1;
 USE db_duck1;
 
 CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE = DuckDB;

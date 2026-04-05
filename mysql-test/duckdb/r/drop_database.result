@@ -2,7 +2,7 @@
 # DuckDB DROP DATABASE operations test
 #
 # Test 1: Basic CREATE/DROP DATABASE with DuckDB table
-CREATE DATABASE IF NOT EXISTS db_duck1;
+CREATE DATABASE db_duck1;
 USE db_duck1;
 CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(50)) ENGINE = DuckDB;
 INSERT INTO t1 VALUES (1, 'one'), (2, 'two'), (3, 'three');

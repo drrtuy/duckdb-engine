@@ -1,10 +1,17 @@
 # Test the compatibility of duckdb engine fields and compare with innodb_db engine
 --disable_query_log
-CREATE DATABASE IF NOT EXISTS innodb_db;
-CREATE DATABASE IF NOT EXISTS duckdb_db;
-CREATE DATABASE IF NOT EXISTS duckdb_db_batch_insert;
-CREATE DATABASE IF NOT EXISTS innotoduck;
-CREATE DATABASE IF NOT EXISTS ducktoinno;
+--disable_warnings
+DROP DATABASE IF EXISTS innodb_db;
+DROP DATABASE IF EXISTS duckdb_db;
+DROP DATABASE IF EXISTS duckdb_db_batch_insert;
+DROP DATABASE IF EXISTS innotoduck;
+DROP DATABASE IF EXISTS ducktoinno;
+--enable_warnings
+CREATE DATABASE innodb_db;
+CREATE DATABASE duckdb_db;
+CREATE DATABASE duckdb_db_batch_insert;
+CREATE DATABASE innotoduck;
+CREATE DATABASE ducktoinno;
 
 # create table with engine innodb and duckdb.
 USE innodb_db;

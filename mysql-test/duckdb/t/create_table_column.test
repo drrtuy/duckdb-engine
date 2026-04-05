@@ -7,6 +7,8 @@
 
 --disable_query_log
 SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;
+SET @saved_duckdb_require_primary_key = @@GLOBAL.duckdb_require_primary_key;
+SET GLOBAL duckdb_require_primary_key = OFF;
 --enable_query_log
 
 --echo # 1) Prepare
@@ -145,7 +147,7 @@ DROP TABLE test_table;
 
 
 --echo #
---echo # decimal 
+--echo # decimal
 --echo #
 --let $create_sql = create table t_decimal (g decimal(9,9),h decimal(9,4),i decimal(9,0))
 --let $table_name = t_decimal
@@ -174,7 +176,7 @@ set global duckdb_use_double_for_decimal=default;
 --echo # decimal(4): low precision(<=38)  with low precision value and duckdb_use_double_for_decimal=off
 --echo #
 set global duckdb_use_double_for_decimal=off;
---let $create_sql = CREATE TABLE t1(id int primary key, c1 decimal(38, 5)) 
+--let $create_sql = CREATE TABLE t1(id int primary key, c1 decimal(38, 5))
 --let $table_name = t1
 --let $insert_sql = INSERT INTO t1 values (1, 123456789012345678901234567890123.12345);
 --let $select_sql = select id, c1 from t1
@@ -187,7 +189,7 @@ set global duckdb_use_double_for_decimal=default;
 --echo # decimal(5): high precision(>38)  with low precision value(<=38) and duckdb_use_double_for_decimal=off
 --echo #
 set global duckdb_use_double_for_decimal=off;
---let $create_sql = CREATE TABLE t1(id int primary key, c1 decimal(40, 5)) 
+--let $create_sql = CREATE TABLE t1(id int primary key, c1 decimal(40, 5))
 --let $table_name = t1
 --let $insert_sql = INSERT INTO t1 values (4, 123456789012345678901234567890.12345);
 --let $select_sql = select id, c1 from t1
@@ -472,5 +474,6 @@ set global duckdb_use_double_for_decimal=default;
 
 --disable_query_log
 SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
+SET GLOBAL duckdb_require_primary_key = @saved_duckdb_require_primary_key;
 --enable_query_log
 --source ../include/cleanup_duckdb_udf.inc
