@@ -119,19 +119,17 @@ menu_choice() {
   _menu_render 0
 
   while true; do
-    read -rsn1 key
+    read -rsn1 key || true
     case "$key" in
       $'\x1b')
-        read -rsn2 rest
+        read -rsn2 rest || true
         case "$rest" in
           '[A') # Up
-            ((selected--))
-            ((selected < 0)) && selected=$((count - 1))
+            selected=$(( (selected - 1 + count) % count ))
             _menu_render 1
             ;;
           '[B') # Down
-            ((selected++))
-            ((selected >= count)) && selected=0
+            selected=$(( (selected + 1) % count ))
             _menu_render 1
             ;;
         esac
