@@ -653,7 +653,7 @@ innotoduck_checksum: .	648909613
 ducktoinno_checksum: .	648909613
 # cleanup
 #
-# decimal 
+# decimal
 #
 # display innodb table structure.
 Field	Type	Null	Key	Default	Extra

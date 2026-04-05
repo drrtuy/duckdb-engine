@@ -2,6 +2,16 @@
 --echo # DuckDB DROP DATABASE operations test
 --echo #
 
+# Cleanup from possible previous failed run
+--disable_query_log
+--disable_warnings
+DROP DATABASE IF EXISTS db_duck1;
+DROP DATABASE IF EXISTS db_duck2;
+DROP DATABASE IF EXISTS db_duck3;
+DROP DATABASE IF EXISTS `my-duck-db`;
+--enable_warnings
+--enable_query_log
+
 # -----------------------------------------------------------------
 # Test 1: CREATE DATABASE, create DuckDB table, DROP DATABASE
 # -----------------------------------------------------------------

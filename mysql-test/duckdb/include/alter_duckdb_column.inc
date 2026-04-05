@@ -3,6 +3,10 @@ CREATE DATABASE IF NOT EXISTS db_alter_col CHARACTER SET utf8mb4;
 USE db_alter_col;
 --enable_query_log
 
+--perl
+unlink "$ENV{MYSQL_TMP_DIR}/duckdb_column_meta.inc";
+EOF
+
 --write_file $MYSQL_TMP_DIR/duckdb_column_meta.inc
   SELECT duckdb_query_udf("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'");
   --sorted_result
@@ -20,7 +24,7 @@ INSERT INTO t(id) VALUES(2);
 SELECT * FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 
-eval ALTER TABLE t ADD COLUMN d INT NOT NULL DEFAULT 100 COMMENT "col d", 
+eval ALTER TABLE t ADD COLUMN d INT NOT NULL DEFAULT 100 COMMENT "col d",
                    ADD COLUMN e INT NULL DEFAULT 1000 COMMENT "",
                    ADD COLUMN f INT, ALGORITHM = $algorithm;
 INSERT INTO t VALUES(3, 3, 3, 3, 3, 3, 3);
@@ -55,14 +59,14 @@ INSERT INTO t(id) VALUES(4);
 SELECT * FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 
-eval ALTER TABLE t ALTER COLUMN b DROP DEFAULT, 
+eval ALTER TABLE t ALTER COLUMN b DROP DEFAULT,
                    ALTER COLUMN c SET DEFAULT 1000, ALGORITHM = $algorithm;
 INSERT INTO t VALUES(5, 5, 5, 5);
 INSERT INTO t(id) VALUES(6);
 SELECT * FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 
-eval ALTER TABLE t ALTER COLUMN b SET DEFAULT 10000, 
+eval ALTER TABLE t ALTER COLUMN b SET DEFAULT 10000,
                    ALTER COLUMN c DROP DEFAULT, ALGORITHM = $algorithm;
 INSERT INTO t VALUES(7, 7, 7, 7);
 INSERT INTO t(id) VALUES(8);
@@ -80,7 +84,7 @@ INSERT INTO t(id) VALUES(2);
 SELECT * FROM t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 
-eval ALTER TABLE t RENAME COLUMN a TO a1, 
+eval ALTER TABLE t RENAME COLUMN a TO a1,
                    RENAME COLUMN b TO b1,
                    RENAME COLUMN c TO c1, ALGORITHM = $algorithm;
 INSERT INTO t(id, a1, b1, c1) VALUES(3, 3, 3, 3);
@@ -168,6 +172,8 @@ SELECT * FROM t;
 --echo #
 --echo # 5) DEFAULT TIMESTAMP
 --echo #
+SET @saved_time_zone = @@session.time_zone;
+SET time_zone = '+00:00';
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY,
                a TIMESTAMP NOT NULL DEFAULT '1970-01-01 12:00:00',
@@ -196,6 +202,8 @@ eval ALTER TABLE t MODIFY COLUMN b TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
 INSERT INTO t(id) VALUES (3);
 SELECT * FROM t;
 
+
+SET time_zone = @saved_time_zone;
 
 --echo #
 --echo # 6) DEFAULT VALUE EXPRESSION
@@ -244,7 +252,7 @@ SELECT id, hex(B0), hex(B1), hex(B2) FROM t;
 DROP TABLE t;
 CREATE TABLE t(id INT PRIMARY KEY,
                a INT DEFAULT 1 COMMENT 'col a',
-               b INT DEFAULT 1 COMMENT 'col b', 
+               b INT DEFAULT 1 COMMENT 'col b',
                c INT DEFAULT 1 COMMENT 'col c',
                d INT DEFAULT 1 COMMENT 'col d',
                e INT DEFAULT 1 COMMENT 'col e',

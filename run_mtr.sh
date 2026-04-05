@@ -101,6 +101,20 @@ if [[ "$RUN_ALL" == false && -z "$TEST_NAME" ]]; then
     TEST_NAME="$MENU_RESULT"
 fi
 
+# ─── Resolve extern early (affects parallel) ────────────────────────────────────
+
+if [[ "$EXTERN" == true ]]; then
+    if [[ -z "$EXTERN_SOCKET" ]]; then
+        EXTERN_SOCKET=$(mariadb -BNe "SELECT @@socket" 2>/dev/null || echo "/run/mysqld/mysqld.sock")
+    fi
+    if [[ ! -S "$EXTERN_SOCKET" ]]; then
+        fail "Socket not found: $EXTERN_SOCKET. Is MariaDB running?"
+    fi
+    # Force serial execution with extern — all tests share one server,
+    # parallel workers would collide on table names and global variables
+    PARALLEL=1
+fi
+
 # ─── Build MTR command ──────────────────────────────────────────────────────────
 
 MTR_CMD=("perl" "$MTR"
@@ -115,12 +129,6 @@ if [[ "$RECORD" == true ]]; then
 fi
 
 if [[ "$EXTERN" == true ]]; then
-    if [[ -z "$EXTERN_SOCKET" ]]; then
-        EXTERN_SOCKET=$(mariadb -BNe "SELECT @@socket" 2>/dev/null || echo "/run/mysqld/mysqld.sock")
-    fi
-    if [[ ! -S "$EXTERN_SOCKET" ]]; then
-        fail "Socket not found: $EXTERN_SOCKET. Is MariaDB running?"
-    fi
     MTR_CMD+=("--extern" "socket=$EXTERN_SOCKET")
 fi
 
