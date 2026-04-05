@@ -742,11 +742,11 @@ int ha_duckdb::extra(enum ha_extra_function operation)
 
   switch (operation)
   {
-  case HA_EXTRA_BEGIN_ALTER_COPY:
+  case HA_EXTRA_BEGIN_COPY:
     ctx->set_in_copy_ddl(true);
     break;
-  case HA_EXTRA_END_ALTER_COPY:
-  case HA_EXTRA_ABORT_ALTER_COPY:
+  case HA_EXTRA_END_COPY:
+  case HA_EXTRA_ABORT_COPY:
     ctx->set_in_copy_ddl(false);
     break;
   default:
