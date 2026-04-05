@@ -4,6 +4,7 @@ set -e
 set -o pipefail
 
 SCRIPT_LOCATION=$(dirname "$0")
+source "$SCRIPT_LOCATION/utils.sh"
 MDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION"/../../../)
 DUCKDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION")
 BUILD_PATH=$(realpath "$MDB_SOURCE_PATH"/../DuckdbBuildOf_$(basename "$MDB_SOURCE_PATH"))
@@ -50,13 +51,8 @@ while getopts "t:d:j:cpSnh" opt; do
 done
 
 if [[ ! " ${BUILD_TYPE_OPTIONS[*]} " =~ " ${BUILD_TYPE} " ]]; then
-    echo "Select build type:"
-    select BUILD_TYPE in "${BUILD_TYPE_OPTIONS[@]}"; do
-        if [[ -n "$BUILD_TYPE" ]]; then
-            break
-        fi
-        echo "Invalid selection, try again."
-    done
+    menu_choice "Select build type:" BUILD_TYPE_OPTIONS
+    BUILD_TYPE="$MENU_RESULT"
 fi
 
 detect_distro() {
@@ -68,10 +64,9 @@ detect_distro() {
         . /etc/lsb-release
         OS=$(echo "$DISTRIB_ID" | tr '[:upper:]' '[:lower:]'):"$DISTRIB_RELEASE"
     else
-        echo "!!!! Cannot detect distro, specify with -d !!!!"
-        exit 1
+        fail "Cannot detect distro, specify with -d"
     fi
-    echo "  Detected distro: $OS"
+    info "Detected distro: ${_CLR_YELLOW}$OS"
 }
 
 select_pkg_format() {
@@ -85,41 +80,36 @@ select_pkg_format() {
 if [[ $BUILD_PACKAGES = true ]]; then
     if [[ ! " ${DISTRO_OPTIONS[*]} " =~ " ${OS} " ]]; then
         if [[ -z "$OS" ]]; then
-            echo "Distro not specified, detecting..."
+            warn "Distro not specified, detecting..."
             detect_distro
         fi
         if [[ ! " ${DISTRO_OPTIONS[*]} " =~ " ${OS} " ]]; then
-            echo "Select distro:"
-            select OS in "${DISTRO_OPTIONS[@]}"; do
-                if [[ -n "$OS" ]]; then
-                    break
-                fi
-                echo "Invalid selection, try again."
-            done
+            menu_choice "Select distro:" DISTRO_OPTIONS
+            OS="$MENU_RESULT"
         fi
     fi
     select_pkg_format "$OS"
 fi
 
-echo "=== DuckDB Storage Engine Build ==="
-echo "  Source:     $MDB_SOURCE_PATH"
-echo "  Build dir:  $BUILD_PATH"
-echo "  Build type: $BUILD_TYPE"
-echo "  Jobs:       $CPUS"
+header "DuckDB Storage Engine Build"
+info "Source:     ${_CLR_YELLOW}$MDB_SOURCE_PATH"
+info "Build dir:  ${_CLR_YELLOW}$BUILD_PATH"
+info "Build type: ${_CLR_YELLOW}$BUILD_TYPE"
+info "Jobs:       ${_CLR_YELLOW}$CPUS"
 if [[ $BUILD_PACKAGES = true ]]; then
-    echo "  Packages:   $PKG_FORMAT ($OS)"
+    info "Packages:   ${_CLR_YELLOW}$PKG_FORMAT ($OS)"
 fi
 echo ""
 
 check_user_and_group() {
     local user=$1
     if [ -z "$(grep "$user" /etc/passwd)" ]; then
-        echo "--- Adding user $user ---"
+        info "Adding user $user"
         useradd -r -U "$user" -d /var/lib/mysql
     fi
     if [ -z "$(grep "$user" /etc/group)" ]; then
         local gid=$(awk -F: '{uid[$3]=1}END{for(x=100; x<=999; x++) {if(uid[x] != ""){}else{print x; exit;}}}' /etc/group)
-        echo "--- Adding group $user with id $gid ---"
+        info "Adding group $user with id $gid"
         groupadd -g "$gid" "$user"
     fi
 }
@@ -133,7 +123,7 @@ clean_old_installation() {
 }
 
 bootstrap_mdb() {
-    echo "--- Bootstrap MariaDB ---"
+    info "Bootstrap MariaDB"
     "$INSTALL_PREFIX/bin/mariadb-install-db" \
         --datadir="$DEFAULT_MDB_DATADIR" \
         --user="$USER" --group="$GROUP" > /dev/null
@@ -141,13 +131,13 @@ bootstrap_mdb() {
 
 stop_mdb() {
     if "$INSTALL_PREFIX/bin/mariadb-admin" ping --silent 2>/dev/null; then
-        echo "--- Stopping MariaDB ---"
+        warn "Stopping MariaDB"
         "$INSTALL_PREFIX/bin/mariadb-admin" shutdown || true
     fi
 }
 
 start_mdb() {
-    echo "--- Starting MariaDB ---"
+    info "Starting MariaDB"
     mkdir -p /run/mysqld
     chown "$USER:$GROUP" /run/mysqld
     "$INSTALL_PREFIX/bin/mariadbd-safe" --datadir="$DEFAULT_MDB_DATADIR" &
@@ -157,23 +147,22 @@ start_mdb() {
     while ! "$INSTALL_PREFIX/bin/mariadb-admin" ping --silent 2>/dev/null; do
         attempt=$((attempt + 1))
         if [[ $attempt -ge $max_attempts ]]; then
-            echo "!!!! MariaDB failed to start within ${max_attempts} seconds !!!!"
             local err_log="${DEFAULT_MDB_DATADIR}/$(hostname).err"
             if [[ -f "$err_log" ]]; then
-                echo "Last 50 lines of $err_log:"
+                error "Last 50 lines of $err_log:"
                 tail -50 "$err_log"
             fi
-            exit 1
+            fail "MariaDB failed to start within ${max_attempts} seconds"
         fi
         sleep 1
     done
-    echo "MariaDB is ready"
+    success "MariaDB is ready"
 }
 
 setup_dev_user() {
     local current_user=$(logname 2>/dev/null || echo "$SUDO_USER")
     if [[ -n "$current_user" && "$current_user" != "root" ]]; then
-        echo "--- Creating dev user '$current_user' ---"
+        info "Creating dev user '${_CLR_YELLOW}$current_user${_CLR_CYAN}'"
         "$INSTALL_PREFIX/bin/mariadb" -e \
             "CREATE USER IF NOT EXISTS '$current_user'@'localhost' IDENTIFIED VIA unix_socket;
              GRANT ALL PRIVILEGES ON *.* TO '$current_user'@'localhost';"
@@ -229,7 +218,7 @@ construct_cmake_flags() {
                 debian:12*)   codename="bookworm" ;;
                 ubuntu:22.04) codename="jammy" ;;
                 ubuntu:24.04) codename="noble" ;;
-                *)            echo "!!!! Unknown DEB codename for $OS !!!!"; exit 1 ;;
+                *)            fail "Unknown DEB codename for $OS" ;;
             esac
             MDB_CMAKE_FLAGS+=(-DDEB=${codename} -DINSTALL_LAYOUT=DEB)
         fi
@@ -241,48 +230,53 @@ construct_cmake_flags() {
 construct_cmake_flags
 
 build_binary() {
-    echo "--- Configuring ---"
-    cmake "${MDB_CMAKE_FLAGS[@]}" -S"$MDB_SOURCE_PATH" -B"$BUILD_PATH"
+    separator
+    info "Configuring"
+    set +e
+    cmake "${MDB_CMAKE_FLAGS[@]}" -S"$MDB_SOURCE_PATH" -B"$BUILD_PATH" | one_liner
+    local rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -ne 0 ]] && fail "CONFIGURE FAILED (exit code $rc)"
 
-    echo "--- Building ---"
-    cmake --build "$BUILD_PATH" -j "$CPUS"
+    separator
+    info "Building with ${_CLR_YELLOW}$CPUS${_CLR_CYAN} jobs"
+    set +e
+    cmake --build "$BUILD_PATH" -j "$CPUS" | one_liner
+    rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -ne 0 ]] && fail "BUILD FAILED (exit code $rc)"
 
-    if [ $? -ne 0 ]; then
-        echo "!!!! BUILD FAILED !!!!"
-        exit 1
-    fi
-
-    echo ""
-    echo "--- Adding compile_commands.json symlink ---"
+    success "Build complete"
+    info "Adding compile_commands.json symlink"
     ln -sf "$BUILD_PATH/compile_commands.json" "$MDB_SOURCE_PATH"
 }
 
 build_package() {
-    echo "--- Building $PKG_FORMAT package for $OS ---"
+    separator
+    info "Building ${_CLR_YELLOW}$PKG_FORMAT${_CLR_CYAN} package for ${_CLR_YELLOW}$OS"
 
+    set +e
     if [[ "$PKG_FORMAT" == "rpm" ]]; then
         cd "$BUILD_PATH"
-        make -j "$CPUS" package
+        make -j "$CPUS" package | one_liner
     else
         cd "$MDB_SOURCE_PATH"
         export DEBIAN_FRONTEND="noninteractive"
         export DEB_BUILD_OPTIONS="parallel=$CPUS"
         export BUILDPACKAGE_FLAGS="-b"
-        CMAKEFLAGS="${MDB_CMAKE_FLAGS[*]}" debian/autobake-deb.sh
+        CMAKEFLAGS="${MDB_CMAKE_FLAGS[*]}" debian/autobake-deb.sh | one_liner
     fi
-
-    if [ $? -ne 0 ]; then
-        echo "!!!! PACKAGE BUILD FAILED !!!!"
-        exit 1
-    fi
-    echo "--- Packages ready ---"
+    local rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -ne 0 ]] && fail "PACKAGE BUILD FAILED (exit code $rc)"
+    success "Packages ready"
 }
 
 build_binary
 
 if [[ $BUILD_PACKAGES = true ]]; then
     build_package
-    echo "=== BUILD FINISHED ==="
+    header "BUILD FINISHED"
     exit 0
 fi
 
@@ -291,14 +285,19 @@ if [[ $CI_MODE = false ]]; then
     stop_mdb
     clean_old_installation
 
-    echo "--- Installing ---"
-    cmake --install "$BUILD_PATH"
+    separator
+    info "Installing"
+    set +e
+    cmake --install "$BUILD_PATH" | one_liner
+    rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -ne 0 ]] && fail "INSTALL FAILED (exit code $rc)"
 
     create_config
     if [[ $NO_CLEAN = false ]]; then
         bootstrap_mdb
     else
-        echo "--- Skipping bootstrap (--no-clean mode, keeping existing data) ---"
+        warn "Skipping bootstrap (--no-clean mode, keeping existing data)"
     fi
 fi
 
@@ -307,8 +306,8 @@ if [[ $START_MDB = true ]]; then
     start_mdb
     setup_dev_user
 
-    echo "--- Registering DuckDB UDFs ---"
+    info "Registering DuckDB UDFs"
     "$INSTALL_PREFIX/bin/mariadb" < "$DUCKDB_SOURCE_PATH/scripts/install.sql"
 fi
 
-echo "=== BUILD FINISHED ==="
+header "BUILD FINISHED"
