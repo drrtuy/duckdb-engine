@@ -89,6 +89,15 @@ if [[ ! -d "$BUILD_PLUGIN_DIR/mysql-test" ]]; then
     info "Symlinked test suite into build tree"
 fi
 
+# MTR discovers plugins via glob storage/*/*.so (one level).
+# ha_duckdb.so lives in storage/duckdb-engine/duck/ (two levels).
+# Symlink it one level up so MTR finds it for managed-server mode.
+PARENT_PLUGIN_DIR="$BUILD_PATH/storage/duckdb-engine"
+if [[ -f "$BUILD_PLUGIN_DIR/ha_duckdb.so" && ! -e "$PARENT_PLUGIN_DIR/ha_duckdb.so" ]]; then
+    ln -sf "$BUILD_PLUGIN_DIR/ha_duckdb.so" "$PARENT_PLUGIN_DIR/ha_duckdb.so"
+    info "Symlinked ha_duckdb.so for MTR plugin discovery"
+fi
+
 if [[ "$RUN_ALL" == false && -z "$TEST_NAME" ]]; then
     # Interactive: show menu of available tests
     mapfile -t available_tests < <(
