@@ -89,13 +89,31 @@ one_liner() {
 menu_choice() {
   local prompt="$1"
   local -n _opts=$2
-  local count=${#_opts[@]}
+  local total=${#_opts[@]}
   local selected=0
+  local filter=""
+  local prev_lines=0
 
-  if [[ $count -eq 0 ]]; then
+  if [[ $total -eq 0 ]]; then
     error "menu_choice: no options provided"
     return 1
   fi
+
+  # Build filtered list (indices into _opts that match the filter)
+  local -a _filtered=()
+  _menu_filter() {
+    _filtered=()
+    local lc_filter="${filter,,}"
+    for ((i = 0; i < total; i++)); do
+      if [[ -z "$filter" || "${_opts[$i],,}" == *"$lc_filter"* ]]; then
+        _filtered+=("$i")
+      fi
+    done
+  }
+  _menu_filter
+
+  # Max visible rows (cap long lists)
+  local max_visible=20
 
   # Hide cursor, restore on exit/ctrl-c
   printf "\e[?25l"
@@ -103,20 +121,61 @@ menu_choice() {
   trap 'printf "\e[?25h"; exit 130' INT
 
   _menu_render() {
-    # Move up to overwrite previous render (skip on first draw)
-    [[ ${1:-0} -gt 0 ]] && printf "\e[%dA" "$((count + 2))"
+    local fcount=${#_filtered[@]}
+    local visible=$fcount
+    (( visible > max_visible )) && visible=$max_visible
+    local lines=$((visible + 2)) # prompt + filter line + items
 
-    echo -e "\n ${_CLR_CYAN}${prompt}${_CLR_RESET}"
-    for ((i = 0; i < count; i++)); do
-      if [[ $i -eq $selected ]]; then
-        echo -e "   ${_CLR_GREEN}▸ ${_opts[$i]}${_CLR_RESET}"
-      else
-        echo -e "   ${_CLR_GRAY}  ${_opts[$i]}${_CLR_RESET}"
-      fi
+    # Move up to overwrite previous render (skip on first draw)
+    if [[ $prev_lines -gt 0 ]]; then
+      printf "\e[%dA" "$prev_lines"
+    fi
+    # Clear old lines
+    for ((i = 0; i < prev_lines; i++)); do
+      printf "\e[K\n"
     done
+    if [[ $prev_lines -gt 0 ]]; then
+      printf "\e[%dA" "$prev_lines"
+    fi
+
+    echo -e " ${_CLR_CYAN}${prompt}${_CLR_RESET}"
+    if [[ -n "$filter" ]]; then
+      echo -e "   ${_CLR_YELLOW}🔍 ${filter}${_CLR_DARKGRAY} (${fcount}/${total})${_CLR_RESET}"
+    else
+      echo -e "   ${_CLR_DARKGRAY}type to filter... (${fcount}/${total})${_CLR_RESET}"
+    fi
+
+    if [[ $fcount -eq 0 ]]; then
+      echo -e "   ${_CLR_RED}no matches${_CLR_RESET}"
+      lines=3
+    else
+      # Scroll window: keep selected in view
+      local scroll_start=0
+      if (( selected >= scroll_start + visible )); then
+        scroll_start=$(( selected - visible + 1 ))
+      fi
+      if (( scroll_start > fcount - visible )); then
+        scroll_start=$(( fcount - visible ))
+      fi
+      (( scroll_start < 0 )) && scroll_start=0
+
+      for ((j = scroll_start; j < scroll_start + visible; j++)); do
+        local idx=${_filtered[$j]}
+        if [[ $j -eq $selected ]]; then
+          echo -e "   ${_CLR_GREEN}▸ ${_opts[$idx]}${_CLR_RESET}"
+        else
+          echo -e "   ${_CLR_GRAY}  ${_opts[$idx]}${_CLR_RESET}"
+        fi
+      done
+      if (( fcount > visible )); then
+        echo -e "   ${_CLR_DARKGRAY}… $((fcount - visible)) more${_CLR_RESET}"
+        lines=$((lines + 1))
+      fi
+    fi
+    prev_lines=$lines
   }
 
-  _menu_render 0
+  _menu_render
 
   while true; do
     read -rsn1 key || true
@@ -125,30 +184,54 @@ menu_choice() {
         read -rsn2 rest || true
         case "$rest" in
           '[A') # Up
-            selected=$(( (selected - 1 + count) % count ))
-            _menu_render 1
+            if [[ ${#_filtered[@]} -gt 0 ]]; then
+              selected=$(( (selected - 1 + ${#_filtered[@]}) % ${#_filtered[@]} ))
+              _menu_render
+            fi
             ;;
           '[B') # Down
-            selected=$(( (selected + 1) % count ))
-            _menu_render 1
+            if [[ ${#_filtered[@]} -gt 0 ]]; then
+              selected=$(( (selected + 1) % ${#_filtered[@]} ))
+              _menu_render
+            fi
             ;;
         esac
         ;;
       '') # Enter
-        break
+        if [[ ${#_filtered[@]} -gt 0 ]]; then
+          break
+        fi
+        ;;
+      $'\x7f'|$'\b') # Backspace
+        if [[ -n "$filter" ]]; then
+          filter="${filter%?}"
+          _menu_filter
+          selected=0
+          _menu_render
+        fi
+        ;;
+      [[:print:]]) # Printable character — add to filter
+        filter+="$key"
+        _menu_filter
+        selected=0
+        _menu_render
         ;;
     esac
   done
 
+  local result_idx=${_filtered[$selected]}
+
   # Clear the menu from terminal
-  printf "\e[%dA" "$((count + 2))"
-  for ((i = 0; i < count + 2; i++)); do
-    printf "\e[K\n"
-  done
-  printf "\e[%dA" "$((count + 2))"
+  if [[ $prev_lines -gt 0 ]]; then
+    printf "\e[%dA" "$prev_lines"
+    for ((i = 0; i < prev_lines; i++)); do
+      printf "\e[K\n"
+    done
+    printf "\e[%dA" "$prev_lines"
+  fi
 
   printf "\e[?25h"
-  echo -e " ${_CLR_CYAN}${prompt}${_CLR_RESET} ${_CLR_GREEN}${_opts[$selected]}${_CLR_RESET}"
+  echo -e " ${_CLR_CYAN}${prompt}${_CLR_RESET} ${_CLR_GREEN}${_opts[$result_idx]}${_CLR_RESET}"
 
-  MENU_RESULT="${_opts[$selected]}"
+  MENU_RESULT="${_opts[$result_idx]}"
 }
