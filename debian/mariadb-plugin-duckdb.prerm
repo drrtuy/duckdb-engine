@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+# Uninstall DuckDB UDFs
+mariadb --defaults-file=/etc/mysql/debian.cnf < /usr/share/mariadb/duckdb/uninstall.sql || true
+# Always exit with success instead of leaving dpkg in a broken state
+
+
+#DEBHELPER#
