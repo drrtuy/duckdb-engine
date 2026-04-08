@@ -1,10 +1,12 @@
 # Test the compatibility of duckdb engine fields and compare with innodb_db engine
 --disable_query_log
+--disable_warnings
 DROP DATABASE IF EXISTS innodb_db;
 DROP DATABASE IF EXISTS duckdb_db;
 DROP DATABASE IF EXISTS duckdb_db_batch_insert;
 DROP DATABASE IF EXISTS innotoduck;
 DROP DATABASE IF EXISTS ducktoinno;
+--enable_warnings
 CREATE DATABASE IF NOT EXISTS innodb_db CHARACTER SET utf8mb4;
 CREATE DATABASE IF NOT EXISTS duckdb_db CHARACTER SET utf8mb4;
 CREATE DATABASE IF NOT EXISTS duckdb_db_batch_insert CHARACTER SET utf8mb4;
