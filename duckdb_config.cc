@@ -140,9 +140,11 @@ void update_appender_flush_threshold_cb(MYSQL_THD thd,
                                         struct st_mysql_sys_var *var,
                                         void *var_ptr, const void *save)
 {
-  // Upstream DuckDB (v1.3.2) does not have appender_allocator_flush_threshold.
-  // Keep the MariaDB sysvar for future use but do not propagate to DuckDB.
   *(ulonglong *) var_ptr= *(const ulonglong *) save;
+  std::ostringstream oss;
+  oss << "SET GLOBAL allocator_flush_threshold = '"
+      << BytesToHumanReadableString(appender_allocator_flush_threshold) << "'";
+  duckdb_query(oss.str());
 }
 
 void update_checkpoint_threshold_cb(MYSQL_THD thd,

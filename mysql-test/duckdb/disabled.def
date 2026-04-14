@@ -11,7 +11,6 @@ duckdb_add_backticks : UDF digit-name schema quoting
 duckdb_agg_func : AVG(VARCHAR) not supported in pushdown
 duckdb_allow_encryption : MySQL keyring_file not available in MariaDB
 duckdb_alter_table_engine : server crash on 64MB JSON
-duckdb_appender_allocator_flush_threshold : AliSQL-only DuckDB setting
 duckdb_bit_string : hex/binary literal comparison broken in pushdown
 duckdb_fix_sql : oct() not in DuckDB
 duckdb_json : json_contains() not in DuckDB
