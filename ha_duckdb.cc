@@ -855,6 +855,8 @@ int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
   else
     *delete_rows= 0;
 
+  srv_duckdb_status.duckdb_rows_delete+= *delete_rows;
+
   DBUG_RETURN(0);
 }
 
@@ -903,6 +905,8 @@ int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
 
   *update_rows= affected;
   *found_rows= affected;
+
+  srv_duckdb_status.duckdb_rows_update+= affected;
 
   DBUG_RETURN(0);
 }

@@ -4,17 +4,17 @@
 
 FILE(STRINGS "${MYSQLD_ERROR_H}" _all_lines)
 
-SET(_header "/* Auto-generated from duckdb_errors.txt — do not edit. */\n#pragma once\n")
+SET(_lines "/* Auto-generated from duckdb_errors.txt — do not edit. */\n#pragma once\n")
 
 FOREACH(_line IN LISTS _all_lines)
   IF(_line MATCHES "^#define ER_DUCKDB_")
-    SET(_header "${_header}\n${_line}")
+    STRING(APPEND _lines "\n${_line}")
   ENDIF()
 ENDFOREACH()
 
-SET(_header "${_header}\n")
+STRING(APPEND _lines "\n")
 
-FILE(WRITE "${DUCKDB_ERROR_H}.tmp" "${_header}")
+FILE(WRITE "${DUCKDB_ERROR_H}.tmp" "${_lines}")
 
 EXECUTE_PROCESS(
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
