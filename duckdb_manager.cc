@@ -120,9 +120,11 @@ bool DuckdbManager::Initialize()
       lacks but MariaDB pushes down via the original query text.
     */
     con->Query("CREATE OR REPLACE MACRO adddate(d, i) AS d + i");
-    con->Query("CREATE OR REPLACE MACRO addtime(d, t) AS d + t::INTERVAL");
+    /* addtime/subtime registered as C++ UDFs */
+    /* convert_tz(ts, from_tz, to_tz) */
+    con->Query("CREATE OR REPLACE MACRO convert_tz(ts, from_tz, to_tz) AS "
+               "timezone(to_tz, timezone(from_tz, ts))");
     con->Query("CREATE OR REPLACE MACRO subdate(d, i) AS d - i");
-    con->Query("CREATE OR REPLACE MACRO subtime(d, t) AS d - t::INTERVAL");
     con->Query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
