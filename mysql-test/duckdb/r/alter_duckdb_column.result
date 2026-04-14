@@ -715,7 +715,7 @@ CREATE TABLE t(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = DuckDB;
 CREATE TABLE t1(id INT PRIMARY KEY, a INT INVISIBLE) ENGINE = DuckDB;
 ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'INVISIBLE column'
 ALTER TABLE t ADD COLUMN d INT INVISIBLE, ALGORITHM = INSTANT;
-ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'd'
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: INVISIBLE column is not supported. Try removing INVISIBLE from column 'd'
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INSTANT;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INSTANT' at line 1
 ALTER TABLE t MODIFY COLUMN c INT AUTO_INCREMENT KEY, ALGORITHM = INSTANT;
@@ -1593,7 +1593,7 @@ CREATE TABLE t(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = DuckDB;
 CREATE TABLE t1(id INT PRIMARY KEY, a INT INVISIBLE) ENGINE = DuckDB;
 ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'INVISIBLE column'
 ALTER TABLE t ADD COLUMN d INT INVISIBLE, ALGORITHM = INPLACE;
-ERROR 0A000: INVISIBLE column is not supported for this operation. Try removing INVISIBLE from column 'd'
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: INVISIBLE column is not supported. Try removing INVISIBLE from column 'd'
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INPLACE;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INPLACE' at line 1
 ALTER TABLE t MODIFY COLUMN c INT AUTO_INCREMENT KEY, ALGORITHM = INPLACE;

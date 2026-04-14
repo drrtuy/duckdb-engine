@@ -1,31 +1,30 @@
-alter_default_debug : 2026-03-07 drrtuy@gmail.com
+alter_default_debug : ALTER COLUMN DROP DEFAULT not propagated to DuckDB
 duckdb_ddl_during_transaction : appender not invalidated after DDL in transaction
-alter_duckdb_index : 2026-03-07 drrtuy@gmail.com
-alter_engine_duckdb : 2026-03-07 drrtuy@gmail.com
-bugfix_crash_after_commit_error : 2026-03-07 drrtuy@gmail.com
-bugfix_temp_and_system_database : 2026-03-07 drrtuy@gmail.com
-charset_and_collation : 2026-03-07 drrtuy@gmail.com
-create_table_column_timestamp : 2026-03-07 drrtuy@gmail.com
-create_table_constraint : 2026-03-07 drrtuy@gmail.com
-decimal_high_precision : 2026-03-07 drrtuy@gmail.com
-decimal_precision_all_possibilities : 2026-03-07 drrtuy@gmail.com
-duckdb_add_backticks : 2026-03-07 drrtuy@gmail.com
-duckdb_agg_func : 2026-03-07 drrtuy@gmail.com
-duckdb_allow_encryption : 2026-03-07 drrtuy@gmail.com
-duckdb_alter_table_engine : 2026-03-07 drrtuy@gmail.com
-duckdb_appender_allocator_flush_threshold : 2026-03-07 drrtuy@gmail.com
-duckdb_bit_string : 2026-03-07 drrtuy@gmail.com
-duckdb_fix_sql : 2026-03-07 drrtuy@gmail.com
-duckdb_json : 2026-03-07 drrtuy@gmail.com
-duckdb_kill : 2026-03-07 drrtuy@gmail.com
-duckdb_numeric_func : 2026-03-07 drrtuy@gmail.com
-duckdb_refuse_xa : 2026-03-07 drrtuy@gmail.com
-duckdb_require_primary_key : 2026-03-07 drrtuy@gmail.com
-duckdb_sql_mode : 2026-03-07 drrtuy@gmail.com
-duckdb_sql_syntax : 2026-03-07 drrtuy@gmail.com
-duckdb_string_func : 2026-03-07 drrtuy@gmail.com
-duckdb_time_func : 2026-03-07 drrtuy@gmail.com
-feature_duckdb_data_type : 2026-03-07 drrtuy@gmail.com
-rename_duckdb_table : 2026-03-07 drrtuy@gmail.com
-supported_copy_ddl : 2026-03-07 drrtuy@gmail.com
-system_timezone : 2026-03-07 drrtuy@gmail.com
+alter_duckdb_index : duplicate key name on ignored indexes
+alter_engine_duckdb : decimal >38 conversion fails
+bugfix_crash_after_commit_error : TODO
+bugfix_temp_and_system_database : DuckDB temp/system schema conflict
+create_table_column_timestamp : timezone propagation mismatch
+create_table_constraint : non-unique index in CREATE TABLE
+decimal_high_precision : decimal >38 precision
+decimal_precision_all_possibilities : decimal >38 precision
+duckdb_add_backticks : UDF digit-name schema quoting
+duckdb_agg_func : AVG(VARCHAR) not supported in pushdown
+duckdb_allow_encryption : MySQL keyring_file not available in MariaDB
+duckdb_alter_table_engine : server crash on 64MB JSON
+duckdb_appender_allocator_flush_threshold : AliSQL-only DuckDB setting
+duckdb_bit_string : hex/binary literal comparison broken in pushdown
+duckdb_fix_sql : oct() not in DuckDB
+duckdb_json : json_contains() not in DuckDB
+duckdb_kill : DEBUG sync points not implemented, timeout
+duckdb_numeric_func : ACOS domain error in DuckDB
+duckdb_refuse_xa : XA PREPARED state handling
+duckdb_require_primary_key : PK check on ALTER
+duckdb_sql_mode : strict GROUP BY in DuckDB
+duckdb_sql_syntax : WITH ROLLUP not supported
+duckdb_string_func : INSERT() function not in DuckDB
+duckdb_time_func : ADDDATE() not in DuckDB
+feature_duckdb_data_type : decimal >38 precision
+rename_duckdb_table : server log warnings on cross-schema rename
+supported_copy_ddl : cross-schema rename not supported
+system_timezone : hangs on mariadbd-safe restart

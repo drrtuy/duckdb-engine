@@ -633,20 +633,20 @@ SET NAMES utf8mb4;
 #
 # 4.1 CREATE TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'non-utf8 charset'
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'non-utf8 charset'
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'non-utf8 charset'
 # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'c'
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'c'
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'a'
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'a'
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
-ERROR 0A000: non-utf8 charset is not supported for this operation. Try using utf8mb4 charset for column 'b'
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'b'
 #
 # Test 5. UTF8MB4 with Emoji
 #

@@ -180,4 +180,16 @@ int DuckdbThdContext::append_row_delete(TABLE *table)
   return delta ? delta->append_row_delete(table, 0) : HA_DUCKDB_APPEND_ERROR;
 }
 
+bool reject_xa_if_active(THD *thd)
+{
+  if (!thd->transaction->xid_state.is_explicit_XA())
+    return false;
+
+  static const char *xa_state_names[]= {"ACTIVE", "IDLE", "PREPARED",
+                                         "ROLLBACK ONLY"};
+  my_error(ER_XAER_RMFAIL, MYF(0),
+           xa_state_names[thd->transaction->xid_state.get_state_code()]);
+  return true;
+}
+
 } // namespace myduck

@@ -1,3 +1,4 @@
+--source ../include/have_duckdb.inc
 --source ../include/have_duckdb_udf.inc
 --echo #
 --echo # check collation config when execute
@@ -310,23 +311,23 @@ SET NAMES utf8mb4;
 --echo # Test 4. NON-UTF8 CHARSET
 --echo #
 --echo # 4.1 CREATE TABLE
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
 
 --echo # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
 
 
