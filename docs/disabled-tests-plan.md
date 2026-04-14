@@ -172,7 +172,15 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 
 ### Next priorities
 
-**Quick wins (1b, 1d, 1e, 24, 25)** — 5 items, low complexity, add more macros or fix test expectations.
+**Done**: `addtime`, `subdate`, `subtime`, `oct(string)`, `bin` macros added. `supported_copy_ddl` error code fixed. `json_contains` 3-arg macro dropped (DuckDB native 2-arg works, 3-arg needs SQL rewrite in test).
+
+**Remaining quick wins**:
+- `duckdb_time_func`: `addtime('1 1:1:1.000002')` — MariaDB time interval format differs from DuckDB INTERVAL
+- `duckdb_fix_sql`: progressed past oct/bin, check next blocker
+- `duckdb_string_func`: `LENGTH(BLOB)` — can't override builtin with macro (infinite recursion)
+- `duckdb_json`: `json_contains(json, val, path)` 3-arg — needs SQL rewrite, not macro
+- `rename_duckdb_table`: server log warnings
+
 **Medium impact (2, 9a, 9b)** — decimal fallback + type/mode pushdown issues, 6 tests.
 **Hard/external (4, 13, 15, 17, 18, 19)** — architecture limits or external deps.
 
