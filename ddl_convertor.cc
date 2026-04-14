@@ -30,6 +30,7 @@
 #undef UNKNOWN
 #include "duckdb_charset_collation.h"
 #include "duckdb_config.h"
+#include "duckdb_error.h"
 #include "sql_class.h"
 #include "sql_alter.h"
 #include "sql_table.h" /* primary_key_name */
@@ -42,12 +43,15 @@ bool report_duckdb_table_struct_error(const char *not_supported,
                                       ddl_error_context ctx)
 {
   if (ctx == ddl_error_context::CREATE)
+  {
     my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0), "DuckDB", not_supported);
+  }
   else
   {
     char buf[512];
-    snprintf(buf, sizeof(buf), "%s '%s'", try_instead, column);
-    my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), not_supported, buf);
+    snprintf(buf, sizeof(buf), "%s is not supported. Try %s '%s'",
+             not_supported, try_instead, column);
+    my_error(ER_DUCKDB_TABLE_STRUCT_INVALID, MYF(0), buf);
   }
   return true;
 }
