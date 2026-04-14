@@ -125,15 +125,24 @@ bool DuckdbManager::Initialize()
     con->Query("CREATE OR REPLACE MACRO subtime(d, t) AS d - t::INTERVAL");
     con->Query("CREATE OR REPLACE MACRO oct(x) AS "
                "printf('%o', CASE WHEN typeof(x) = 'VARCHAR' "
-               "THEN CAST(regexp_extract(x::VARCHAR, '^[0-9]+') AS BIGINT) "
-               "ELSE x::BIGINT END)");
+               "THEN CASE WHEN regexp_extract(x::VARCHAR, '^[0-9]+') = '' "
+               "THEN 0 ELSE CAST(regexp_extract(x::VARCHAR, '^[0-9]+') "
+               "AS BIGINT) END ELSE x::BIGINT END)");
     con->Query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
                "substr(str, pos + len) END");
-    /* bin() — MariaDB returns binary string representation */
     con->Query("CREATE OR REPLACE MACRO bin(x) AS "
-               "printf('%b', x::BIGINT)");
+               "printf('%b', CASE WHEN typeof(x) = 'VARCHAR' "
+               "THEN CASE WHEN regexp_extract(x::VARCHAR, '^[0-9]+') = '' "
+               "THEN 0 ELSE CAST(regexp_extract(x::VARCHAR, '^[0-9]+') "
+               "AS BIGINT) END ELSE x::BIGINT END)");
+    /* locate(substr, str[, pos]) — MariaDB has reversed arg order vs DuckDB */
+    con->Query("CREATE OR REPLACE MACRO locate(needle, haystack) AS "
+               "instr(haystack, needle)");
+    con->Query("CREATE OR REPLACE MACRO locate(needle, haystack, pos) AS "
+               "CASE WHEN instr(substr(haystack, pos), needle) = 0 THEN 0 "
+               "ELSE instr(substr(haystack, pos), needle) + pos - 1 END");
   }
 
   /* Register MySQL-compatible function overloads */
