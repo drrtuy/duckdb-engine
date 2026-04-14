@@ -484,11 +484,14 @@ std::string FieldConvertor::convert_type(const Field *field)
       ret= "decimal(" + std::to_string(precision) + "," + std::to_string(dec) +
            ")";
     }
+    else if (myduck::use_double_for_decimal)
+    {
+      ret= "double";
+    }
     else
     {
       /* Clamp to max DuckDB precision */
-      assert(dec <= 30);
-      ret= "decimal(38," + std::to_string(dec) + ")";
+      ret= "decimal(38," + std::to_string(std::min((uint) 38, dec)) + ")";
     }
     break;
   }
