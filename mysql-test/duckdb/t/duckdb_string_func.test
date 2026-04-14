@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 # 1. In Duckdb, some string function does not support blob fields as input
 # 2. Regex-related functions are basically incompatible, and regex functions will be processed uniformly in the future.
 # 3. Some set functions are not support yet, such as CHAR(), ELT(), EXPORT_SET(), FIELD(), FORMAT(), MAKE_SET().

@@ -1,4 +1,4 @@
---source include/have_mysqld_safe.inc
+--source ../include/have_mysqld_safe.inc
 
 # 1) Set valiables to be used in parameters of mysqld_safe.
 let $MYSQLD_DATADIR= `SELECT @@datadir`;

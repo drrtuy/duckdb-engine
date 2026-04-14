@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 CREATE TABLE t_innodb (
 	id INT PRIMARY KEY,
 	col1 TINYINT,

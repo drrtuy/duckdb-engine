@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 CREATE TABLE fake_innodb_table (id INT PRIMARY KEY) ENGINE=InnoDB;
 INSERT INTO fake_innodb_table VALUES (0);
 CREATE TABLE fake_duckdb_table (id INT PRIMARY KEY) ENGINE=DuckDB;

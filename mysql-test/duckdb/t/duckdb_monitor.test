@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 #
 # For duckdb monitoring tests
 #
