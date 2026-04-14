@@ -19,7 +19,6 @@ duckdb_db_table_strconvert : 2026-03-07 drrtuy@gmail.com
 duckdb_fix_sql : 2026-03-07 drrtuy@gmail.com
 duckdb_json : 2026-03-07 drrtuy@gmail.com
 duckdb_kill : 2026-03-07 drrtuy@gmail.com
-duckdb_monitor : 2026-03-07 drrtuy@gmail.com
 duckdb_numeric_func : 2026-03-07 drrtuy@gmail.com
 duckdb_refuse_xa : 2026-03-07 drrtuy@gmail.com
 duckdb_require_primary_key : 2026-03-07 drrtuy@gmail.com
