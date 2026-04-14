@@ -1,8 +1,8 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. **Enabled: 22/47 tests. Disabled: 25. DuckDB: v1.5.2.**
+Status as of 2026-04-14. **Enabled: 24/47 tests. Disabled: 23. DuckDB: v1.5.2.**
 
-### Done this session (12 → 20)
+### Done this session (12 → 24)
 
 | Test | Fix |
 |------|-----|

@@ -17,7 +17,6 @@ duckdb_kill : DEBUG sync points not implemented, timeout
 duckdb_numeric_func : ACOS domain error in DuckDB
 duckdb_refuse_xa : XA PREPARED state handling
 duckdb_sql_mode : strict GROUP BY in DuckDB
-duckdb_sql_syntax : WITH ROLLUP not supported
 duckdb_time_func : ADDDATE() not in DuckDB
 rename_duckdb_table : server log warnings on cross-schema rename
 supported_copy_ddl : cross-schema rename not supported
