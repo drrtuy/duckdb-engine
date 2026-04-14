@@ -1,0 +1,11 @@
+/* Auto-generated from duckdb_errors.txt — do not edit. */
+#pragma once
+
+#define ER_DUCKDB_CLIENT 4206
+#define ER_DUCKDB_QUERY_ERROR 4207
+#define ER_DUCKDB_TABLE_STRUCT_INVALID 4208
+#define ER_DUCKDB_SEND_RESULT_ERROR 4209
+#define ER_DUCKDB_APPENDER_ERROR 4210
+#define ER_DUCKDB_COMMIT_ERROR 4211
+#define ER_DUCKDB_ROLLBACK_ERROR 4212
+#define ER_DUCKDB_PREPARE_ERROR 4213

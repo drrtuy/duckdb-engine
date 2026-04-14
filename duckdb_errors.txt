@@ -1,0 +1,24 @@
+# DuckDB storage engine error messages.
+#
+# Format follows sql/share/errmsg-utf8.txt conventions.
+# This file is appended to errmsg-utf8.txt at cmake configure time
+# so that comp_err assigns proper error codes.
+#
+# The generated header duckdb_error.h is #included by engine sources.
+
+ER_DUCKDB_CLIENT
+        eng "[DuckDB] %s"
+ER_DUCKDB_QUERY_ERROR
+        eng "[DuckDB] Execute sql failed. %s"
+ER_DUCKDB_TABLE_STRUCT_INVALID
+        eng "[DuckDB] DuckDB table structure is invalid. Reason: %s"
+ER_DUCKDB_SEND_RESULT_ERROR
+        eng "[DuckDB] DuckDB send result error. %s"
+ER_DUCKDB_APPENDER_ERROR
+        eng "[DuckDB] DuckDB appender error. %s"
+ER_DUCKDB_COMMIT_ERROR
+        eng "[DuckDB] DuckDB commit transaction error. %s"
+ER_DUCKDB_ROLLBACK_ERROR
+        eng "[DuckDB] DuckDB rollback transaction error. %s"
+ER_DUCKDB_PREPARE_ERROR
+        eng "[DuckDB] DuckDB prepare transaction error. %s"

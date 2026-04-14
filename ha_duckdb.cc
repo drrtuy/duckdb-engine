@@ -38,6 +38,7 @@
 #include "ddl_convertor.h"
 #include "dml_convertor.h"
 #include "delta_appender.h"
+#include "duckdb_error.h"
 #include "row_helpers.h"
 #include "ha_duckdb_pushdown.h"
 #include "duckdb_log.h"
@@ -95,7 +96,7 @@ static int duckdb_prepare(handlerton *hton, THD *thd, bool all)
     auto *ctx= get_duckdb_context(thd);
     if (ctx->flush_appenders(error_msg))
     {
-      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      my_error(ER_DUCKDB_PREPARE_ERROR, MYF(0), error_msg.c_str());
       return 1;
     }
   }
@@ -111,7 +112,7 @@ static void push_duckdb_query_error(const std::string &err)
     return;
   }
 
-  my_error(ER_UNKNOWN_ERROR, MYF(0), err.c_str());
+  my_error(ER_DUCKDB_CLIENT, MYF(0), err.c_str());
 }
 
 #if MYSQL_VERSION_ID >= 110800
@@ -132,14 +133,14 @@ static int duckdb_commit(handlerton *hton, THD *thd, bool commit_trx)
        This is a no-op when appenders were already flushed. */
     if (ctx->flush_appenders(error_msg))
     {
-      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), error_msg.c_str());
       ctx->duckdb_trans_rollback(error_msg);
       return 1;
     }
 
     if (ctx->duckdb_trans_commit(error_msg))
     {
-      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      my_error(ER_DUCKDB_COMMIT_ERROR, MYF(0), error_msg.c_str());
       ctx->duckdb_trans_rollback(error_msg);
       return 1;
     }
@@ -162,7 +163,7 @@ static int duckdb_rollback(handlerton *hton, THD *thd, bool rollback_trx)
     auto *ctx= get_duckdb_context(thd);
     if (ctx->duckdb_trans_rollback(error_msg))
     {
-      my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+      my_error(ER_DUCKDB_ROLLBACK_ERROR, MYF(0), error_msg.c_str());
       return 1;
     }
   }
@@ -323,7 +324,7 @@ static int execute_dml(THD *thd, DMLConvertor *convertor)
 
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
     return HA_DUCKDB_DML_ERROR;
   }
 
@@ -643,7 +644,7 @@ int ha_duckdb::rnd_init(bool)
   query_result= myduck::duckdb_query(ctx->get_connection(), query);
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
 
@@ -794,7 +795,7 @@ int ha_duckdb::delete_all_rows()
   auto query_result= myduck::duckdb_query(ctx->get_connection(), query);
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
 
@@ -833,7 +834,7 @@ int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
   std::string error_msg;
   if (ctx->flush_appenders(error_msg))
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), error_msg.c_str());
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
 
@@ -843,7 +844,7 @@ int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
   auto result= myduck::duckdb_query(thd, query, true);
   if (result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), result->GetError().c_str());
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
 
@@ -880,7 +881,7 @@ int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
   std::string error_msg;
   if (ctx->flush_appenders(error_msg))
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), error_msg.c_str());
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), error_msg.c_str());
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
 
@@ -890,7 +891,7 @@ int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
   auto result= myduck::duckdb_query(thd, query, true);
   if (result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), result->GetError().c_str());
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
 
@@ -1045,7 +1046,7 @@ int ha_duckdb::truncate()
 
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
     DBUG_RETURN(HA_DUCKDB_TRUNCATE_TABLE_ERROR);
   }
 
@@ -1157,7 +1158,7 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
 
   if (query_result->HasError())
   {
-    my_error(ER_UNKNOWN_ERROR, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
     DBUG_RETURN(true);
   }
 
