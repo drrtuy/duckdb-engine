@@ -9,8 +9,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -27,8 +27,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db2	t2_rename
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -42,8 +42,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -53,13 +53,13 @@ db2	t2
 
 Failed to rename single DuckDB table for different schemas
 RENAME TABLE db1.t1 TO db2.t1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB does not support rename between different schema.
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: cross-schema rename is not supported. Try renaming within the same schema, not to 'db2'
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -69,13 +69,13 @@ db2	t2
 
 Failed to rename DuckDB tables for different schemas
 ALTER TABLE db1.t1 RENAME TO db2.t1, ALGORITHM = INPLACE;
-ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: cross-schema rename is not supported. Try renaming within the same schema, not to 'db2'
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -84,13 +84,13 @@ db2	t2
 
 
 RENAME TABLE db1.t1 TO db1.t1_rename, db2.t2 TO db1.t2_rename;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB does not support rename between different schema.
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: cross-schema rename is not supported. Try renaming within the same schema, not to 'db1'
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-db1	t1
+db1	t1_rename
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -105,11 +105,11 @@ CREATE TABLE db1.t3(a INT PRIMARY KEY) ENGINE = DUCKDB;
 ALTER TABLE db1.t3 RENAME TO db1.t3_rename, CHECKSUM = 1;
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-db1	t1
+db1	t1_rename
 db1	t3_rename
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -124,11 +124,11 @@ db2	t2
 ALTER TABLE db1.t3_rename RENAME TO db1.t3, ALGORITHM = COPY;
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-db1	t1
+db1	t1_rename
 db1	t3
 db2	t2
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -140,11 +140,11 @@ db2	t2
 ALTER TABLE db1.t3 RENAME TO db2.t3, ALGORITHM = COPY;
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-db1	t1
+db1	t1_rename
 db2	t2
 db2	t3
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -160,10 +160,11 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
-[ Rows: 0]
+[ Rows: 1]
+db1	t1
 
 
