@@ -28,6 +28,7 @@
 #undef UNKNOWN
 
 #include "cross_engine_scan.h"
+#include "duckdb_mysql_compat.h"
 
 namespace myduck
 {
@@ -134,6 +135,9 @@ bool DuckdbManager::Initialize()
     con->Query("CREATE OR REPLACE MACRO bin(x) AS "
                "printf('%b', x::BIGINT)");
   }
+
+  /* Register MySQL-compatible function overloads */
+  register_mysql_compat_functions(*m_database->instance);
 
   /* Register cross-engine scan support (_mdb_scan + replacement scan) */
   register_cross_engine_scan(*m_database->instance);

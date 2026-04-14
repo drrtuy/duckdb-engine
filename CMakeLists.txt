@@ -18,6 +18,7 @@ SET(DUCKDB_SOURCES
   ha_duckdb_pushdown.cc
   cross_engine_scan.cc
   duckdb_udf.cc
+  duckdb_mysql_compat.cc
 )
 
 MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_SOURCES}
