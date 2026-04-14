@@ -113,6 +113,17 @@ bool DuckdbManager::Initialize()
     auto con= std::make_shared<duckdb::Connection>(*m_database);
     con->Query("SET autoload_known_extensions=true");
     con->Query("SET autoinstall_known_extensions=true");
+
+    /*
+      Register MariaDB-compatible SQL macros for functions that DuckDB
+      lacks but MariaDB pushes down via the original query text.
+    */
+    con->Query("CREATE OR REPLACE MACRO adddate(d, i) AS d + i");
+    con->Query("CREATE OR REPLACE MACRO oct(x) AS printf('%o', x::BIGINT)");
+    con->Query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
+               "CASE WHEN pos < 1 OR pos > length(str) THEN str "
+               "ELSE substr(str, 1, pos - 1) || newstr || "
+               "substr(str, pos + len) END");
   }
 
   /* Register cross-engine scan support (_mdb_scan + replacement scan) */

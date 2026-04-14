@@ -18,6 +18,7 @@
 */
 
 #define MYSQL_SERVER 1
+#include <algorithm>
 #include <my_global.h>
 #include "sql_class.h"
 #include "sql_select.h"
@@ -237,6 +238,34 @@ int ha_duckdb_select_handler::init_scan()
   }
 
   std::string sql(query_string.ptr(), query_string.length());
+
+  /*
+    Rewrite MariaDB-specific SQL syntax that DuckDB does not understand.
+    GROUP BY ... WITH ROLLUP  →  GROUP BY ROLLUP(...)
+  */
+  {
+    /* Case-insensitive search for "GROUP BY ... WITH ROLLUP" */
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+
+    const char *rollup_str= " WITH ROLLUP";
+    size_t rollup_pos= upper_sql.find(rollup_str);
+    if (rollup_pos != std::string::npos)
+    {
+      /* Find "GROUP BY" before WITH ROLLUP */
+      const char *group_str= "GROUP BY ";
+      size_t group_pos= upper_sql.rfind(group_str, rollup_pos);
+      if (group_pos != std::string::npos)
+      {
+        size_t cols_start= group_pos + strlen(group_str);
+        std::string cols= sql.substr(cols_start, rollup_pos - cols_start);
+        std::string replacement= "GROUP BY ROLLUP(" + cols + ")";
+        sql.replace(group_pos, rollup_pos + strlen(rollup_str) - group_pos,
+                    replacement);
+      }
+    }
+  }
 
   query_result= myduck::duckdb_query(thd, sql, true);
 
