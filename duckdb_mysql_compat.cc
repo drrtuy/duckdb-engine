@@ -50,6 +50,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
 
@@ -152,6 +153,110 @@ static void ord_byte_func(duckdb::DataChunk &args,
         for (int i= 0; i < char_len && i < (int) size; i++)
           val= val * 256 + data[i];
         return val;
+      });
+}
+
+/* ================================================================
+   Helper: parse MariaDB time interval string 'D H:M:S.us' into
+   microseconds. Supports formats:
+     'HH:MM:SS', 'HH:MM:SS.uuuuuu', 'D HH:MM:SS', 'D HH:MM:SS.uuuuuu'
+   Returns total microseconds. Negative values supported via leading '-'.
+   ================================================================ */
+
+static int64_t parse_mariadb_interval_us(const char *data, size_t len)
+{
+  if (len == 0)
+    return 0;
+  bool neg= false;
+  size_t i= 0;
+  if (data[0] == '-')
+  {
+    neg= true;
+    i++;
+  }
+  int days= 0, hours= 0, minutes= 0, seconds= 0, usec= 0;
+
+  /* Check if there's a 'D ' prefix (day followed by space) */
+  size_t space= std::string(data + i, len - i).find(' ');
+  if (space != std::string::npos)
+  {
+    days= atoi(std::string(data + i, space).c_str());
+    i+= space + 1;
+  }
+
+  /* Parse H:M:S */
+  int parts[3]= {0, 0, 0};
+  int pidx= 0;
+  size_t num_start= i;
+  for (; i <= len && pidx < 3; i++)
+  {
+    if (i == len || data[i] == ':' || data[i] == '.')
+    {
+      parts[pidx++]= atoi(std::string(data + num_start, i - num_start).c_str());
+      num_start= i + 1;
+      if (i < len && data[i] == '.')
+      {
+        i++;
+        break;
+      }
+    }
+  }
+  hours= parts[0];
+  minutes= parts[1];
+  seconds= parts[2];
+
+  /* Parse fractional seconds */
+  if (i < len)
+  {
+    std::string frac(data + i, len - i);
+    /* Pad to 6 digits */
+    while (frac.size() < 6)
+      frac+= '0';
+    frac= frac.substr(0, 6);
+    usec= atoi(frac.c_str());
+  }
+
+  int64_t total_us= ((int64_t) days * 86400 + (int64_t) hours * 3600 +
+                      (int64_t) minutes * 60 + seconds) *
+                         1000000 +
+                     usec;
+  return neg ? -total_us : total_us;
+}
+
+/* ================================================================
+   addtime(TIMESTAMP, VARCHAR) -> TIMESTAMP
+   subtime(TIMESTAMP, VARCHAR) -> TIMESTAMP
+   MariaDB ADDTIME/SUBTIME accepts time interval in 'D H:M:S.us' format.
+   DuckDB INTERVAL doesn't parse this format.
+   ================================================================ */
+
+static void addtime_func(duckdb::DataChunk &args,
+                         duckdb::ExpressionState &,
+                         duckdb::Vector &result)
+{
+  duckdb::BinaryExecutor::Execute<duckdb::timestamp_t, duckdb::string_t,
+                                  duckdb::timestamp_t>(
+      args.data[0], args.data[1], result, args.size(),
+      [](duckdb::timestamp_t ts, duckdb::string_t interval_str)
+          -> duckdb::timestamp_t {
+        int64_t us= parse_mariadb_interval_us(interval_str.GetData(),
+                                              interval_str.GetSize());
+        return duckdb::timestamp_t(ts.value + us);
+      });
+}
+
+static void subtime_func(duckdb::DataChunk &args,
+                         duckdb::ExpressionState &,
+                         duckdb::Vector &result)
+{
+  duckdb::BinaryExecutor::Execute<duckdb::timestamp_t, duckdb::string_t,
+                                  duckdb::timestamp_t>(
+      args.data[0], args.data[1], result, args.size(),
+      [](duckdb::timestamp_t ts, duckdb::string_t interval_str)
+          -> duckdb::timestamp_t {
+        int64_t us= parse_mariadb_interval_us(interval_str.GetData(),
+                                              interval_str.GetSize());
+        return duckdb::timestamp_t(ts.value - us);
       });
 }
 
@@ -1213,6 +1318,63 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
                     out+= data[i];
                 }
                 return duckdb::StringVector::AddString(result, out);
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* addtime(TIMESTAMP/TIME, VARCHAR) → TIMESTAMP/TIME */
+  {
+    duckdb::ScalarFunctionSet set("addtime");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::TIMESTAMP, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::TIMESTAMP, addtime_func));
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::TIME, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::TIME,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::BinaryExecutor::Execute<duckdb::dtime_t, duckdb::string_t,
+                                          duckdb::dtime_t>(
+              args.data[0], args.data[1], result, args.size(),
+              [](duckdb::dtime_t t, duckdb::string_t s) -> duckdb::dtime_t {
+                int64_t us= parse_mariadb_interval_us(s.GetData(),
+                                                      s.GetSize());
+                /* Wrap around 24h for DuckDB TIME range */
+                int64_t r= t.micros + us;
+                const int64_t day_us= 86400LL * 1000000;
+                r= ((r % day_us) + day_us) % day_us;
+                return duckdb::dtime_t(r);
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* subtime(TIMESTAMP/TIME, VARCHAR) → TIMESTAMP/TIME */
+  {
+    duckdb::ScalarFunctionSet set("subtime");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::TIMESTAMP, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::TIMESTAMP, subtime_func));
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::TIME, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::TIME,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::BinaryExecutor::Execute<duckdb::dtime_t, duckdb::string_t,
+                                          duckdb::dtime_t>(
+              args.data[0], args.data[1], result, args.size(),
+              [](duckdb::dtime_t t, duckdb::string_t s) -> duckdb::dtime_t {
+                int64_t us= parse_mariadb_interval_us(s.GetData(),
+                                                      s.GetSize());
+                int64_t r= t.micros - us;
+                const int64_t day_us= 86400LL * 1000000;
+                r= ((r % day_us) + day_us) % day_us;
+                return duckdb::dtime_t(r);
               });
         }));
     duckdb::CreateScalarFunctionInfo info(std::move(set));
