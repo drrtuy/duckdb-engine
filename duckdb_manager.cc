@@ -119,11 +119,20 @@ bool DuckdbManager::Initialize()
       lacks but MariaDB pushes down via the original query text.
     */
     con->Query("CREATE OR REPLACE MACRO adddate(d, i) AS d + i");
-    con->Query("CREATE OR REPLACE MACRO oct(x) AS printf('%o', x::BIGINT)");
+    con->Query("CREATE OR REPLACE MACRO addtime(d, t) AS d + t::INTERVAL");
+    con->Query("CREATE OR REPLACE MACRO subdate(d, i) AS d - i");
+    con->Query("CREATE OR REPLACE MACRO subtime(d, t) AS d - t::INTERVAL");
+    con->Query("CREATE OR REPLACE MACRO oct(x) AS "
+               "printf('%o', CASE WHEN typeof(x) = 'VARCHAR' "
+               "THEN CAST(regexp_extract(x::VARCHAR, '^[0-9]+') AS BIGINT) "
+               "ELSE x::BIGINT END)");
     con->Query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
                "substr(str, pos + len) END");
+    /* bin() — MariaDB returns binary string representation */
+    con->Query("CREATE OR REPLACE MACRO bin(x) AS "
+               "printf('%b', x::BIGINT)");
   }
 
   /* Register cross-engine scan support (_mdb_scan + replacement scan) */
