@@ -312,6 +312,97 @@ int ha_duckdb_select_handler::init_scan()
     }
   }
 
+  /*
+    Rewrite conditionless JOIN → CROSS JOIN.
+    MariaDB allows "t1 JOIN t2" without ON; DuckDB requires ON clause.
+    Scan forward from each JOIN for ON/USING before the next
+    clause boundary (JOIN, WHERE, GROUP, ORDER, LIMIT, HAVING, ;).
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    size_t pos= 0;
+    while ((pos= upper_sql.find(" JOIN ", pos)) != std::string::npos)
+    {
+      /* Skip LEFT/RIGHT/INNER/CROSS/NATURAL JOIN */
+      if (pos >= 6)
+      {
+        std::string before= upper_sql.substr(
+            pos > 10 ? pos - 10 : 0,
+            pos - (pos > 10 ? pos - 10 : 0));
+        if (before.find("CROSS") != std::string::npos)
+        {
+          pos+= 6;
+          continue;
+        }
+      }
+
+      /* Scan forward to find ON/USING or a clause boundary */
+      size_t scan= pos + 6;
+      bool has_condition= false;
+      while (scan < upper_sql.size())
+      {
+        /* Check for ON (as keyword, followed by space) */
+        if (upper_sql.compare(scan, 3, "ON ") == 0 ||
+            upper_sql.compare(scan, 6, "USING ") == 0 ||
+            upper_sql.compare(scan, 6, "USING(") == 0)
+        {
+          has_condition= true;
+          break;
+        }
+        /* Clause boundary — no ON found, this is conditionless */
+        if (upper_sql.compare(scan, 5, "JOIN ") == 0 ||
+            upper_sql.compare(scan, 6, "WHERE ") == 0 ||
+            upper_sql.compare(scan, 6, "GROUP ") == 0 ||
+            upper_sql.compare(scan, 6, "ORDER ") == 0 ||
+            upper_sql.compare(scan, 6, "LIMIT ") == 0 ||
+            upper_sql.compare(scan, 7, "HAVING ") == 0 ||
+            upper_sql[scan] == ';')
+          break;
+        scan++;
+      }
+      if (!has_condition)
+      {
+        sql.replace(pos, 6, " CROSS JOIN ");
+        upper_sql= sql;
+        std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                       ::toupper);
+        pos+= 12;
+      }
+      else
+        pos+= 6;
+    }
+  }
+
+  /*
+    Rewrite REGEXP / NOT REGEXP → regexp_matches().
+    MariaDB: expr REGEXP pattern / expr NOT REGEXP pattern
+    DuckDB:  regexp_matches(expr, pattern) / NOT regexp_matches(expr, pattern)
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    /* Replace NOT REGEXP first (longer), then REGEXP */
+    size_t pos= 0;
+    while ((pos= upper_sql.find(" NOT REGEXP ", pos)) != std::string::npos)
+    {
+      sql.replace(pos, 12, " !~ ");
+      upper_sql= sql;
+      std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                     ::toupper);
+    }
+    pos= 0;
+    while ((pos= upper_sql.find(" REGEXP ", pos)) != std::string::npos)
+    {
+      sql.replace(pos, 8, " ~ ");
+      upper_sql= sql;
+      std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                     ::toupper);
+    }
+  }
+
   query_result= myduck::duckdb_query(thd, sql, true);
 
   if (!query_result || query_result->HasError())
