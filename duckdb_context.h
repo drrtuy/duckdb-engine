@@ -161,4 +161,8 @@ private:
   std::string m_collation;
 };
 
+/** Return true (and push ER_XAER_RMFAIL) when THD is inside an XA
+    transaction.  DuckDB does not support XA. */
+bool reject_xa_if_active(THD *thd);
+
 } // namespace myduck

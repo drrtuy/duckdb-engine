@@ -324,7 +324,7 @@ static int execute_dml(THD *thd, DMLConvertor *convertor)
 
   if (query_result->HasError())
   {
-    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
+    my_error(ER_DUCKDB_QUERY_ERROR, MYF(0), query_result->GetError().c_str());
     return HA_DUCKDB_DML_ERROR;
   }
 
@@ -916,6 +916,10 @@ int ha_duckdb::external_lock(THD *thd, int lock_type)
   DBUG_ENTER("ha_duckdb::external_lock");
   if (lock_type != F_UNLCK)
   {
+    /* DuckDB does not support XA transactions. Reject DML early. */
+    if (myduck::reject_xa_if_active(thd))
+      DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+
     int ret= duckdb_register_trx(thd);
     if (ret)
       DBUG_RETURN(ret);

@@ -34,7 +34,7 @@ RENAME TABLE db1.t1 TO db2.t1;
 --source $MYSQL_TMP_DIR/duckdb_meta.inc
 
 --echo Failed to rename DuckDB tables for different schemas
---error ER_ALTER_OPERATION_NOT_SUPPORTED
+--error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE db1.t1 RENAME TO db2.t1, ALGORITHM = INPLACE;
 --source $MYSQL_TMP_DIR/duckdb_meta.inc
 
