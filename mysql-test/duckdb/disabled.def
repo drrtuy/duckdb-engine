@@ -20,7 +20,6 @@ duckdb_sql_mode : strict GROUP BY in DuckDB
 duckdb_sql_syntax : WITH ROLLUP not supported
 duckdb_string_func : INSERT() function not in DuckDB
 duckdb_time_func : ADDDATE() not in DuckDB
-feature_duckdb_data_type : decimal >38 precision
 rename_duckdb_table : server log warnings on cross-schema rename
 supported_copy_ddl : cross-schema rename not supported
 system_timezone : hangs on mariadbd-safe restart
