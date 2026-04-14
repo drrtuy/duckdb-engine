@@ -127,7 +127,8 @@ bool DuckdbManager::Initialize()
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
                "substr(str, pos + len) END");
-    /* oct, bin, locate are now registered as native C++ scalar functions
+    /* MID() registered as C++ UDF in register_mysql_compat_functions() */
+    /* oct, bin, hex, locate are now registered as native C++ scalar functions
        in register_mysql_compat_functions() -- no SQL macros needed. */
   }
 

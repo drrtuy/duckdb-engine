@@ -267,6 +267,51 @@ int ha_duckdb_select_handler::init_scan()
     }
   }
 
+  /*
+    Rewrite CONVERT(expr, TYPE) → CAST(expr AS TYPE)
+    MariaDB uses CONVERT(expr, type) syntax, DuckDB uses CAST(expr AS type).
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    size_t pos= 0;
+    while ((pos= upper_sql.find("CONVERT(", pos)) != std::string::npos)
+    {
+      /* Find matching closing paren, handling nested parens */
+      size_t start= pos + 8; /* after "CONVERT(" */
+      int depth= 1;
+      size_t i= start;
+      size_t comma= std::string::npos;
+      for (; i < sql.size() && depth > 0; i++)
+      {
+        if (sql[i] == '(')
+          depth++;
+        else if (sql[i] == ')')
+          depth--;
+        else if (sql[i] == ',' && depth == 1 && comma == std::string::npos)
+          comma= i;
+      }
+      if (comma != std::string::npos && depth == 0)
+      {
+        std::string expr= sql.substr(start, comma - start);
+        std::string type= sql.substr(comma + 1, i - 1 - (comma + 1));
+        /* Trim whitespace from type */
+        size_t ts= type.find_first_not_of(" \t");
+        size_t te= type.find_last_not_of(" \t");
+        if (ts != std::string::npos)
+          type= type.substr(ts, te - ts + 1);
+        std::string replacement= "CAST(" + expr + " AS " + type + ")";
+        sql.replace(pos, i - pos, replacement);
+        upper_sql= sql;
+        std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                       ::toupper);
+      }
+      else
+        pos++;
+    }
+  }
+
   query_result= myduck::duckdb_query(thd, sql, true);
 
   if (!query_result || query_result->HasError())
