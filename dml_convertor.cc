@@ -28,6 +28,8 @@
 #include "sql_table.h" /* primary_key_name */
 #include "my_decimal.h"
 
+namespace myduck { extern my_bool use_double_for_decimal; }
+
 static const uint sizeof_trailing_comma= sizeof(", ") - 1;
 static const uint sizeof_trailing_and= sizeof(" AND ") - 1;
 
@@ -79,6 +81,13 @@ void append_field_value_to_sql(String &target_str, Field *field)
       int string_length= DECIMAL_MAX_STR_LENGTH + 1;
       decimal2string(&value, buff, &string_length, precision, dec, '0');
       target_str.append(buff, string_length);
+    }
+    else if (myduck::use_double_for_decimal)
+    {
+      /* DuckDB column is DOUBLE for precision >38 — emit as double literal */
+      char buff[64];
+      snprintf(buff, sizeof(buff), "%.17e", field->val_real());
+      target_str.append(buff, strlen(buff));
     }
     else
     {
