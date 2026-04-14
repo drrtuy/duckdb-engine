@@ -38,3 +38,5 @@ SHOW CREATE TABLE t;
 --echo #
 SET GLOBAL duckdb_require_primary_key = default;
 DROP TABLE t;
+
+--source ../include/cleanup_duckdb.inc

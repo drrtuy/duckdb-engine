@@ -367,3 +367,5 @@ SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
 --enable_query_log
 
 --source ../include/cleanup_duckdb_udf.inc
+
+--source ../include/cleanup_duckdb.inc
