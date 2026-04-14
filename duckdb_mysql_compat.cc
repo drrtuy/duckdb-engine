@@ -53,6 +53,9 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
 
+#include "duckdb/common/types/string_type.hpp"
+#include "re2/re2.h"
+
 namespace myduck
 {
 
@@ -902,9 +905,159 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
                "ELSE substr(s, p, n) END");
   }
 
+  /* regexp_instr(VARCHAR, VARCHAR) → INTEGER
+     Returns 1-based position of first match, 0 if no match. */
+  {
+    duckdb::ScalarFunctionSet set("regexp_instr");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::INTEGER,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                          int32_t>(
+              args.data[0], args.data[1], result, args.size(),
+              [](duckdb::string_t expr, duckdb::string_t pat) -> int32_t {
+                duckdb_re2::RE2 re(
+                    duckdb_re2::StringPiece(pat.GetData(), pat.GetSize()));
+                if (!re.ok())
+                  return 0;
+                duckdb_re2::StringPiece match;
+                duckdb_re2::StringPiece input(expr.GetData(), expr.GetSize());
+                if (re.Match(input, 0, expr.GetSize(),
+                             duckdb_re2::RE2::UNANCHORED, &match, 1))
+                  return (int32_t)(match.data() - expr.GetData()) + 1;
+                return 0;
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* regexp_replace(VARCHAR, VARCHAR, VARCHAR) → VARCHAR
+     Replaces all occurrences of pattern in expr with replacement. */
+  {
+    duckdb::ScalarFunctionSet set("regexp_replace");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR,
+         duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::VARCHAR,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::TernaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                           duckdb::string_t,
+                                           duckdb::string_t>(
+              args.data[0], args.data[1], args.data[2], result, args.size(),
+              [&](duckdb::string_t expr, duckdb::string_t pat,
+                  duckdb::string_t repl) -> duckdb::string_t {
+                duckdb_re2::RE2 re(
+                    duckdb_re2::StringPiece(pat.GetData(), pat.GetSize()));
+                if (!re.ok())
+                  return expr;
+                std::string s(expr.GetData(), expr.GetSize());
+                duckdb_re2::RE2::GlobalReplace(
+                    &s,  re,
+                    duckdb_re2::StringPiece(repl.GetData(), repl.GetSize()));
+                return duckdb::StringVector::AddString(result, s);
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* regexp_substr(VARCHAR, VARCHAR) → VARCHAR
+     Returns the substring matching pattern, or NULL if no match. */
+  {
+    duckdb::ScalarFunctionSet set("regexp_substr");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::VARCHAR,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::BinaryExecutor::ExecuteWithNulls<duckdb::string_t,
+                                                   duckdb::string_t,
+                                                   duckdb::string_t>(
+              args.data[0], args.data[1], result, args.size(),
+              [&](duckdb::string_t expr, duckdb::string_t pat,
+                  duckdb::ValidityMask &mask,
+                  duckdb::idx_t idx) -> duckdb::string_t {
+                duckdb_re2::RE2 re(
+                    duckdb_re2::StringPiece(pat.GetData(), pat.GetSize()));
+                if (!re.ok())
+                {
+                  mask.SetInvalid(idx);
+                  return duckdb::string_t();
+                }
+                duckdb_re2::StringPiece match;
+                duckdb_re2::StringPiece input(expr.GetData(), expr.GetSize());
+                if (re.Match(input, 0, expr.GetSize(),
+                             duckdb_re2::RE2::UNANCHORED, &match, 1))
+                  return duckdb::StringVector::AddString(
+                      result, match.data(), match.size());
+                mask.SetInvalid(idx);
+                return duckdb::string_t();
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* json_unquote(VARCHAR) → VARCHAR
+     Removes JSON quotes and unescapes. Simple implementation. */
+  {
+    duckdb::ScalarFunctionSet set("json_unquote");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::VARCHAR,
+        [](duckdb::DataChunk &args, duckdb::ExpressionState &,
+           duckdb::Vector &result) {
+          duckdb::UnaryExecutor::Execute<duckdb::string_t, duckdb::string_t>(
+              args.data[0], result, args.size(),
+              [&](duckdb::string_t input) -> duckdb::string_t {
+                auto data= input.GetData();
+                auto size= input.GetSize();
+                /* If not quoted, return as-is */
+                if (size < 2 || data[0] != '"' || data[size - 1] != '"')
+                  return input;
+                /* Strip quotes and unescape */
+                std::string out;
+                out.reserve(size);
+                for (size_t i= 1; i < size - 1; i++)
+                {
+                  if (data[i] == '\\' && i + 1 < size - 1)
+                  {
+                    i++;
+                    switch (data[i])
+                    {
+                    case '"':  out+= '"'; break;
+                    case '\\': out+= '\\'; break;
+                    case '/':  out+= '/'; break;
+                    case 'b':  out+= '\b'; break;
+                    case 'f':  out+= '\f'; break;
+                    case 'n':  out+= '\n'; break;
+                    case 'r':  out+= '\r'; break;
+                    case 't':  out+= '\t'; break;
+                    default:   out+= '\\'; out+= data[i]; break;
+                    }
+                  }
+                  else
+                    out+= data[i];
+                }
+                return duckdb::StringVector::AddString(result, out);
+              });
+        }));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
   sql_print_information(
       "DuckDB: registered MySQL-compatible function overloads "
-      "(octet_length, length, hex, oct, bin, locate, mid, json_contains)");
+      "(octet_length, length, hex, oct, bin, locate, mid, "
+      "regexp_instr, regexp_replace, regexp_substr, json_unquote, "
+      "json_contains)");
 }
 
 } /* namespace myduck */
