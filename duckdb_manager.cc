@@ -127,6 +127,19 @@ bool DuckdbManager::Initialize()
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
                "substr(str, pos + len) END");
+    /* to_base64 / from_base64 — DuckDB uses base64()/from_base64() */
+    con->Query("CREATE OR REPLACE MACRO to_base64(x) AS "
+               "base64(encode(x))");
+    /* substring_index(str, delim, count) */
+    con->Query("CREATE OR REPLACE MACRO substring_index(s, d, c) AS "
+               "CASE WHEN c > 0 THEN "
+               "array_to_string(list_slice(string_split(s, d), 1, c), d) "
+               "WHEN c < 0 THEN "
+               "array_to_string(list_slice(string_split(s, d), c, NULL), d) "
+               "ELSE '' END");
+    /* strcmp(s1, s2) — returns 0, -1 or 1 */
+    con->Query("CREATE OR REPLACE MACRO strcmp(a, b) AS "
+               "CASE WHEN a = b THEN 0 WHEN a < b THEN -1 ELSE 1 END");
     /* MID() registered as C++ UDF in register_mysql_compat_functions() */
     /* oct, bin, hex, locate are now registered as native C++ scalar functions
        in register_mysql_compat_functions() -- no SQL macros needed. */

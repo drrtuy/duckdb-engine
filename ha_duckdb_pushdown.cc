@@ -401,6 +401,23 @@ int ha_duckdb_select_handler::init_scan()
       std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
                      ::toupper);
     }
+    /* RLIKE is a synonym for REGEXP in MariaDB */
+    pos= 0;
+    while ((pos= upper_sql.find(" NOT RLIKE ", pos)) != std::string::npos)
+    {
+      sql.replace(pos, 11, " !~ ");
+      upper_sql= sql;
+      std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                     ::toupper);
+    }
+    pos= 0;
+    while ((pos= upper_sql.find(" RLIKE ", pos)) != std::string::npos)
+    {
+      sql.replace(pos, 7, " ~ ");
+      upper_sql= sql;
+      std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                     ::toupper);
+    }
   }
 
   query_result= myduck::duckdb_query(thd, sql, true);
