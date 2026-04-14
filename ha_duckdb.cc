@@ -1160,21 +1160,27 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
   if (convertors.empty())
     DBUG_RETURN(false);
 
-  std::ostringstream query;
+  /* Execute each ALTER operation in its own auto-commit context.
+     DuckDB v1.5+ does not allow compound DDL that mixes structural
+     changes (ADD COLUMN) with constraint updates (SET DEFAULT)
+     within the same transaction. */
+  auto con= myduck::DuckdbManager::CreateConnection();
+
   for (auto &conv : convertors)
   {
     if (!conv || conv->check())
       DBUG_RETURN(true);
-    query << conv->translate();
-  }
 
-  auto *ctx= get_duckdb_context(thd);
-  auto query_result= myduck::duckdb_query(ctx->get_connection(), query.str());
+    std::string sql= conv->translate();
+    if (sql.empty())
+      continue;
 
-  if (query_result->HasError())
-  {
-    my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
-    DBUG_RETURN(true);
+    auto query_result= myduck::duckdb_query(*con, sql);
+    if (query_result->HasError())
+    {
+      my_error(ER_DUCKDB_CLIENT, MYF(0), query_result->GetError().c_str());
+      DBUG_RETURN(true);
+    }
   }
 
   DBUG_RETURN(false);
