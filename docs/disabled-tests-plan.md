@@ -32,16 +32,18 @@ Status as of 2026-04-14. **Enabled: 20/47 tests. Disabled: 27. DuckDB: v1.5.2.**
 
 ## Group A: Missing SQL functions in DuckDB pushdown (6 tests)
 
-MariaDB pushes SELECT into DuckDB, but DuckDB lacks these functions.
+Primary blockers **FIXED**: `adddate()`, `insert()`, `oct()` registered as DuckDB macros; `WITH ROLLUP` rewritten to `GROUP BY ROLLUP(...)`.
 
-| Test | Line | Error | Missing function |
-|------|------|-------|------------------|
-| `duckdb_time_func` | 24 | `Scalar Function with name adddate does not exist!` | `ADDDATE()` |
-| `duckdb_string_func` | 124 | `Scalar Function with name insert does not exist!` | `INSERT(str,pos,len,new)` |
-| `duckdb_fix_sql` | 26 | `Scalar Function with name oct does not exist!` | `oct()` |
-| `duckdb_sql_syntax` | 5 | `syntax error at or near "WITH"` | `WITH ROLLUP` |
-| `duckdb_numeric_func` | 27 | `ACOS is undefined outside [-1,1]` | Not a missing function — DuckDB is stricter on domain checks |
-| `duckdb_agg_func` | 53 | `No function matches 'avg(VARCHAR)'` | `AVG()` on string types not supported |
+Tests now hit secondary errors:
+
+| Test | New blocker after fix |
+|------|---------------------|
+| `duckdb_sql_syntax` | line 16: `SELECT * FROM t1 JOIN t2` — conditionless JOIN not supported by DuckDB parser |
+| `duckdb_time_func` | line 45: `addtime()` not in DuckDB |
+| `duckdb_string_func` | line 152: `LENGTH(BLOB)` — no BLOB overload in DuckDB |
+| `duckdb_fix_sql` | line 28: `oct('123.123a')` — string-to-BIGINT cast fails on non-numeric suffix |
+| `duckdb_numeric_func` | line 27: `ACOS` domain error — DuckDB is stricter on [-1,1] |
+| `duckdb_agg_func` | line 53: `AVG(VARCHAR)` — no string overload |
 
 **Fix:** Implement SQL rewrite in `ha_duckdb_pushdown.cc` — intercept `SELECT_LEX::print()` output and rewrite:
 - `adddate(x, interval)` → `x + interval` or `date_add(x, interval)`
@@ -127,29 +129,52 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 
 ## Priority work plan
 
-| # | Task | Tests | Complexity | Status |
-|---|------|-------|------------|--------|
-| ~~3~~ | ~~**Error code fixes**~~ | ~~4~~ | ~~low–medium~~ | **DONE** (1 enabled, 3 partially fixed) |
-| ~~6~~ | ~~**Index handling / CREATE TABLE constraint**~~ | ~~2~~ | ~~medium~~ | **DONE** (`create_table_constraint` enabled; `alter_duckdb_index` remains — see G) |
-| ~~11~~ | ~~**require_primary_key on ALTER**~~ | ~~1~~ | ~~low~~ | **DONE** |
-| ~~14~~ | ~~**appender_allocator_flush_threshold**~~ | ~~1~~ | ~~low~~ | **DONE** — maps to `allocator_flush_threshold` in v1.5.2 |
-| ~~20~~ | ~~**Upgrade DuckDB submodule**~~ v1.3.2 → v1.5.2 | many | high | **DONE** |
-| ~~21~~ | ~~**Compound ALTER regression**~~ in v1.5.2 | 2 | medium | **DONE** — separate auto-commit connection per DDL |
-| 1 | **SQL function rewrite** in pushdown: `adddate→+interval`, `insert→overlay`, `oct`, `WITH ROLLUP→no pushdown` | 4 | medium | TODO |
-| 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | 3 | medium | TODO |
-| 4 | **ALTER COLUMN DROP DEFAULT** — MariaDB handles as metadata-only (INSTANT), handler not called | 1 | hard | TODO (architecture limitation) |
-| 5 | **Appender invalidation** after DDL in transaction | 1 | medium | TODO |
-| 7 | **UDF digit-name schemas** — quote schema/table names in DuckDB queries | 1 | medium | TODO |
-| 8 | **Hex/binary literal** in WHERE via pushdown | 1 | medium | TODO |
-| 9 | **AVG(VARCHAR)** / strict GROUP BY — refuse pushdown | 2 | medium | TODO |
-| 10 | **Numeric function domain** (ACOS outside [-1,1]) | 1 | medium | TODO |
-| 12 | **Timezone propagation** | 1 | medium | TODO |
-| 13 | **Cross-schema rename via COPY** | 1 | high | TODO |
-| 15 | **KILL/interrupt** — DEBUG sync points | 1 | high | TODO |
-| 16 | **bugfix_crash_after_commit_error** — test marked TODO | 1 | unknown | TODO |
-| 17 | **Encryption** — MySQL→MariaDB | 1 | high | TODO |
-| 18 | **system_timezone** — mariadbd-safe restart | 1 | high | TODO |
-| 19 | **Server crash** on 64MB JSON | 1 | out of scope | MariaDB server bug |
+### Completed
+
+| # | Task | Status |
+|---|------|--------|
+| 3 | Error code fixes | **DONE** — `ER_DUCKDB_*` codegen, error classification |
+| 6 | Index handling / CREATE TABLE constraint | **DONE** — `create_table_constraint` enabled |
+| 11 | require_primary_key on ALTER | **DONE** |
+| 14 | appender_allocator_flush_threshold | **DONE** — maps to `allocator_flush_threshold` in v1.5.2 |
+| 20 | Upgrade DuckDB v1.3.2 → v1.5.2 | **DONE** |
+| 21 | Compound ALTER regression | **DONE** — separate auto-commit connection per DDL |
+| 1a | SQL macros (`adddate`, `insert`, `oct`) + `WITH ROLLUP` rewrite | **DONE** — primary blockers fixed |
+
+### Remaining (27 disabled tests, grouped by root cause)
+
+| # | Task | Tests | Complexity |
+|---|------|-------|------------|
+| 1b | **More SQL macros**: `addtime`, `json_contains` | `duckdb_time_func`, `duckdb_json` | low — same pattern as adddate/oct |
+| 1c | **Conditionless JOIN**: `SELECT * FROM t1 JOIN t2` — DuckDB requires ON clause | `duckdb_sql_syntax` | medium — SQL rewrite or refuse pushdown |
+| 1d | **oct(string)**: `oct('123.123a')` — MariaDB truncates to number, DuckDB casts strictly | `duckdb_fix_sql` | low — improve macro to handle strings |
+| 1e | **LENGTH(BLOB)**: DuckDB has no BLOB overload for `length()` | `duckdb_string_func` | low — add `octet_length` macro alias |
+| 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | `decimal_high_precision`, `decimal_precision_all_possibilities`, `feature_duckdb_data_type`, `alter_engine_duckdb` | medium |
+| 4 | **ALTER COLUMN DROP DEFAULT** — MariaDB metadata-only, handler not called | `alter_default_debug` | hard |
+| 5 | **Appender invalidation** after DDL in transaction | `duckdb_ddl_during_transaction` | medium |
+| 7 | **UDF digit-name schemas** — quote in DuckDB queries | `duckdb_add_backticks` | medium |
+| 8 | **Hex/binary literal** in WHERE via pushdown | `duckdb_bit_string` | medium |
+| 9a | **AVG(VARCHAR)** — no string overload in DuckDB | `duckdb_agg_func` | medium |
+| 9b | **Strict GROUP BY** — DuckDB requires ONLY_FULL_GROUP_BY | `duckdb_sql_mode` | medium |
+| 10 | **ACOS domain** [-1,1] — DuckDB stricter than MariaDB | `duckdb_numeric_func` | medium |
+| 12 | **Timezone propagation** — checksum mismatch | `create_table_column_timestamp` | medium |
+| 22 | **DuckDB "temp"/"system" schema conflict** — reserved schema names | `bugfix_temp_and_system_database` | medium |
+| 23 | **XA PREPARED lifecycle** — INSERT after XA COMMIT fails | `duckdb_refuse_xa` | medium |
+| 24 | **Cross-schema rename error code** — test expects `ER_ALTER_OPERATION_NOT_SUPPORTED` for INPLACE | `supported_copy_ddl` | low — update test |
+| 25 | **Server log warnings** on rename test | `rename_duckdb_table` | low — suppress or fix warnings |
+| 26 | **Duplicate index names** — DuckDB ignores indexes but MariaDB remembers names | `alter_duckdb_index` | medium |
+| 13 | **Cross-schema rename via COPY** | `supported_copy_ddl` | high |
+| 15 | **KILL/interrupt** — DEBUG sync points | `duckdb_kill` | high |
+| 16 | **bugfix_crash_after_commit_error** — test TODO | `bugfix_crash_after_commit_error` | unknown |
+| 17 | **Encryption** — MySQL→MariaDB | `duckdb_allow_encryption` | high |
+| 18 | **system_timezone** — mariadbd-safe restart hangs | `system_timezone` | high |
+| 19 | **Server crash** on 64MB JSON | `duckdb_alter_table_engine` | out of scope |
+
+### Next priorities
+
+**Quick wins (1b, 1d, 1e, 24, 25)** — 5 items, low complexity, add more macros or fix test expectations.
+**Medium impact (2, 9a, 9b)** — decimal fallback + type/mode pushdown issues, 6 tests.
+**Hard/external (4, 13, 15, 17, 18, 19)** — architecture limits or external deps.
 
 ### DuckDB upstream upgrade — DONE
 
