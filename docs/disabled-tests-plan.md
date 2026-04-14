@@ -1,6 +1,27 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. Enabled: 16/47 tests. Disabled: 31.
+Status as of 2026-04-14. **Enabled: 17/47 tests. Disabled: 30.**
+
+### Done this session (12 → 17)
+
+| Test | Fix |
+|------|-----|
+| `duckdb_set_operation` | Already passing after charset fix |
+| `truncate_and_maintenance_duckdb_table` | Re-record for MariaDB ANALYZE output |
+| `duckdb_db_table_strconvert` | Re-record for UDF API |
+| `duckdb_monitor` | Fix `direct_delete/update_rows` counters + rewrite test |
+| `charset_and_collation` | Fix collation in master.opt + error codes |
+
+### Engine fixes done
+
+- `ER_DUCKDB_*` error codes (4206–4213) with codegen from `duckdb_errors.txt`
+- `report_duckdb_table_struct_error`: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER, `ER_ILLEGAL_HA_CREATE_OPTION` for CREATE
+- `execute_dml`: `ER_DUCKDB_QUERY_ERROR` for row-at-a-time DML failures
+- `direct_delete_rows` / `direct_update_rows`: increment `Duckdb_rows_delete` / `Duckdb_rows_update`
+- `external_lock`: reject DML on DuckDB tables inside XA transactions (`ER_XAER_RMFAIL`)
+- `have_duckdb.inc`: engine check + utf8mb4 charset setup
+- `my.cnf`: `character-set-server=utf8mb4`
+- Build fixes: `CREATE_TYPELIB_FOR`, `HA_EXTRA_*_ALTER_COPY`
 
 ## Group A: Missing SQL functions in DuckDB pushdown (6 tests)
 
@@ -35,22 +56,16 @@ DuckDB max: DECIMAL(38,x). MariaDB supports up to DECIMAL(65,30).
 
 **Fix:** In `ddl_convertor.cc` map `DECIMAL(>38, scale)` to `DOUBLE` (when `duckdb_use_double_for_decimal=ON`) or `DECIMAL(38, min(scale, 38-intg))` with truncation. In `delta_appender.cc` — analogous fallback on append. Test `decimal_high_precision` also needs PK (already added in working tree).
 
-## Group C: Wrong error code (4 tests)
+## Group C: Wrong error code (3 remaining tests)
 
-Engine returns wrong error code vs what the test expects.
+Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural errors, `ER_DUCKDB_QUERY_ERROR` for DML, XA DML rejection. `charset_and_collation` **DONE** (enabled).
 
-| Test | Line | Expected | Got | Cause |
-|------|------|----------|-----|-------|
-| `charset_and_collation` | 314 | `ER_ALTER_OPERATION_NOT_SUPPORTED` | `ER_ILLEGAL_HA_CREATE_OPTION` | `report_duckdb_table_struct_error` for CREATE returns `ER_ILLEGAL_HA_CREATE_OPTION`; also `-master.opt` references `utf8mb4_0900_ai_ci` which doesn't exist in MariaDB |
-| `rename_duckdb_table` | 33 | `ER_DUCKDB_TABLE_STRUCT_INVALID` | `ER_ALTER_OPERATION_NOT_SUPPORTED` | Cross-schema rename goes through `report_duckdb_table_struct_error` with ctx=ALTER |
-| `bugfix_temp_and_system_database` | 29 | `ER_DUCKDB_QUERY_ERROR` | `ER_DUCKDB_CLIENT` | INSERT into schema "temp" conflict — error passes through `push_duckdb_query_error` → `ER_DUCKDB_CLIENT` |
-| `duckdb_refuse_xa` | 12 | `ER_XAER_RMFAIL` | `ER_NO_DEFAULT_FOR_FIELD` | DuckDB doesn't block DML in XA transaction, INSERT proceeds and fails on missing default for c1 |
-
-**Fix:**
-- `charset_and_collation`: update `-master.opt` (remove `0900_ai_ci`), update expected error or use `ER_DUCKDB_TABLE_STRUCT_INVALID` for charset errors
-- `rename_duckdb_table`: use `ER_DUCKDB_TABLE_STRUCT_INVALID` in `report_duckdb_table_struct_error` for cross-schema rename
-- `bugfix_temp_and_system_database`: differentiate `ER_DUCKDB_QUERY_ERROR` vs `ER_DUCKDB_CLIENT` in `push_duckdb_query_error`, or update test
-- `duckdb_refuse_xa`: implement XA state check in handler, reject DML with `ER_XAER_RMFAIL`
+| Test | Status | Remaining issue |
+|------|--------|-----------------|
+| ~~`charset_and_collation`~~ | **DONE** | — |
+| `rename_duckdb_table` | Error codes fixed, result updated | Server log warnings during cross-schema rename test |
+| `bugfix_temp_and_system_database` | Error code `ER_DUCKDB_QUERY_ERROR` fixed | `DROP TABLE t1` in DuckDB "temp" schema fails — DuckDB internal schema conflict |
+| `duckdb_refuse_xa` | XA DML rejection implemented | INSERT after `XA COMMIT` in PREPARED state fails — need to handle XA lifecycle correctly |
 
 ## Group D: Engine features not implemented (5 tests)
 
@@ -108,27 +123,26 @@ Engine returns wrong error code vs what the test expects.
 
 ## Priority work plan
 
-| # | Task | Tests unblocked | Complexity | Type |
-|---|------|-----------------|------------|------|
-| 1 | **SQL function rewrite** in pushdown: `adddate→+interval`, `insert→overlay`, `oct`, `WITH ROLLUP→no pushdown` | 4 | medium | engine |
-| 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | 3 | medium | engine |
-| 3 | **Error code fixes**: `rename→ER_DUCKDB_TABLE_STRUCT_INVALID`, `charset→update test+opt`, `temp/system→ER_DUCKDB_QUERY_ERROR`, `XA→block DML` | 4 | low–medium | engine+tests |
-| 4 | **ALTER COLUMN DROP DEFAULT** propagate to DuckDB | 1 | medium | engine |
-| 5 | **Appender invalidation** after DDL in transaction | 1 | medium | engine |
-| 6 | **Index handling**: ignore non-unique index in CREATE TABLE, don't register ignored index names | 2 | medium | engine |
-| 7 | **UDF digit-name schemas** — quote schema/table names in DuckDB queries | 1 | medium | engine |
-| 8 | **Hex/binary literal** in WHERE via pushdown | 1 | medium | engine |
-| 9 | **AVG(VARCHAR)** / strict GROUP BY — refuse pushdown | 2 | medium | engine |
-| 10 | **Numeric function domain** (ACOS outside [-1,1]) | 1 | medium | engine |
-| 11 | **require_primary_key on ALTER** | 1 | low | engine |
-| 12 | **Timezone propagation** | 1 | medium | engine |
-| 13 | **Cross-schema rename via COPY** | 1 | high | engine |
-| 14 | **appender_allocator_flush_threshold** — AliSQL-only setting | 1 | low | test (N/A or adapt) |
-| 15 | **KILL/interrupt** — DEBUG sync points | 1 | high | engine |
-| 16 | **bugfix_crash_after_commit_error** — test marked TODO | 1 | unknown | test |
-| 17 | **Encryption** — MySQL→MariaDB | 1 | high | engine+test |
-| 18 | **system_timezone** — mariadbd-safe restart | 1 | high | test |
+| # | Task | Tests unblocked | Complexity | Status |
+|---|------|-----------------|------------|--------|
+| ~~3~~ | ~~**Error code fixes**~~ | ~~4~~ | ~~low–medium~~ | **DONE** (1 enabled, 3 partially fixed) |
+| 1 | **SQL function rewrite** in pushdown: `adddate→+interval`, `insert→overlay`, `oct`, `WITH ROLLUP→no pushdown` | 4 | medium | TODO |
+| 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | 3 | medium | TODO |
+| 4 | **ALTER COLUMN DROP DEFAULT** propagate to DuckDB | 1 | medium | TODO |
+| 5 | **Appender invalidation** after DDL in transaction | 1 | medium | TODO |
+| 6 | **Index handling**: ignore non-unique index in CREATE TABLE, don't register ignored index names | 2 | medium | TODO |
+| 7 | **UDF digit-name schemas** — quote schema/table names in DuckDB queries | 1 | medium | TODO |
+| 8 | **Hex/binary literal** in WHERE via pushdown | 1 | medium | TODO |
+| 9 | **AVG(VARCHAR)** / strict GROUP BY — refuse pushdown | 2 | medium | TODO |
+| 10 | **Numeric function domain** (ACOS outside [-1,1]) | 1 | medium | TODO |
+| 11 | **require_primary_key on ALTER** | 1 | low | TODO |
+| 12 | **Timezone propagation** | 1 | medium | TODO |
+| 13 | **Cross-schema rename via COPY** | 1 | high | TODO |
+| 14 | **appender_allocator_flush_threshold** — AliSQL-only setting | 1 | low | TODO (N/A or adapt) |
+| 15 | **KILL/interrupt** — DEBUG sync points | 1 | high | TODO |
+| 16 | **bugfix_crash_after_commit_error** — test marked TODO | 1 | unknown | TODO |
+| 17 | **Encryption** — MySQL→MariaDB | 1 | high | TODO |
+| 18 | **system_timezone** — mariadbd-safe restart | 1 | high | TODO |
 | 19 | **Server crash** on 64MB JSON | 1 | out of scope | MariaDB server bug |
 
-**Items 1–3** unblock **13 tests** and cover the main scenarios.
-Items 4–12 add **11 more tests**. Items 13–19 are complex or external.
+Items 1–2 unblock **7 tests**. Items 4–12 add **11 more**. Items 13–19 are complex or external.
