@@ -78,10 +78,151 @@ static void octet_length_varchar_func(duckdb::DataChunk &args,
 }
 
 /* ================================================================
+   length(VARCHAR) -> BIGINT  (byte count, MariaDB semantics)
+   DuckDB builtin length(VARCHAR) returns character count.
+   MariaDB LENGTH() = OCTET_LENGTH() = byte count.
+   We override to match MariaDB behavior for pushdown queries.
+   ================================================================ */
+
+static void length_varchar_byte_func(duckdb::DataChunk &args,
+                                     duckdb::ExpressionState &state,
+                                     duckdb::Vector &result)
+{
+  duckdb::UnaryExecutor::Execute<duckdb::string_t, int64_t>(
+      args.data[0], result, args.size(),
+      [](duckdb::string_t s) -> int64_t { return (int64_t) s.GetSize(); });
+}
+
+/* ================================================================
    length(BLOB) -> BIGINT
    DuckDB builtin length() only works on VARCHAR (returns char count).
    MariaDB LENGTH() = OCTET_LENGTH() = byte count.
    ================================================================ */
+
+/* ================================================================
+   ascii(VARCHAR) -> INTEGER  (first byte, MariaDB semantics)
+   DuckDB builtin ascii() returns Unicode codepoint of first character.
+   MariaDB ASCII() returns the numeric value of the first byte.
+   ================================================================ */
+
+static void ascii_byte_func(duckdb::DataChunk &args,
+                            duckdb::ExpressionState &state,
+                            duckdb::Vector &result)
+{
+  duckdb::UnaryExecutor::Execute<duckdb::string_t, int32_t>(
+      args.data[0], result, args.size(),
+      [](duckdb::string_t s) -> int32_t {
+        return s.GetSize() > 0 ? (unsigned char) s.GetData()[0] : 0;
+      });
+}
+
+/* ================================================================
+   ord(VARCHAR) -> BIGINT  (multibyte byte-value, MariaDB semantics)
+   DuckDB builtin ord() returns Unicode codepoint.
+   MariaDB ORD() for multibyte characters returns
+   (byte1 * 256 + byte2) * 256 + byte3 ... etc.
+   For single-byte characters, same as ASCII().
+   ================================================================ */
+
+static void ord_byte_func(duckdb::DataChunk &args,
+                          duckdb::ExpressionState &state,
+                          duckdb::Vector &result)
+{
+  duckdb::UnaryExecutor::Execute<duckdb::string_t, int32_t>(
+      args.data[0], result, args.size(),
+      [](duckdb::string_t s) -> int32_t {
+        auto data= (const unsigned char *) s.GetData();
+        auto size= s.GetSize();
+        if (size == 0)
+          return 0;
+        /* Determine UTF-8 character length from first byte */
+        unsigned char c= data[0];
+        int char_len= 1;
+        if (c >= 0xF0)
+          char_len= 4;
+        else if (c >= 0xE0)
+          char_len= 3;
+        else if (c >= 0xC0)
+          char_len= 2;
+        /* Single byte — same as ASCII */
+        if (char_len == 1)
+          return (int32_t) c;
+        /* Multibyte: (b1 * 256 + b2) * 256 + b3 ... */
+        int32_t val= 0;
+        for (int i= 0; i < char_len && i < (int) size; i++)
+          val= val * 256 + data[i];
+        return val;
+      });
+}
+
+/* ================================================================
+   rtrim(VARCHAR, VARCHAR), ltrim(VARCHAR, VARCHAR), trim(VARCHAR, VARCHAR)
+   DuckDB builtins remove individual characters from the set.
+   MariaDB TRIM removes a substring pattern (e.g. TRIM(TRAILING 'xyz' FROM s)
+   removes the trailing "xyz" substring, not individual x/y/z chars).
+   We override the 2-arg forms for substring semantics.
+   ================================================================ */
+
+static void rtrim_substr_func(duckdb::DataChunk &args,
+                              duckdb::ExpressionState &,
+                              duckdb::Vector &result)
+{
+  duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                  duckdb::string_t>(
+      args.data[0], args.data[1], result, args.size(),
+      [&](duckdb::string_t s, duckdb::string_t pat) -> duckdb::string_t {
+        auto data= s.GetData();
+        auto slen= (int64_t) s.GetSize();
+        auto plen= (int64_t) pat.GetSize();
+        if (plen == 0 || plen > slen)
+          return s;
+        /* Single char — same as DuckDB default behavior */
+        if (plen == 1)
+        {
+          auto c= pat.GetData()[0];
+          while (slen > 0 && data[slen - 1] == c)
+            slen--;
+          return duckdb::StringVector::AddString(result, data, slen);
+        }
+        /* Multi-char: remove trailing substring repeatedly */
+        auto pdata= pat.GetData();
+        while (slen >= plen &&
+               memcmp(data + slen - plen, pdata, plen) == 0)
+          slen-= plen;
+        return duckdb::StringVector::AddString(result, data, slen);
+      });
+}
+
+static void ltrim_substr_func(duckdb::DataChunk &args,
+                              duckdb::ExpressionState &,
+                              duckdb::Vector &result)
+{
+  duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                  duckdb::string_t>(
+      args.data[0], args.data[1], result, args.size(),
+      [&](duckdb::string_t s, duckdb::string_t pat) -> duckdb::string_t {
+        auto data= s.GetData();
+        auto slen= (int64_t) s.GetSize();
+        auto plen= (int64_t) pat.GetSize();
+        int64_t start= 0;
+        if (plen == 0 || plen > slen)
+          return s;
+        if (plen == 1)
+        {
+          auto c= pat.GetData()[0];
+          while (start < slen && data[start] == c)
+            start++;
+          return duckdb::StringVector::AddString(result, data + start,
+                                                 slen - start);
+        }
+        auto pdata= pat.GetData();
+        while (start + plen <= slen &&
+               memcmp(data + start, pdata, plen) == 0)
+          start+= plen;
+        return duckdb::StringVector::AddString(result, data + start,
+                                               slen - start);
+      });
+}
 
 static void length_blob_func(duckdb::DataChunk &args,
                              duckdb::ExpressionState &state,
@@ -757,12 +898,38 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
+  /* length(VARCHAR) -> BIGINT (byte count, replaces DuckDB char count) */
   /* length(BLOB) -> BIGINT */
   {
     duckdb::ScalarFunctionSet set("length");
     set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::BIGINT,
+        length_varchar_byte_func));
+    set.AddFunction(duckdb::ScalarFunction(
         {duckdb::LogicalType::BLOB}, duckdb::LogicalType::BIGINT,
         length_blob_func));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* ascii(VARCHAR) -> INTEGER (first byte, replaces DuckDB codepoint) */
+  {
+    duckdb::ScalarFunctionSet set("ascii");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::INTEGER,
+        ascii_byte_func));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* ord(VARCHAR) -> INTEGER (multibyte byte-value, replaces DuckDB codepoint) */
+  {
+    duckdb::ScalarFunctionSet set("ord");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::INTEGER,
+        ord_byte_func));
     duckdb::CreateScalarFunctionInfo info(std::move(set));
     info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
     catalog.CreateFunction(transaction, info);
@@ -1053,11 +1220,33 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
+  /* rtrim(VARCHAR, VARCHAR) — substring semantics (MariaDB TRIM) */
+  {
+    duckdb::ScalarFunctionSet set("rtrim");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::VARCHAR, rtrim_substr_func));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* ltrim(VARCHAR, VARCHAR) — substring semantics (MariaDB TRIM) */
+  {
+    duckdb::ScalarFunctionSet set("ltrim");
+    set.AddFunction(duckdb::ScalarFunction(
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::VARCHAR, ltrim_substr_func));
+    duckdb::CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
   sql_print_information(
       "DuckDB: registered MySQL-compatible function overloads "
-      "(octet_length, length, hex, oct, bin, locate, mid, "
-      "regexp_instr, regexp_replace, regexp_substr, json_unquote, "
-      "json_contains)");
+      "(octet_length, length, ascii, ord, hex, oct, bin, locate, mid, "
+      "rtrim, ltrim, regexp_instr, regexp_replace, regexp_substr, "
+      "json_unquote, json_contains)");
 }
 
 } /* namespace myduck */
