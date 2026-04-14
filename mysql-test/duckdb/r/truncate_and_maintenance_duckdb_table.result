@@ -10,6 +10,7 @@ INSERT INTO t VALUES (3, 3, 3, 3);
 #
 ANALYZE TABLE t;
 Table	Op	Msg_type	Msg_text
+test.t	analyze	status	Engine-independent statistics collected
 test.t	analyze	note	The storage engine for the table doesn't support analyze
 CHECK TABLE t;
 Table	Op	Msg_type	Msg_text

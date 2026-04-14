@@ -1,4 +1,5 @@
 alter_default_debug : 2026-03-07 drrtuy@gmail.com
+duckdb_ddl_during_transaction : appender not invalidated after DDL in transaction
 alter_duckdb_index : 2026-03-07 drrtuy@gmail.com
 alter_engine_duckdb : 2026-03-07 drrtuy@gmail.com
 bugfix_crash_after_commit_error : 2026-03-07 drrtuy@gmail.com
@@ -15,7 +16,6 @@ duckdb_alter_table_engine : 2026-03-07 drrtuy@gmail.com
 duckdb_appender_allocator_flush_threshold : 2026-03-07 drrtuy@gmail.com
 duckdb_bit_string : 2026-03-07 drrtuy@gmail.com
 duckdb_db_table_strconvert : 2026-03-07 drrtuy@gmail.com
-duckdb_ddl_during_transaction : 2026-03-07 drrtuy@gmail.com
 duckdb_fix_sql : 2026-03-07 drrtuy@gmail.com
 duckdb_json : 2026-03-07 drrtuy@gmail.com
 duckdb_kill : 2026-03-07 drrtuy@gmail.com
@@ -23,7 +23,6 @@ duckdb_monitor : 2026-03-07 drrtuy@gmail.com
 duckdb_numeric_func : 2026-03-07 drrtuy@gmail.com
 duckdb_refuse_xa : 2026-03-07 drrtuy@gmail.com
 duckdb_require_primary_key : 2026-03-07 drrtuy@gmail.com
-duckdb_set_operation : 2026-03-07 drrtuy@gmail.com
 duckdb_sql_mode : 2026-03-07 drrtuy@gmail.com
 duckdb_sql_syntax : 2026-03-07 drrtuy@gmail.com
 duckdb_string_func : 2026-03-07 drrtuy@gmail.com
@@ -32,4 +31,3 @@ feature_duckdb_data_type : 2026-03-07 drrtuy@gmail.com
 rename_duckdb_table : 2026-03-07 drrtuy@gmail.com
 supported_copy_ddl : 2026-03-07 drrtuy@gmail.com
 system_timezone : 2026-03-07 drrtuy@gmail.com
-truncate_and_maintenance_duckdb_table : 2026-03-07 drrtuy@gmail.com
