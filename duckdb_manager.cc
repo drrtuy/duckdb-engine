@@ -70,7 +70,6 @@ bool DuckdbManager::Initialize()
     config.options.maximum_swap_space= global_max_temp_directory_size;
 
   config.options.checkpoint_wal_size= checkpoint_threshold;
-  config.options.scheduler_process_partial= global_scheduler_process_partial;
 
   /* Temp directory: user-specified or default (data directory) */
   {
@@ -107,6 +106,13 @@ bool DuckdbManager::Initialize()
                     path);
     m_database= nullptr;
     return true;
+  }
+
+  /* Enable autoloading of statically-linked extensions (core_functions etc.) */
+  {
+    auto con= std::make_shared<duckdb::Connection>(*m_database);
+    con->Query("SET autoload_known_extensions=true");
+    con->Query("SET autoinstall_known_extensions=true");
   }
 
   /* Register cross-engine scan support (_mdb_scan + replacement scan) */

@@ -29,8 +29,10 @@ ENDIF()
 # mysqld_error.h is produced by GenError (extra/CMakeLists.txt).
 # We create a custom command that depends on it and extracts ER_DUCKDB_* defines.
 
-ADD_CUSTOM_COMMAND(
-  OUTPUT "${DUCKDB_ERROR_H}"
+# Generate duckdb_error.h at build time.
+# We use a stamp-based approach: the custom command always runs but
+# copy_if_different avoids unnecessary rebuilds.
+ADD_CUSTOM_TARGET(duckdb_error_h
   COMMAND ${CMAKE_COMMAND}
     -DMYSQLD_ERROR_H=${MYSQLD_ERROR_H}
     -DDUCKDB_ERROR_H=${DUCKDB_ERROR_H}
