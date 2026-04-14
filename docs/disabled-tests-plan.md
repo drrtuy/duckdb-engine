@@ -1,6 +1,6 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. **Enabled: 20/47 tests. Disabled: 27. DuckDB: v1.5.2.**
+Status as of 2026-04-14. **Enabled: 21/47 tests. Disabled: 26. DuckDB: v1.5.2.**
 
 ### Done this session (12 → 20)
 
@@ -14,6 +14,7 @@ Status as of 2026-04-14. **Enabled: 20/47 tests. Disabled: 27. DuckDB: v1.5.2.**
 | `duckdb_require_primary_key` | Add PK check in `check_if_supported_inplace_alter` |
 | `create_table_constraint` | Add `have_duckdb.inc` for charset (non-unique indexes already handled) |
 | `duckdb_appender_allocator_flush_threshold` | Propagate to DuckDB v1.5 `allocator_flush_threshold` |
+| `decimal_high_precision` | DDL: DECIMAL(>38) → DOUBLE, DML: emit as `%.17e`, default `use_double_for_decimal=TRUE` |
 
 ### Engine fixes done
 
@@ -149,7 +150,7 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | 1c | **Conditionless JOIN**: `SELECT * FROM t1 JOIN t2` — DuckDB requires ON clause | `duckdb_sql_syntax` | medium — SQL rewrite or refuse pushdown |
 | 1d | **oct(string)**: `oct('123.123a')` — MariaDB truncates to number, DuckDB casts strictly | `duckdb_fix_sql` | low — improve macro to handle strings |
 | 1e | **LENGTH(BLOB)**: DuckDB has no BLOB overload for `length()` | `duckdb_string_func` | low — add `octet_length` macro alias |
-| 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | `decimal_high_precision`, `decimal_precision_all_possibilities`, `feature_duckdb_data_type`, `alter_engine_duckdb` | medium |
+| 2 | **Decimal >38**: `decimal_high_precision` **DONE**. Remaining: `decimal_precision_all_possibilities` (appender incomplete row), `feature_duckdb_data_type` (ENUM/SET insert), `alter_engine_duckdb` (server crash on ALTER) | medium | IN PROGRESS |
 | 4 | **ALTER COLUMN DROP DEFAULT** — MariaDB metadata-only, handler not called | `alter_default_debug` | hard |
 | 5 | **Appender invalidation** after DDL in transaction | `duckdb_ddl_during_transaction` | medium |
 | 7 | **UDF digit-name schemas** — quote in DuckDB queries | `duckdb_add_backticks` | medium |

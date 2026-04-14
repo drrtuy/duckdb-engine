@@ -1251,7 +1251,7 @@ static MYSQL_SYSVAR_ULONGLONG(checkpoint_threshold,
 static MYSQL_SYSVAR_BOOL(use_double_for_decimal,
                          myduck::use_double_for_decimal, PLUGIN_VAR_RQCMDARG,
                          "Use DOUBLE for DECIMAL precision > 38", NULL, NULL,
-                         FALSE);
+                         TRUE);
 
 static MYSQL_SYSVAR_BOOL(require_primary_key, myduck::require_primary_key,
                          PLUGIN_VAR_RQCMDARG,
