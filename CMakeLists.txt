@@ -32,6 +32,7 @@ MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_SOURCES}
 # Strip the flags that MariaDB's debug build adds so that our plugin's
 # object files see the same STL container layout as the library.
 IF(TARGET duckdb)
+  ADD_DEPENDENCIES(duckdb_error_h GenError)
   ADD_DEPENDENCIES(duckdb duckdb_error_h)
   # DuckDB headers and plugin code require C++17.
   SET_TARGET_PROPERTIES(duckdb PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)

@@ -32,7 +32,8 @@
 #include "duckdb_log.h"
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -386,7 +387,10 @@ void register_cross_engine_scan(duckdb::DatabaseInstance &db)
   mdb_scan.projection_pushdown= true;
   mdb_scan.filter_pushdown= false;
 
-  duckdb::ExtensionUtil::RegisterFunction(db, std::move(mdb_scan));
+  duckdb::CreateTableFunctionInfo info(std::move(mdb_scan));
+  auto &catalog= duckdb::Catalog::GetSystemCatalog(db);
+  auto transaction= duckdb::CatalogTransaction::GetSystemTransaction(db);
+  catalog.CreateFunction(transaction, info);
 
   auto &config= duckdb::DBConfig::GetConfig(db);
   config.replacement_scans.emplace_back(mariadb_replacement_scan);
