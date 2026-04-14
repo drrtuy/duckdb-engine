@@ -1081,6 +1081,13 @@ ha_duckdb::check_if_supported_inplace_alter(TABLE *altered_table,
   if (ha_alter_info->alter_info->flags & ALTER_COLUMN_ORDER)
     DBUG_RETURN(HA_ALTER_INPLACE_NOT_SUPPORTED);
 
+  /* Reject ALTER on tables without PK when require_primary_key is ON */
+  if (myduck::require_primary_key && table->s->primary_key == MAX_KEY)
+  {
+    my_error(ER_REQUIRES_PRIMARY_KEY, MYF(0));
+    DBUG_RETURN(HA_ALTER_ERROR);
+  }
+
   DBUG_RETURN(HA_ALTER_INPLACE_NO_LOCK);
 }
 
