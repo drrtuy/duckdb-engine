@@ -5,7 +5,6 @@ alter_engine_duckdb : decimal >38 conversion fails
 bugfix_crash_after_commit_error : TODO
 bugfix_temp_and_system_database : DuckDB temp/system schema conflict
 create_table_column_timestamp : timezone propagation mismatch
-create_table_constraint : non-unique index in CREATE TABLE
 decimal_high_precision : decimal >38 precision
 decimal_precision_all_possibilities : decimal >38 precision
 duckdb_add_backticks : UDF digit-name schema quoting
