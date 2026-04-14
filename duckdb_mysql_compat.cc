@@ -51,6 +51,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/connection.hpp"
 
 namespace myduck
 {
@@ -888,9 +889,22 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
+  /* mid() — registered via SQL macro calling DuckDB's substr() which
+     handles multibyte UTF-8 correctly. We use a dedicated connection
+     for macro creation since macros support overloading by arg count
+     only when created with different names — so we use one 3-arg macro
+     that the 2-arg call will match via DuckDB's default parameter.
+     Actually DuckDB substr already works as 2 or 3 arg. */
+  {
+    auto con= std::make_shared<duckdb::Connection>(db);
+    con->Query("CREATE OR REPLACE MACRO mid(s, p, n := NULL) AS "
+               "CASE WHEN n IS NULL THEN substr(s, p) "
+               "ELSE substr(s, p, n) END");
+  }
+
   sql_print_information(
       "DuckDB: registered MySQL-compatible function overloads "
-      "(octet_length, length, hex, oct, bin, locate, json_contains)");
+      "(octet_length, length, hex, oct, bin, locate, mid, json_contains)");
 }
 
 } /* namespace myduck */
