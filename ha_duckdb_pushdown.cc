@@ -313,16 +313,25 @@ int ha_duckdb_select_handler::init_scan()
   }
 
   /*
-    Rewrite conditionless JOIN → CROSS JOIN.
-    MariaDB allows "t1 JOIN t2" without ON; DuckDB requires ON clause.
-    Scan forward from each JOIN for ON/USING before the next
-    clause boundary (JOIN, WHERE, GROUP, ORDER, LIMIT, HAVING, ;).
+    Rewrite STRAIGHT_JOIN → CROSS JOIN (always conditionless in MariaDB).
+    Then rewrite remaining conditionless JOIN → CROSS JOIN.
   */
   {
     std::string upper_sql= sql;
     std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
                    ::toupper);
     size_t pos= 0;
+    while ((pos= upper_sql.find("STRAIGHT_JOIN", pos)) != std::string::npos)
+    {
+      sql.replace(pos, 13, "CROSS JOIN");
+      upper_sql= sql;
+      std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                     ::toupper);
+    }
+    /*
+      Scan for remaining conditionless JOIN (no ON/USING).
+    */
+    pos= 0;
     while ((pos= upper_sql.find(" JOIN ", pos)) != std::string::npos)
     {
       /* Skip LEFT/RIGHT/INNER/CROSS/NATURAL JOIN */
@@ -431,7 +440,7 @@ int ha_duckdb_select_handler::init_scan()
     static const char *hints[]= {
         "HIGH_PRIORITY ", "SQL_NO_CACHE ", "SQL_CACHE ",
         "SQL_BUFFER_RESULT ", "SQL_SMALL_RESULT ", "SQL_BIG_RESULT ",
-        "SQL_CALC_FOUND_ROWS ", "STRAIGHT_JOIN "};
+        "SQL_CALC_FOUND_ROWS "};
     for (auto hint : hints)
     {
       size_t pos;
@@ -440,6 +449,42 @@ int ha_duckdb_select_handler::init_scan()
       {
         sql.erase(pos, hlen);
         upper_sql.erase(pos, hlen);
+      }
+    }
+  }
+
+  /*
+    Remove MariaDB index hints: FORCE INDEX(...), USE INDEX(...),
+    IGNORE INDEX(...).
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    static const char *idx_hints[]= {
+        "FORCE INDEX(", "USE INDEX(", "IGNORE INDEX("};
+    for (auto hint : idx_hints)
+    {
+      size_t hlen= strlen(hint);
+      size_t pos= 0;
+      while ((pos= upper_sql.find(hint, pos)) != std::string::npos)
+      {
+        /* Find matching closing paren */
+        size_t end= sql.find(')', pos + hlen);
+        if (end == std::string::npos)
+        {
+          pos++;
+          continue;
+        }
+        /* Remove including surrounding spaces */
+        size_t erase_start= pos;
+        size_t erase_end= end + 1;
+        while (erase_end < sql.size() && sql[erase_end] == ' ')
+          erase_end++;
+        sql.erase(erase_start, erase_end - erase_start);
+        upper_sql= sql;
+        std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                       ::toupper);
       }
     }
   }

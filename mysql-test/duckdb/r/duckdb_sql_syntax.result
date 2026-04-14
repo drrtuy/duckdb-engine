@@ -4,6 +4,7 @@ id	col1	col2
 ALTER TABLE t1 ENGINE=DuckDB;
 SELECT id, col1, col2 FROM t1 GROUP BY id, col1, col2 WITH ROLLUP;
 id	col1	col2
+NULL	NULL	NULL
 DROP TABLE t1;
 CREATE TABLE t1 (id INT PRIMARY KEY, col1 INT, col2 INT);
 CREATE TABLE t2 (id INT PRIMARY KEY, col1 INT, col2 INT);
@@ -48,14 +49,10 @@ SELECT SQL_CALC_FOUND_ROWS * FROM t1;
 id	col1
 1	1
 2	1
-Warnings:
-Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
 SELECT SQL_NO_CACHE * FROM t1;
 id	col1
 1	1
 2	1
-Warnings:
-Warning	1681	'SQL_NO_CACHE' is deprecated and will be removed in a future release.
 ALTER TABLE t1 ENGINE=DuckDB;
 SELECT DISTINCT col1 FROM t1;
 col1
@@ -84,14 +81,10 @@ SELECT SQL_CALC_FOUND_ROWS * FROM t1;
 id	col1
 1	1
 2	1
-Warnings:
-Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
 SELECT SQL_NO_CACHE * FROM t1;
 id	col1
 1	1
 2	1
-Warnings:
-Warning	1681	'SQL_NO_CACHE' is deprecated and will be removed in a future release.
 DROP TABLE t1;
 CREATE TABLE t1 (id INT PRIMARY KEY);
 INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
