@@ -1,6 +1,6 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. **Enabled: 19/47 tests. Disabled: 28.**
+Status as of 2026-04-14. **Enabled: 19/47 tests (17 pass, 2 regressed). Disabled: 28. DuckDB: v1.5.2.**
 
 ### Done this session (12 → 19)
 
@@ -128,6 +128,8 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | ~~3~~ | ~~**Error code fixes**~~ | ~~4~~ | ~~low–medium~~ | **DONE** (1 enabled, 3 partially fixed) |
 | ~~6~~ | ~~**Index handling / CREATE TABLE constraint**~~ | ~~2~~ | ~~medium~~ | **DONE** (`create_table_constraint` enabled; `alter_duckdb_index` remains — see G) |
 | ~~11~~ | ~~**require_primary_key on ALTER**~~ | ~~1~~ | ~~low~~ | **DONE** |
+| ~~20~~ | ~~**Upgrade DuckDB submodule**~~ v1.3.2 → v1.5.2 | many | high | **DONE** |
+| 21 | **Compound ALTER regression** in v1.5.2: `Cannot create index with outstanding updates` | 2 | medium | TODO — regressed `alter_duckdb_column`, `alter_duckdb_column_copy` |
 | 1 | **SQL function rewrite** in pushdown: `adddate→+interval`, `insert→overlay`, `oct`, `WITH ROLLUP→no pushdown` | 4 | medium | TODO |
 | 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | 3 | medium | TODO |
 | 4 | **ALTER COLUMN DROP DEFAULT** propagate to DuckDB | 1 | medium | TODO |
@@ -138,25 +140,28 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | 10 | **Numeric function domain** (ACOS outside [-1,1]) | 1 | medium | TODO |
 | 12 | **Timezone propagation** | 1 | medium | TODO |
 | 13 | **Cross-schema rename via COPY** | 1 | high | TODO |
-| 14 | **appender_allocator_flush_threshold** — AliSQL-only setting | 1 | low | TODO (revisit after upstream upgrade) |
+| 14 | **appender_allocator_flush_threshold** — now `allocator_flush_threshold` in v1.5.2 | 1 | low | TODO (adapt test) |
 | 15 | **KILL/interrupt** — DEBUG sync points | 1 | high | TODO |
 | 16 | **bugfix_crash_after_commit_error** — test marked TODO | 1 | unknown | TODO |
 | 17 | **Encryption** — MySQL→MariaDB | 1 | high | TODO |
 | 18 | **system_timezone** — mariadbd-safe restart | 1 | high | TODO |
 | 19 | **Server crash** on 64MB JSON | 1 | out of scope | MariaDB server bug |
-| 20 | **Upgrade DuckDB submodule** v1.3.2 → v1.5.2 | many | high | TODO |
 
-### DuckDB upstream upgrade (v1.3.2 → v1.5.2)
+### DuckDB upstream upgrade — DONE
 
-Current submodule: **v1.3.2**. Latest stable: **v1.5.2**.
+Upgraded: **v1.3.2 → v1.5.2**.
 
-Notable for our tests:
-- `allocator_flush_threshold` setting added (may fix `duckdb_appender_allocator_flush_threshold`)
-- Potential improvements in function coverage, decimal handling, JSON support
-- 2 major versions — likely has API breaking changes, needs careful porting
+Changes made:
+- `ExtensionUtil` → `Catalog::GetSystemCatalog` + `CatalogTransaction` + `CreateFunction`
+- `scheduler_process_partial` removed (gone in v1.5)
+- `core_functions` added to `duckdb_extensions.cmake` (was built-in in v1.3, separate extension in v1.5)
+- `autoload_known_extensions` + `autoinstall_known_extensions` enabled at DB init
+- `DUCKDB_EXTENSION_AUTOLOAD_DEFAULT` + `DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT` cmake flags
+- `duckdb_error_h` target dependency on `GenError` fixed for clean builds
 
-This should be a separate work item after current test fixes stabilize.
+Regression: `alter_duckdb_column` / `alter_duckdb_column_copy` fail on compound ALTER (ADD COLUMN + SET DEFAULT) with `TransactionContext Error: Cannot create index with outstanding updates`. This is new v1.5.2 behavior — see item 21.
 
 ---
 
-Items 1–2 unblock **7 tests**. Items 4–10 add **8 more**. Items 12–19 are complex or external. Item 20 (upstream upgrade) is a prerequisite for some fixes and should be planned as a standalone effort.
+Items 21, 1–2 are highest priority (fix regression + unblock 7 tests).
+Items 4–10 add 8 more. Items 12–19 are complex or external.
