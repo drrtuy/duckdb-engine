@@ -420,6 +420,71 @@ int ha_duckdb_select_handler::init_scan()
     }
   }
 
+  /*
+    Remove MariaDB-specific SELECT hints that DuckDB doesn't understand.
+    HIGH_PRIORITY, SQL_NO_CACHE, SQL_CACHE, STRAIGHT_JOIN (as hint).
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    static const char *hints[]= {
+        "HIGH_PRIORITY ", "SQL_NO_CACHE ", "SQL_CACHE ",
+        "SQL_BUFFER_RESULT ", "SQL_SMALL_RESULT ", "SQL_BIG_RESULT ",
+        "SQL_CALC_FOUND_ROWS ", "STRAIGHT_JOIN "};
+    for (auto hint : hints)
+    {
+      size_t pos;
+      size_t hlen= strlen(hint);
+      while ((pos= upper_sql.find(hint)) != std::string::npos)
+      {
+        sql.erase(pos, hlen);
+        upper_sql.erase(pos, hlen);
+      }
+    }
+  }
+
+  /*
+    Rewrite LIMIT offset,count → LIMIT count OFFSET offset.
+    MariaDB: LIMIT 2,5   DuckDB: LIMIT 5 OFFSET 2
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    size_t lpos= upper_sql.rfind("LIMIT ");
+    if (lpos != std::string::npos)
+    {
+      size_t after_limit= lpos + 6;
+      /* Skip whitespace */
+      while (after_limit < sql.size() && sql[after_limit] == ' ')
+        after_limit++;
+      /* Read first number */
+      size_t num1_start= after_limit;
+      while (after_limit < sql.size() && isdigit(sql[after_limit]))
+        after_limit++;
+      /* Check for comma */
+      size_t comma= after_limit;
+      while (comma < sql.size() && sql[comma] == ' ')
+        comma++;
+      if (comma < sql.size() && sql[comma] == ',')
+      {
+        std::string offset_str= sql.substr(num1_start,
+                                           after_limit - num1_start);
+        size_t num2_start= comma + 1;
+        while (num2_start < sql.size() && sql[num2_start] == ' ')
+          num2_start++;
+        size_t num2_end= num2_start;
+        while (num2_end < sql.size() && isdigit(sql[num2_end]))
+          num2_end++;
+        std::string count_str= sql.substr(num2_start, num2_end - num2_start);
+        std::string replacement= "LIMIT " + count_str + " OFFSET " +
+                                 offset_str;
+        sql.replace(lpos, num2_end - lpos, replacement);
+      }
+    }
+  }
+
   query_result= myduck::duckdb_query(thd, sql, true);
 
   if (!query_result || query_result->HasError())
