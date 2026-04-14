@@ -30,6 +30,7 @@
 #include "ddl_convertor.h"
 #include "duckdb_timezone.h"
 #include "ha_duckdb.h"
+#include "duckdb_error.h"
 #include "tztime.h"
 #include "my_decimal.h"
 
@@ -134,7 +135,7 @@ int DeltaAppender::append_row_insert(TABLE *table, ulonglong trx_no,
   catch (std::exception &ex)
   {
     sql_print_error("DuckDB: Appender error: %s", ex.what());
-    my_error(ER_UNKNOWN_ERROR, MYF(0), ex.what());
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), ex.what());
     return HA_DUCKDB_APPEND_ERROR;
   }
 
@@ -201,7 +202,7 @@ int DeltaAppender::append_row_delete(TABLE *table, ulonglong trx_no,
   catch (std::exception &ex)
   {
     sql_print_error("DuckDB: Appender error: %s", ex.what());
-    my_error(ER_UNKNOWN_ERROR, MYF(0), ex.what());
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), ex.what());
     return HA_DUCKDB_APPEND_ERROR;
   }
 
@@ -336,7 +337,7 @@ int DeltaAppender::append_mysql_field(const Field *field_arg,
       if (value.intg + value.frac > (int) precision_val ||
           value.frac > (int) dec)
       {
-        my_error(ER_UNKNOWN_ERROR, MYF(0), "Append DECIMAL field failed");
+        my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), "Append DECIMAL field failed");
         return HA_DUCKDB_APPEND_ERROR;
       }
 
@@ -366,7 +367,7 @@ int DeltaAppender::append_mysql_field(const Field *field_arg,
       int real_intg= my_decimal_actual_intg(&value);
       if (real_intg + (int) dec > 38)
       {
-        my_error(ER_UNKNOWN_ERROR, MYF(0),
+        my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0),
                  "Decimal value out of range for DECIMAL(38,...)");
         return HA_DUCKDB_APPEND_ERROR;
       }

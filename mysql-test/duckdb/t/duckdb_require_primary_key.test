@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 --echo #
 --echo # 1) duckdb_require_primary_key is ON, CREATE without PK is not allowed
 --echo #

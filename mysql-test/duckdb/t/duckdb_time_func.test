@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 # Compared with MySQL, duckdb's date functions generally have the following incompatibilities:
 # 1. Conversion between integer type and date/timestamp/time type
 # 2. When invalid date is used as a parameter, MySQL will return NULL and DuckDB will report an error.

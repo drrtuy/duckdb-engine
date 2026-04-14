@@ -1,3 +1,5 @@
+--source ../include/have_duckdb.inc
+
 --echo #
 --echo # Test DDL: alter table engine = innodb from duckdb tables
 --echo # check whether changing storage engine from duckdb to innodb is supported

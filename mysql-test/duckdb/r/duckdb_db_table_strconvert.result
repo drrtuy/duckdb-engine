@@ -8,8 +8,6 @@ CREATE TABLE `my-table` (
 `name` varchar(255) NOT NULL,
 PRIMARY KEY (`id`)
 ) ENGINE = InnoDB;
-Warnings:
-Warning	1681	Integer display width is deprecated and will be removed in a future release.
 INSERT INTO `my-table` (`id`, `name`) VALUES (1, 'John'), (2, 'Jane'), (3, 'Jim');
 #
 # 2) ALTER TO DUCKDB
@@ -26,16 +24,16 @@ COUNT(*)
 INSERT INTO `my-table` (`id`, `name`) VALUES (4, 'Joe');
 UPDATE `my-table` SET `name` = 'Jack' WHERE `id` = 4;
 DELETE FROM `my-table` WHERE `id` = 4;
-CALL dbms_duckdb.query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'my-db'");
-RESULT
+SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'my-db'");
+duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'my-db'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 1]
 my-db	my-table
 
 
-CALL dbms_duckdb.query("DESC `my-db`.`my-table`");
-RESULT
+SELECT duckdb_query_udf("DESC `my-db`.`my-table`");
+duckdb_query_udf("DESC `my-db`.`my-table`")
 column_name	column_type	null	key	default	extra	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
@@ -49,8 +47,8 @@ col2	INTEGER	YES	NULL	NULL	NULL
 # 3) ALTER TO INNODB
 #
 ALTER TABLE `my-table` ENGINE = InnoDB;
-CALL dbms_duckdb.query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'my-db'");
-RESULT
+SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'my-db'");
+duckdb_query_udf("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'my-db'")
 count_star()	
 BIGINT	
 [ Rows: 1]
@@ -62,8 +60,8 @@ include/assert.inc [CHECKSUM is the same]
 # 4) CLEANUP
 #
 DROP DATABASE `my-db`;
-CALL dbms_duckdb.query("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'");
-RESULT
+SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'");
+duckdb_query_udf("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'")
 count_star()	
 BIGINT	
 [ Rows: 1]
