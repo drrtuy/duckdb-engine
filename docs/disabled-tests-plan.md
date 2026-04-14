@@ -1,8 +1,8 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. **Enabled: 19/47 tests (17 pass, 2 regressed). Disabled: 28. DuckDB: v1.5.2.**
+Status as of 2026-04-14. **Enabled: 20/47 tests. Disabled: 27. DuckDB: v1.5.2.**
 
-### Done this session (12 → 19)
+### Done this session (12 → 20)
 
 | Test | Fix |
 |------|-----|
@@ -13,16 +13,20 @@ Status as of 2026-04-14. **Enabled: 19/47 tests (17 pass, 2 regressed). Disabled
 | `charset_and_collation` | Fix collation in master.opt + error codes |
 | `duckdb_require_primary_key` | Add PK check in `check_if_supported_inplace_alter` |
 | `create_table_constraint` | Add `have_duckdb.inc` for charset (non-unique indexes already handled) |
+| `duckdb_appender_allocator_flush_threshold` | Propagate to DuckDB v1.5 `allocator_flush_threshold` |
 
 ### Engine fixes done
 
 - **Build**: `CREATE_TYPELIB_FOR` → manual TYPELIB init; `HA_EXTRA_*_COPY` → `HA_EXTRA_*_ALTER_COPY`
+- **DuckDB upgrade**: v1.3.2 → v1.5.2 (`ExtensionUtil` → `Catalog`, `core_functions` extension, autoload)
+- **Compound ALTER**: execute each DDL convertor on separate auto-commit connection (v1.5 regression fix)
 - **Error codes**: `ER_DUCKDB_*` (4206–4213) with codegen from `duckdb_errors.txt` via cmake
 - **Error classification**: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural errors, `ER_ILLEGAL_HA_CREATE_OPTION` for CREATE, `ER_DUCKDB_QUERY_ERROR` for DML execution failures
 - **Monitoring**: `direct_delete_rows` / `direct_update_rows` increment `Duckdb_rows_delete` / `Duckdb_rows_update`
 - **XA**: reject DML on DuckDB tables inside XA transactions (`ER_XAER_RMFAIL`)
 - **DDL**: reject ALTER TABLE without PK when `duckdb_require_primary_key=ON`
-- **Test infra**: `have_duckdb.inc` (engine check + utf8mb4 setup), `cleanup_duckdb.inc` (restore latin1), `have_mysqld_safe.inc`, `character-set-server=utf8mb4` in suite `my.cnf`
+- **Config**: propagate `appender_allocator_flush_threshold` to DuckDB `allocator_flush_threshold`
+- **Test infra**: `have_duckdb.inc` (engine check + utf8mb4 setup), `cleanup_duckdb.inc` (restore latin1), `cleanup_duckdb_udf.inc`, `have_mysqld_safe.inc`, `character-set-server=utf8mb4` in suite `my.cnf`
 
 ---
 
@@ -128,11 +132,12 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | ~~3~~ | ~~**Error code fixes**~~ | ~~4~~ | ~~low–medium~~ | **DONE** (1 enabled, 3 partially fixed) |
 | ~~6~~ | ~~**Index handling / CREATE TABLE constraint**~~ | ~~2~~ | ~~medium~~ | **DONE** (`create_table_constraint` enabled; `alter_duckdb_index` remains — see G) |
 | ~~11~~ | ~~**require_primary_key on ALTER**~~ | ~~1~~ | ~~low~~ | **DONE** |
+| ~~14~~ | ~~**appender_allocator_flush_threshold**~~ | ~~1~~ | ~~low~~ | **DONE** — maps to `allocator_flush_threshold` in v1.5.2 |
 | ~~20~~ | ~~**Upgrade DuckDB submodule**~~ v1.3.2 → v1.5.2 | many | high | **DONE** |
-| 21 | **Compound ALTER regression** in v1.5.2: `Cannot create index with outstanding updates` | 2 | medium | TODO — regressed `alter_duckdb_column`, `alter_duckdb_column_copy` |
+| ~~21~~ | ~~**Compound ALTER regression**~~ in v1.5.2 | 2 | medium | **DONE** — separate auto-commit connection per DDL |
 | 1 | **SQL function rewrite** in pushdown: `adddate→+interval`, `insert→overlay`, `oct`, `WITH ROLLUP→no pushdown` | 4 | medium | TODO |
 | 2 | **Decimal >38 fallback** to DOUBLE or truncated DECIMAL(38) | 3 | medium | TODO |
-| 4 | **ALTER COLUMN DROP DEFAULT** propagate to DuckDB | 1 | medium | TODO |
+| 4 | **ALTER COLUMN DROP DEFAULT** — MariaDB handles as metadata-only (INSTANT), handler not called | 1 | hard | TODO (architecture limitation) |
 | 5 | **Appender invalidation** after DDL in transaction | 1 | medium | TODO |
 | 7 | **UDF digit-name schemas** — quote schema/table names in DuckDB queries | 1 | medium | TODO |
 | 8 | **Hex/binary literal** in WHERE via pushdown | 1 | medium | TODO |
@@ -140,7 +145,6 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | 10 | **Numeric function domain** (ACOS outside [-1,1]) | 1 | medium | TODO |
 | 12 | **Timezone propagation** | 1 | medium | TODO |
 | 13 | **Cross-schema rename via COPY** | 1 | high | TODO |
-| 14 | **appender_allocator_flush_threshold** — now `allocator_flush_threshold` in v1.5.2 | 1 | low | TODO (adapt test) |
 | 15 | **KILL/interrupt** — DEBUG sync points | 1 | high | TODO |
 | 16 | **bugfix_crash_after_commit_error** — test marked TODO | 1 | unknown | TODO |
 | 17 | **Encryption** — MySQL→MariaDB | 1 | high | TODO |
@@ -163,5 +167,5 @@ Regression: `alter_duckdb_column` / `alter_duckdb_column_copy` fail on compound 
 
 ---
 
-Items 21, 1–2 are highest priority (fix regression + unblock 7 tests).
-Items 4–10 add 8 more. Items 12–19 are complex or external.
+Items 1–2 are highest priority (unblock 7 tests).
+Items 5–10 add 6 more. Items 4, 12–19 are complex or external.
