@@ -122,8 +122,11 @@ bool DuckdbManager::Initialize()
     con->Query("CREATE OR REPLACE MACRO adddate(d, i) AS d + i");
     /* addtime/subtime registered as C++ UDFs */
     /* curdate/curtime — MariaDB aliases */
+    /* datediff(d1, d2) — MariaDB returns days, DuckDB needs 3-arg form */
+    con->Query("CREATE OR REPLACE MACRO datediff(d1, d2) AS "
+               "(d1::DATE - d2::DATE)");
     con->Query("CREATE OR REPLACE MACRO curdate() AS current_date");
-    con->Query("CREATE OR REPLACE MACRO curtime() AS current_time");
+    con->Query("CREATE OR REPLACE MACRO curtime(fsp := 0) AS current_time");
     /* convert_tz(ts, from_tz, to_tz) */
     con->Query("CREATE OR REPLACE MACRO convert_tz(ts, from_tz, to_tz) AS "
                "timezone(to_tz, timezone(from_tz, ts))");

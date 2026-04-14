@@ -313,6 +313,38 @@ int ha_duckdb_select_handler::init_scan()
   }
 
   /*
+    Rewrite CURRENT_TIME() → current_time, CURRENT_DATE() → current_date,
+    CURRENT_TIMESTAMP() → current_timestamp.
+    MariaDB outputs these with parens; DuckDB treats them as keywords.
+  */
+  {
+    std::string upper_sql= sql;
+    std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                   ::toupper);
+    /* Replace CURRENT_TIME(...) / CURRENT_DATE(...) / CURRENT_TIMESTAMP(...)
+       with the keyword form (DuckDB doesn't accept these as functions) */
+    static const char *time_kws[]= {
+        "CURRENT_TIME(", "CURRENT_DATE(", "CURRENT_TIMESTAMP("};
+    static const char *time_repls[]= {
+        "current_time", "current_date", "current_timestamp"};
+    for (int ki= 0; ki < 3; ki++)
+    {
+      size_t klen= strlen(time_kws[ki]);
+      size_t pos= 0;
+      while ((pos= upper_sql.find(time_kws[ki], pos)) != std::string::npos)
+      {
+        /* Find closing paren */
+        size_t end= sql.find(')', pos + klen);
+        if (end == std::string::npos) { pos++; continue; }
+        sql.replace(pos, end + 1 - pos, time_repls[ki]);
+        upper_sql= sql;
+        std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(),
+                       ::toupper);
+      }
+    }
+  }
+
+  /*
     Rewrite STRAIGHT_JOIN → CROSS JOIN (always conditionless in MariaDB).
     Then rewrite remaining conditionless JOIN → CROSS JOIN.
   */
