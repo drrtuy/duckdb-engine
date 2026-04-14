@@ -22,3 +22,5 @@ CREATE TABLE test_table (
 --source ../include/show_duckdb_table_structure.inc
 
 DROP TABLE test_table;
+--source ../include/cleanup_duckdb_udf.inc
+--source ../include/cleanup_duckdb.inc
