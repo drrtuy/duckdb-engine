@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2025, Alibaba and/or its affiliates.
   Copyright (c) 2026, MariaDB Foundation.
   Copyright (c) 2026, Roman Nozdrin <drrtuy@gmail.com>
   Copyright (c) 2026, Leonid Fedorov.
@@ -23,6 +24,8 @@
   These add missing type overloads to DuckDB builtins so that pushdown
   queries from MariaDB work without SQL text rewriting.  Registered
   once at DuckdbManager::Initialize() via register_mysql_compat_functions().
+
+  hex/oct/bin implementations ported from AliSQL's DuckDB fork.
 */
 
 #include <my_global.h>
@@ -34,8 +37,16 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include <cerrno>
+#include <cstdlib>
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -44,11 +55,11 @@
 namespace myduck
 {
 
-/* ----------------------------------------------------------------
-   octet_length(VARCHAR) → BIGINT
+/* ================================================================
+   octet_length(VARCHAR) -> BIGINT
    DuckDB builtin only has octet_length(BLOB).
    MariaDB OCTET_LENGTH() works on any string type.
-   ---------------------------------------------------------------- */
+   ================================================================ */
 
 static void octet_length_varchar_func(duckdb::DataChunk &args,
                                       duckdb::ExpressionState &state,
@@ -62,11 +73,11 @@ static void octet_length_varchar_func(duckdb::DataChunk &args,
       [](duckdb::string_t s) -> int64_t { return (int64_t) s.GetSize(); });
 }
 
-/* ----------------------------------------------------------------
-   length(BLOB) → BIGINT
+/* ================================================================
+   length(BLOB) -> BIGINT
    DuckDB builtin length() only works on VARCHAR (returns char count).
    MariaDB LENGTH() = OCTET_LENGTH() = byte count.
-   ---------------------------------------------------------------- */
+   ================================================================ */
 
 static void length_blob_func(duckdb::DataChunk &args,
                              duckdb::ExpressionState &state,
@@ -80,22 +91,18 @@ static void length_blob_func(duckdb::DataChunk &args,
       [](duckdb::string_t s) -> int64_t { return (int64_t) s.GetSize(); });
 }
 
-/* ----------------------------------------------------------------
-   json_contains(json, candidate, path) → BOOLEAN
-   DuckDB has json_contains(json, candidate) — 2-arg.
-   MariaDB JSON_CONTAINS(json, candidate, path) — 3-arg, extracts
+/* ================================================================
+   json_contains(json, candidate, path) -> BOOLEAN
+   DuckDB has json_contains(json, candidate) -- 2-arg.
+   MariaDB JSON_CONTAINS(json, candidate, path) -- 3-arg, extracts
    path first then checks containment.
    Implemented as: json_contains(json_extract(json, path), candidate)
-   ---------------------------------------------------------------- */
+   ================================================================ */
 
 static void json_contains_3arg_func(duckdb::DataChunk &args,
                                     duckdb::ExpressionState &state,
                                     duckdb::Vector &result)
 {
-  /* We implement this via DuckDB SQL execution on the connection.
-     For scalar UDF it's simpler to delegate to existing functions.
-     Use a direct approach: extract + contains logic. */
-
   auto &json_vec= args.data[0];
   auto &candidate_vec= args.data[1];
   auto &path_vec= args.data[2];
@@ -108,7 +115,7 @@ static void json_contains_3arg_func(duckdb::DataChunk &args,
          duckdb::string_t path) -> bool {
         /* Minimal implementation: delegate to DuckDB's own functions
            would require a ClientContext which we don't have here.
-           For now, return false — placeholder for proper implementation. */
+           For now, return false -- placeholder for proper implementation. */
         (void) json;
         (void) candidate;
         (void) path;
@@ -116,44 +123,626 @@ static void json_contains_3arg_func(duckdb::DataChunk &args,
       });
 }
 
-/* ----------------------------------------------------------------
-   hex(BIGINT), hex(DOUBLE) → VARCHAR  (for numeric arguments)
-   DuckDB hex() accepts VARCHAR and BLOB but not numeric types.
-   MariaDB HEX(N) truncates to integer and converts to hex string.
-   We add BIGINT and DOUBLE overloads. DECIMAL values implicitly
-   cast to DOUBLE by DuckDB.
+/* ================================================================
+   hex / oct / bin helper functions
+   Ported from AliSQL's DuckDB fork (core_functions/scalar/string/hex.cpp).
+   ================================================================ */
 
-   TODO: for values > 2^63, BIGINT overflows. AliSQL solved this by
-   adding hex/oct/bin directly to their DuckDB fork with hugeint
-   support. For production, consider implementing with hugeint or
-   string-based arithmetic.
-   ---------------------------------------------------------------- */
+namespace {
 
-static void hex_bigint_func(duckdb::DataChunk &args,
-                            duckdb::ExpressionState &state,
-                            duckdb::Vector &result)
+using namespace duckdb;
+
+/* ---- Hex byte writers ---- */
+
+static void WriteHexBytes(uint64_t x, char *&output, idx_t buffer_size)
 {
+  idx_t offset= buffer_size * 4;
+  for (; offset >= 4; offset -= 4)
+  {
+    uint8_t byte= (x >> (offset - 4)) & 0x0F;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+}
+
+template <class T>
+static void WriteHugeIntHexBytes(T x, char *&output, idx_t buffer_size)
+{
+  idx_t offset= buffer_size * 4;
+  auto upper= x.upper;
+  auto lower= x.lower;
+
+  for (; offset >= 68; offset -= 4)
+  {
+    uint8_t byte= (upper >> (offset - 68)) & 0x0F;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+
+  for (; offset >= 4; offset -= 4)
+  {
+    uint8_t byte= (lower >> (offset - 4)) & 0x0F;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+}
+
+/* ---- Binary (bin) byte writers ---- */
+
+static void WriteBinBytes(uint64_t x, char *&output, idx_t buffer_size)
+{
+  idx_t offset= buffer_size;
+  for (; offset >= 1; offset -= 1)
+  {
+    *output= NumericCast<char>(((x >> (offset - 1)) & 0x01) + '0');
+    output++;
+  }
+}
+
+template <class T>
+static void WriteHugeIntBinBytes(T x, char *&output, idx_t buffer_size)
+{
+  auto upper= x.upper;
+  auto lower= x.lower;
+  idx_t offset= buffer_size;
+
+  for (; offset >= 65; offset -= 1)
+  {
+    *output= ((upper >> (offset - 65)) & 0x01) + '0';
+    output++;
+  }
+
+  for (; offset >= 1; offset -= 1)
+  {
+    *output= ((lower >> (offset - 1)) & 0x01) + '0';
+    output++;
+  }
+}
+
+/* ---- Octal byte writers ---- */
+
+static void WriteOctBytes(uint64_t x, char *&output, idx_t buffer_size)
+{
+  idx_t offset= buffer_size * 3;
+  for (; offset >= 3; offset -= 3)
+  {
+    uint8_t byte= (x >> (offset - 3)) & 0x07;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+}
+
+template <class T>
+static void WriteHugeIntOctBytes(T x, char *&output, idx_t buffer_size)
+{
+  idx_t offset= buffer_size * 3;
+  auto upper= x.upper;
+  auto lower= x.lower;
+
+  for (; offset >= 69; offset -= 3)
+  {
+    uint8_t byte= (upper >> (offset - 66)) & 0x07;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+
+  {
+    uint8_t byte= ((upper & 0x03) << 1) + ((lower >> offset) & 0x01);
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+    offset -= 3;
+  }
+
+  for (; offset >= 3; offset -= 3)
+  {
+    uint8_t byte= (lower >> (offset - 3)) & 0x07;
+    *output= Blob::HEX_TABLE[byte];
+    output++;
+  }
+}
+
+/* ================================================================
+   Hex operator structs
+   ================================================================ */
+
+struct HexStrOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto data= input.GetData();
+    auto size= input.GetSize();
+
+    auto target= StringVector::EmptyString(result, size * 2);
+    auto output= target.GetDataWriteable();
+
+    for (idx_t i= 0; i < size; ++i)
+    {
+      *output= Blob::HEX_TABLE[(data[i] >> 4) & 0x0F];
+      output++;
+      *output= Blob::HEX_TABLE[data[i] & 0x0F];
+      output++;
+    }
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct HexIntegralOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto num_leading_zero=
+        CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
+    idx_t num_bits_to_check= 64 - num_leading_zero;
+    D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
+
+    idx_t buffer_size= (num_bits_to_check + 3) / 4;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHexBytes(static_cast<uint64_t>(input), output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct HexHugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    idx_t num_leading_zero=
+        CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
+    idx_t buffer_size= sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntHexBytes<hugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct HexUhugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    idx_t num_leading_zero=
+        CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
+    idx_t buffer_size= sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntHexBytes<uhugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct HexFloatOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    int64_t input_integer= std::round(input);
+    return HexIntegralOperator::Operation<int64_t, string_t>(input_integer,
+                                                             result);
+  }
+};
+
+/* ================================================================
+   Oct operator structs
+   ================================================================ */
+
+struct OctIntegralOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto num_leading_zero=
+        CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
+    idx_t num_bits_to_check= 64 - num_leading_zero;
+    D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
+
+    idx_t buffer_size= (num_bits_to_check + 2) / 3;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteOctBytes(static_cast<uint64_t>(input), output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct OctHugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    idx_t num_leading_zero=
+        CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
+    idx_t buffer_size=
+        (sizeof(INPUT_TYPE) * 2 - num_leading_zero + 2) / 3;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntOctBytes<hugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct OctUhugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    idx_t num_leading_zero=
+        CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
+    idx_t buffer_size=
+        (sizeof(INPUT_TYPE) * 2 - num_leading_zero + 2) / 3;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntOctBytes<uhugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct OctFloatOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    int64_t input_integer= std::round(input);
+    return OctIntegralOperator::Operation<int64_t, string_t>(input_integer,
+                                                             result);
+  }
+};
+
+struct OctStrOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    double d;
+    std::string tmp(input.GetData(), input.GetSize());
+    char *end= nullptr;
+    errno= 0;
+    d= strtod(tmp.c_str(), &end);
+    bool success= (errno == 0 && end != tmp.c_str());
+    if (!success)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+    else
+    {
+      return OctFloatOperator::Operation<double, RESULT_TYPE>(d, result);
+    }
+  }
+};
+
+/* ================================================================
+   Bin (binary) operator structs
+   ================================================================ */
+
+struct BinaryIntegralOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto num_leading_zero=
+        CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
+    idx_t num_bits_to_check= 64 - num_leading_zero;
+    D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
+
+    idx_t buffer_size= num_bits_to_check;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    D_ASSERT(buffer_size > 0);
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteBinBytes(static_cast<uint64_t>(input), output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct BinaryHugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto num_leading_zero=
+        CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
+    idx_t buffer_size= sizeof(INPUT_TYPE) * 8 - num_leading_zero;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntBinBytes<hugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct BinaryUhugeIntOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    auto num_leading_zero=
+        CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
+    idx_t buffer_size= sizeof(INPUT_TYPE) * 8 - num_leading_zero;
+
+    if (buffer_size == 0)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+
+    auto target= StringVector::EmptyString(result, buffer_size);
+    auto output= target.GetDataWriteable();
+
+    WriteHugeIntBinBytes<uhugeint_t>(input, output, buffer_size);
+
+    target.Finalize();
+    return target;
+  }
+};
+
+struct BinaryFloatOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    int64_t input_integer= std::round(input);
+    return BinaryIntegralOperator::Operation<int64_t, string_t>(input_integer,
+                                                                result);
+  }
+};
+
+struct BinaryStrOperator {
+  template <class INPUT_TYPE, class RESULT_TYPE>
+  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  {
+    double d;
+    std::string tmp(input.GetData(), input.GetSize());
+    char *end= nullptr;
+    errno= 0;
+    d= strtod(tmp.c_str(), &end);
+    bool success= (errno == 0 && end != tmp.c_str());
+    if (!success)
+    {
+      auto target= StringVector::EmptyString(result, 1);
+      auto output= target.GetDataWriteable();
+      *output= '0';
+      target.Finalize();
+      return target;
+    }
+    else
+    {
+      return BinaryFloatOperator::Operation<double, RESULT_TYPE>(d, result);
+    }
+  }
+};
+
+/* ================================================================
+   Template wrapper functions for UnaryExecutor::ExecuteString
+   ================================================================ */
+
+template <class INPUT, class OP>
+static void ToHexFunction(DataChunk &args, ExpressionState &state,
+                          Vector &result)
+{
+  D_ASSERT(args.ColumnCount() == 1);
   auto &input= args.data[0];
+  idx_t count= args.size();
+  UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
+}
+
+template <class INPUT, class OP>
+static void ToBinaryFunction(DataChunk &args, ExpressionState &state,
+                             Vector &result)
+{
+  D_ASSERT(args.ColumnCount() == 1);
+  auto &input= args.data[0];
+  idx_t count= args.size();
+  UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
+}
+
+template <class INPUT, class OP>
+static void ToOctFunction(DataChunk &args, ExpressionState &state,
+                          Vector &result)
+{
+  D_ASSERT(args.ColumnCount() == 1);
+  auto &input= args.data[0];
+  idx_t count= args.size();
+  UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
+}
+
+} /* anonymous namespace */
+
+/* ================================================================
+   locate(substr, str) -> BIGINT
+   locate(substr, str, pos) -> BIGINT
+   MariaDB LOCATE(substr, str [, pos]) returns the position of the
+   first occurrence of substr in str, starting at position pos (1-based).
+   This is the reversed argument order of DuckDB's instr(str, substr).
+   ================================================================ */
+
+static void locate_2arg_func(duckdb::DataChunk &args,
+                             duckdb::ExpressionState &state,
+                             duckdb::Vector &result)
+{
+  auto &needle_vec= args.data[0];
+  auto &haystack_vec= args.data[1];
   auto count= args.size();
 
-  duckdb::UnaryExecutor::Execute<int64_t, duckdb::string_t>(
-      input, result, count, [&](int64_t val) -> duckdb::string_t {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%llX", (unsigned long long) val);
-        return duckdb::StringVector::AddString(result, buf);
+  duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                  int64_t>(
+      needle_vec, haystack_vec, result, count,
+      [](duckdb::string_t needle, duckdb::string_t haystack) -> int64_t {
+        if (needle.GetSize() == 0)
+          return 1;
+        auto haystack_data= haystack.GetData();
+        auto haystack_size= haystack.GetSize();
+        auto needle_data= needle.GetData();
+        auto needle_size= needle.GetSize();
+
+        if (needle_size > haystack_size)
+          return 0;
+
+        for (duckdb::idx_t i= 0; i <= haystack_size - needle_size; i++)
+        {
+          if (memcmp(haystack_data + i, needle_data, needle_size) == 0)
+            return (int64_t)(i + 1);
+        }
+        return 0;
       });
 }
 
-/* ----------------------------------------------------------------
+static void locate_3arg_func(duckdb::DataChunk &args,
+                             duckdb::ExpressionState &state,
+                             duckdb::Vector &result)
+{
+  auto &needle_vec= args.data[0];
+  auto &haystack_vec= args.data[1];
+  auto &pos_vec= args.data[2];
+  auto count= args.size();
+
+  duckdb::TernaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                   int64_t, int64_t>(
+      needle_vec, haystack_vec, pos_vec, result, count,
+      [](duckdb::string_t needle, duckdb::string_t haystack,
+         int64_t pos) -> int64_t {
+        if (pos < 1)
+          return 0;
+        if (needle.GetSize() == 0)
+          return pos;
+
+        auto haystack_data= haystack.GetData();
+        auto haystack_size= (int64_t) haystack.GetSize();
+        auto needle_data= needle.GetData();
+        auto needle_size= (int64_t) needle.GetSize();
+
+        /* pos is 1-based; convert to 0-based offset */
+        int64_t start= pos - 1;
+        if (start >= haystack_size)
+          return 0;
+
+        if (needle_size > haystack_size - start)
+          return 0;
+
+        for (int64_t i= start; i <= haystack_size - needle_size; i++)
+        {
+          if (memcmp(haystack_data + i, needle_data, needle_size) == 0)
+            return i + 1;
+        }
+        return 0;
+      });
+}
+
+/* ================================================================
    Registration
-   ---------------------------------------------------------------- */
+   ================================================================ */
 
 void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
 {
   auto &catalog= duckdb::Catalog::GetSystemCatalog(db);
   auto transaction= duckdb::CatalogTransaction::GetSystemTransaction(db);
 
-  /* octet_length(VARCHAR) → BIGINT */
+  /* octet_length(VARCHAR) -> BIGINT */
   {
     duckdb::ScalarFunctionSet set("octet_length");
     set.AddFunction(duckdb::ScalarFunction(
@@ -164,7 +753,7 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
-  /* length(BLOB) → BIGINT */
+  /* length(BLOB) -> BIGINT */
   {
     duckdb::ScalarFunctionSet set("length");
     set.AddFunction(duckdb::ScalarFunction(
@@ -175,7 +764,7 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
-  /* json_contains(VARCHAR, VARCHAR, VARCHAR) → BOOLEAN — 3-arg */
+  /* json_contains(VARCHAR, VARCHAR, VARCHAR) -> BOOLEAN -- 3-arg */
   {
     duckdb::ScalarFunctionSet set("json_contains");
     set.AddFunction(duckdb::ScalarFunction(
@@ -187,26 +776,113 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
     catalog.CreateFunction(transaction, info);
   }
 
-  /* hex(BIGINT) and hex(DOUBLE) → VARCHAR */
+  /* hex() -- full AliSQL-compatible overloads */
   {
-    duckdb::ScalarFunctionSet set("hex");
+    using namespace duckdb;
+    ScalarFunctionSet set("hex");
+    set.AddFunction(ScalarFunction(
+        {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+        ToHexFunction<string_t, HexStrOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::BLOB}, LogicalType::VARCHAR,
+        ToHexFunction<string_t, HexStrOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::BIGINT}, LogicalType::VARCHAR,
+        ToHexFunction<int64_t, HexIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UBIGINT}, LogicalType::VARCHAR,
+        ToHexFunction<uint64_t, HexIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::HUGEINT}, LogicalType::VARCHAR,
+        ToHexFunction<hugeint_t, HexHugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UHUGEINT}, LogicalType::VARCHAR,
+        ToHexFunction<uhugeint_t, HexUhugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::DOUBLE}, LogicalType::VARCHAR,
+        ToHexFunction<double, HexFloatOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::FLOAT}, LogicalType::VARCHAR,
+        ToHexFunction<float, HexFloatOperator>));
+    CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* oct() -- full AliSQL-compatible overloads */
+  {
+    using namespace duckdb;
+    ScalarFunctionSet set("oct");
+    set.AddFunction(ScalarFunction(
+        {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+        ToOctFunction<string_t, OctStrOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::BLOB}, LogicalType::VARCHAR,
+        ToOctFunction<string_t, OctStrOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::BIGINT}, LogicalType::VARCHAR,
+        ToOctFunction<int64_t, OctIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UBIGINT}, LogicalType::VARCHAR,
+        ToOctFunction<uint64_t, OctIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::HUGEINT}, LogicalType::VARCHAR,
+        ToOctFunction<hugeint_t, OctHugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UHUGEINT}, LogicalType::VARCHAR,
+        ToOctFunction<uhugeint_t, OctUhugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::DOUBLE}, LogicalType::VARCHAR,
+        ToOctFunction<double, OctFloatOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::FLOAT}, LogicalType::VARCHAR,
+        ToOctFunction<float, OctFloatOperator>));
+    CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* bin() -- full AliSQL-compatible overloads */
+  {
+    using namespace duckdb;
+    ScalarFunctionSet set("bin");
+    set.AddFunction(ScalarFunction(
+        {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+        ToBinaryFunction<string_t, BinaryStrOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::BIGINT}, LogicalType::VARCHAR,
+        ToBinaryFunction<int64_t, BinaryIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UBIGINT}, LogicalType::VARCHAR,
+        ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::HUGEINT}, LogicalType::VARCHAR,
+        ToBinaryFunction<hugeint_t, BinaryHugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::UHUGEINT}, LogicalType::VARCHAR,
+        ToBinaryFunction<uhugeint_t, BinaryUhugeIntOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::DOUBLE}, LogicalType::VARCHAR,
+        ToBinaryFunction<double, BinaryFloatOperator>));
+    set.AddFunction(ScalarFunction(
+        {LogicalType::FLOAT}, LogicalType::VARCHAR,
+        ToBinaryFunction<float, BinaryFloatOperator>));
+    CreateScalarFunctionInfo info(std::move(set));
+    info.on_conflict= OnCreateConflict::ALTER_ON_CONFLICT;
+    catalog.CreateFunction(transaction, info);
+  }
+
+  /* locate(VARCHAR, VARCHAR) -> BIGINT  (2-arg) */
+  /* locate(VARCHAR, VARCHAR, BIGINT) -> BIGINT  (3-arg) */
+  {
+    duckdb::ScalarFunctionSet set("locate");
     set.AddFunction(duckdb::ScalarFunction(
-        {duckdb::LogicalType::BIGINT}, duckdb::LogicalType::VARCHAR,
-        hex_bigint_func));
-    /* DECIMAL implicitly casts to DOUBLE, so this catches hex(decimal_col) */
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+        duckdb::LogicalType::BIGINT, locate_2arg_func));
     set.AddFunction(duckdb::ScalarFunction(
-        {duckdb::LogicalType::DOUBLE}, duckdb::LogicalType::VARCHAR,
-        [](duckdb::DataChunk &args, duckdb::ExpressionState &state,
-           duckdb::Vector &result) {
-          auto &input= args.data[0];
-          duckdb::UnaryExecutor::Execute<double, duckdb::string_t>(
-              input, result, args.size(), [&](double val) -> duckdb::string_t {
-                char buf[32];
-                snprintf(buf, sizeof(buf), "%llX",
-                         (unsigned long long)(int64_t) val);
-                return duckdb::StringVector::AddString(result, buf);
-              });
-        }));
+        {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR,
+         duckdb::LogicalType::BIGINT},
+        duckdb::LogicalType::BIGINT, locate_3arg_func));
     duckdb::CreateScalarFunctionInfo info(std::move(set));
     info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
     catalog.CreateFunction(transaction, info);
@@ -214,7 +890,7 @@ void register_mysql_compat_functions(duckdb::DatabaseInstance &db)
 
   sql_print_information(
       "DuckDB: registered MySQL-compatible function overloads "
-      "(octet_length, length, hex, json_contains)");
+      "(octet_length, length, hex, oct, bin, locate, json_contains)");
 }
 
 } /* namespace myduck */
