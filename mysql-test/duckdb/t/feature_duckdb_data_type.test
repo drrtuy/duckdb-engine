@@ -1,3 +1,4 @@
+--source ../include/have_duckdb.inc
 # Feature ORC data type test
 
 # Prepare
