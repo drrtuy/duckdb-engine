@@ -123,26 +123,12 @@ bool DuckdbManager::Initialize()
     con->Query("CREATE OR REPLACE MACRO addtime(d, t) AS d + t::INTERVAL");
     con->Query("CREATE OR REPLACE MACRO subdate(d, i) AS d - i");
     con->Query("CREATE OR REPLACE MACRO subtime(d, t) AS d - t::INTERVAL");
-    con->Query("CREATE OR REPLACE MACRO oct(x) AS "
-               "printf('%o', CASE WHEN typeof(x) = 'VARCHAR' "
-               "THEN CASE WHEN regexp_extract(x::VARCHAR, '^[0-9]+') = '' "
-               "THEN 0 ELSE CAST(regexp_extract(x::VARCHAR, '^[0-9]+') "
-               "AS BIGINT) END ELSE x::BIGINT END)");
     con->Query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
                "ELSE substr(str, 1, pos - 1) || newstr || "
                "substr(str, pos + len) END");
-    con->Query("CREATE OR REPLACE MACRO bin(x) AS "
-               "printf('%b', CASE WHEN typeof(x) = 'VARCHAR' "
-               "THEN CASE WHEN regexp_extract(x::VARCHAR, '^[0-9]+') = '' "
-               "THEN 0 ELSE CAST(regexp_extract(x::VARCHAR, '^[0-9]+') "
-               "AS BIGINT) END ELSE x::BIGINT END)");
-    /* locate(substr, str[, pos]) — MariaDB has reversed arg order vs DuckDB */
-    con->Query("CREATE OR REPLACE MACRO locate(needle, haystack) AS "
-               "instr(haystack, needle)");
-    con->Query("CREATE OR REPLACE MACRO locate(needle, haystack, pos) AS "
-               "CASE WHEN instr(substr(haystack, pos), needle) = 0 THEN 0 "
-               "ELSE instr(substr(haystack, pos), needle) + pos - 1 END");
+    /* oct, bin, locate are now registered as native C++ scalar functions
+       in register_mysql_compat_functions() -- no SQL macros needed. */
   }
 
   /* Register MySQL-compatible function overloads */
