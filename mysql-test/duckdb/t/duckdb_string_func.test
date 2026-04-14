@@ -301,8 +301,9 @@ DROP TABLE t_regexp;
 SELECT REGEXP_INSTR('dog cat dog', 'dog') FROM t_innodb;
 SELECT REGEXP_INSTR('dog cat dog', 'dog') FROM t_duckdb;
 
-SELECT REGEXP_INSTR('dog cat dog', 'dog', 2) FROM t_innodb;
-SELECT REGEXP_INSTR('dog cat dog', 'dog', 2) FROM t_duckdb;
+# MariaDB 11.4 does not support 3+ arg REGEXP_INSTR (MySQL 8.0 feature)
+# SELECT REGEXP_INSTR('dog cat dog', 'dog', 2) FROM t_innodb;
+# SELECT REGEXP_INSTR('dog cat dog', 'dog', 2) FROM t_duckdb;
 
 SELECT REGEXP_INSTR('aa aaa aaaa', 'a{2}') FROM t_innodb;
 SELECT REGEXP_INSTR('aa aaa aaaa', 'a{2}') FROM t_duckdb;
@@ -319,25 +320,10 @@ SELECT REGEXP_INSTR(col1, col2) FROM t_regexp;
 DROP TABLE t_regexp;
 
 --echo --------------------------
---echo 38. REGEXP_LIKE()
+--echo 38. REGEXP_LIKE() — skipped, not available in MariaDB 11.4
 --echo --------------------------
 
-SELECT REGEXP_LIKE('Michael!', '.*') FROM t_innodb;
-SELECT REGEXP_LIKE('Michael!', '.*') FROM t_duckdb;
-
-SELECT REGEXP_LIKE('new*\n*line', 'new\\*.\\*line') FROM t_innodb;
-SELECT REGEXP_LIKE('new*\n*line', 'new\\*.\\*line') FROM t_duckdb;
-
-SELECT REGEXP_LIKE('a', '^[a-d]') FROM t_innodb;
-SELECT REGEXP_LIKE('a', '^[a-d]') FROM t_duckdb;
-
-CREATE TABLE t_regexp (id INT PRIMARY KEY, col1 VARCHAR(100), col2 VARCHAR(100));
-INSERT INTO t_regexp VALUES (1, 'Michael!', '.*'), (2, 'new*\n*line', 'new\\*.\\*line'),
-                            (3, 'a', '^[a-d]'), (4, NULL, 'abc'), (5, 'abc', NULL);
-SELECT REGEXP_LIKE(col1, col2) FROM t_regexp;
-ALTER TABLE t_regexp ENGINE=DuckDB;
-SELECT REGEXP_LIKE(col1, col2) FROM t_regexp;
-DROP TABLE t_regexp;
+# REGEXP_LIKE is MySQL 8.0 only. MariaDB uses REGEXP / RLIKE instead.
 
 --echo --------------------------
 --echo 39. REGEXP_REPLACE()
@@ -346,8 +332,9 @@ DROP TABLE t_regexp;
 SELECT REGEXP_REPLACE('a b c', 'b', 'X') FROM t_innodb;
 SELECT REGEXP_REPLACE('a b c', 'b', 'X') FROM t_duckdb;
 
-SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3) FROM t_innodb;
-SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3) FROM t_duckdb;
+# 5-arg REGEXP_REPLACE is MySQL 8.0 only
+# SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3) FROM t_innodb;
+# SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3) FROM t_duckdb;
 
 CREATE TABLE t_regexp (id INT PRIMARY KEY, col1 VARCHAR(100), col2 VARCHAR(100), col3 VARCHAR(100));
 INSERT INTO t_regexp VALUES (1, 'a b c', 'b', 'X'), (2, 'abc def ghi', '[a-z]+', 'X'),
@@ -364,8 +351,9 @@ DROP TABLE t_regexp;
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+') FROM t_innodb;
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+') FROM t_duckdb;
 
-SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3) FROM t_innodb;
-SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3) FROM t_duckdb;
+# 4-arg REGEXP_SUBSTR is MySQL 8.0 only
+# SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3) FROM t_innodb;
+# SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3) FROM t_duckdb;
 
 CREATE TABLE t_regexp (id INT PRIMARY KEY, col1 VARCHAR(100), col2 VARCHAR(100));
 INSERT INTO t_regexp VALUES (1, 'a b c', 'b'), (2, 'abc def ghi', '[a-z]+');
