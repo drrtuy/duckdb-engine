@@ -61,3 +61,5 @@ SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.tables WHERE ta
 --echo #
 DROP DATABASE `my-db`;
 SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'");
+
+--source ../include/cleanup_duckdb_udf.inc
