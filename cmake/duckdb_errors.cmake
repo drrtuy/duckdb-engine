@@ -35,8 +35,9 @@ ADD_CUSTOM_COMMAND(
     -DMYSQLD_ERROR_H=${MYSQLD_ERROR_H}
     -DDUCKDB_ERROR_H=${DUCKDB_ERROR_H}
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_duckdb_error_h.cmake"
-  DEPENDS "${MYSQLD_ERROR_H}"
+  DEPENDS "${DUCKDB_ERRORS_TXT}"
   COMMENT "Generating duckdb_error.h from mysqld_error.h"
 )
 
 ADD_CUSTOM_TARGET(duckdb_error_h DEPENDS "${DUCKDB_ERROR_H}")
+ADD_DEPENDENCIES(duckdb_error_h GenError)
