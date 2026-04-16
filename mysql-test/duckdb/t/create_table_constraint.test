@@ -2,6 +2,14 @@
 --source include/have_debug.inc
 --source ../include/have_duckdb_udf.inc
 
+
+--disable_query_log
+CREATE DATABASE IF NOT EXISTS create_table_constrain CHARACTER SET utf8mb4;
+USE create_table_constrain;
+--enable_query_log
+ALTER DATABASE create_table_constrain CHARACTER SET utf8mb4;
+SET NAMES utf8mb4;
+
 --echo # 1) Prepare
 --echo
 
@@ -24,3 +32,7 @@ CREATE TABLE test_table (
 DROP TABLE test_table;
 --source ../include/cleanup_duckdb_udf.inc
 --source ../include/cleanup_duckdb.inc
+
+--disable_query_log
+DROP DATABASE create_table_constrain;
+--enable_query_log

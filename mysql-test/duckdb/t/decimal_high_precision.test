@@ -153,3 +153,6 @@ DROP DATABASE duckdb_db;
 
 set global duckdb_use_double_for_decimal=default;
 SET GLOBAL duckdb_dml_in_batch = default;
+
+--source ../include/cleanup_duckdb_udf.inc
+--source ../include/cleanup_duckdb.inc

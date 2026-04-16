@@ -86,4 +86,10 @@ DROP TABLE t1;
 DROP TABLE t2;
 DROP TABLE t3;
 
+
+--disable_query_log
+DROP DATABASE db_duckdb_monitor;
+--enable_query_log
+
+--source ../include/cleanup_duckdb_udf.inc
 --source ../include/cleanup_duckdb.inc
