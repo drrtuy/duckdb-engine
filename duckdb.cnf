@@ -1,11 +1,3 @@
-[mariadbd]
-plugin-maturity=experimental
-socket=/run/mysqld/mysqld.sock
-
-[client]
-socket=/run/mysqld/mysqld.sock
-
 [mysqld]
-debug=t:f,*:d,error,query:O,/var/lib/mysql/mysqld.trace
 plugin-load-add=ha_duckdb.so
 #loose-duckdb-memory-limit=1073741824

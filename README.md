@@ -42,7 +42,7 @@ cd mariadb-server
 git clone --recurse-submodules https://github.com/drrtuy/duckdb-engine.git storage/duckdb
 
 # Build
-./storage/duckdb/build.sh
+./storage/duckdb/duckdb/build.sh
 ```
 
 ## License
