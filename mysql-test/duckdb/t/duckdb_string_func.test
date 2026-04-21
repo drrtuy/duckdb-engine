@@ -512,7 +512,9 @@ SELECT TO_BASE64('MySQL'), TO_BASE64('数据库'), TO_BASE64(col1) FROM t_duckdb
 SELECT FROM_BASE64(TO_BASE64('MySQL')), FROM_BASE64(TO_BASE64('数据库')), FROM_BASE64(TO_BASE64(col1)) FROM t_innodb;
 SELECT FROM_BASE64(TO_BASE64('MySQL')), FROM_BASE64(TO_BASE64('数据库')), FROM_BASE64(TO_BASE64(col1)) FROM t_duckdb;
 
-
 DROP TABLE t_innodb;
 DROP TABLE t_duckdb;
 DROP DATABASE test_duckdb;
+
+SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
+--source ../include/cleanup_duckdb_udf.inc
