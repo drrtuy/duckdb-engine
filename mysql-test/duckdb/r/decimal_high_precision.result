@@ -89,4 +89,3 @@ c3	decimal(40,5)	YES		NULL
 innodb_result : 4	12345678901234567890123456789012345.12345
 duckdb_result : 4	12345678901234570000000000000000000.00000
 set global duckdb_use_double_for_decimal=default;
-SET GLOBAL duckdb_dml_in_batch = default;

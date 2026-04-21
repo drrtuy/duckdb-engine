@@ -721,3 +721,4 @@ MySQL	数据库	数据库
 DROP TABLE t_innodb;
 DROP TABLE t_duckdb;
 DROP DATABASE test_duckdb;
+SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
