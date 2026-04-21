@@ -16,6 +16,7 @@ DEFAULT_MDB_DATADIR="/var/lib/mysql"
 USER="mysql"
 GROUP="mysql"
 INSTALL_PREFIX="/usr/"
+GCC_VERSION="12"
 
 usage() {
     echo "Usage: $0 [options]"
@@ -26,6 +27,8 @@ usage() {
     echo "  -p          Build packages (DEB or RPM)"
     echo "  -S          Start MariaDB after build"
     echo "  -n          No clean: keep existing data files"
+    echo "  -D          Install build prerequisites (requires root/sudo)"
+    echo "  -R          Use gcc-toolset-\${GCC_VERSION} on Rocky 8"
     echo "  -h          Show this help"
     exit 0
 }
@@ -34,9 +37,11 @@ CI_MODE=false
 START_MDB=false
 NO_CLEAN=false
 BUILD_PACKAGES=false
+INSTALL_DEPS=false
+GCC_TOOLSET=false
 OS=""
 
-while getopts "t:d:j:cpSnh" opt; do
+while getopts "t:d:j:cpSnDRh" opt; do
     case $opt in
         t) BUILD_TYPE="$OPTARG" ;;
         d) OS="$OPTARG" ;;
@@ -45,6 +50,8 @@ while getopts "t:d:j:cpSnh" opt; do
         p) BUILD_PACKAGES=true ;;
         S) START_MDB=true ;;
         n) NO_CLEAN=true ;;
+        D) INSTALL_DEPS=true ;;
+        R) GCC_TOOLSET=true ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -227,7 +234,73 @@ construct_cmake_flags() {
     fi
 }
 
+install_deps() {
+    if [[ $INSTALL_DEPS = false ]]; then
+        return
+    fi
+
+    if [[ -z "$OS" ]]; then
+        detect_distro
+    fi
+
+    local SUDO=""
+    if [[ $EUID -ne 0 ]]; then
+        SUDO="sudo"
+    fi
+
+    # MariaDB server + DuckDB build prerequisites
+    local RPM_DEPS="git make cmake ninja-build bison flex \
+        ncurses-devel readline-devel openssl-devel zlib-devel bzip2-devel \
+        libzstd-devel libcurl-devel libaio-devel libxml2-devel pcre2-devel \
+        libxcrypt-devel xz-devel pam-devel perl-DBI python3 python3-devel \
+        ccache rpm-build"
+
+    local DEB_DEPS="build-essential git cmake ninja-build bison flex \
+        libncurses-dev libreadline-dev libssl-dev zlib1g-dev libbz2-dev \
+        libzstd-dev libcurl4-openssl-dev libaio-dev libxml2-dev libpcre2-dev \
+        libxcrypt-dev liblzma-dev libpam0g-dev libperl-dev python3 python3-dev \
+        ccache devscripts equivs debhelper libdistro-info-perl"
+
+    local command=""
+    case "$OS" in
+        rockylinux:8|rocky:8)
+            command="$SUDO dnf install -y 'dnf-command(config-manager)' epel-release && \
+                     $SUDO dnf config-manager --set-enabled powertools && \
+                     $SUDO dnf install -y ${RPM_DEPS}"
+            if [[ $GCC_TOOLSET = true ]]; then
+                command="$command && $SUDO dnf install -y gcc-toolset-${GCC_VERSION} gcc-toolset-${GCC_VERSION}-gcc-c++"
+                warn "Activate toolchain before rebuilding: . /opt/rh/gcc-toolset-${GCC_VERSION}/enable"
+            else
+                command="$command && $SUDO dnf groupinstall -y \"Development Tools\""
+                warn "Rocky 8 default gcc 8 lacks C++20 -- consider re-running with -R"
+            fi
+            ;;
+        rockylinux:9|rocky:9|rocky:10)
+            command="$SUDO dnf install -y 'dnf-command(config-manager)' epel-release && \
+                     $SUDO dnf config-manager --set-enabled crb && \
+                     $SUDO dnf install -y gcc gcc-c++ ${RPM_DEPS}"
+            ;;
+        ubuntu:*|debian:*)
+            command="$SUDO apt-get update && \
+                     DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y ${DEB_DEPS}"
+            ;;
+        *)
+            fail "Unsupported distro for -D: $OS"
+            ;;
+    esac
+
+    separator
+    info "Installing prerequisites for ${_CLR_YELLOW}$OS"
+    set +e
+    eval "$command" | one_liner
+    local rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -ne 0 ]] && fail "DEPENDENCY INSTALL FAILED (exit code $rc)"
+    success "Prerequisites installed"
+}
+
 construct_cmake_flags
+install_deps
 
 build_binary() {
     separator
