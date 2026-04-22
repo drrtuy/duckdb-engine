@@ -1,6 +1,7 @@
 # MariaDB - DuckDB Incompatibilities
 
 Discovered during porting the DuckDB storage engine plugin to MariaDB 12.
+DuckDB upstream version: **v1.5.2** (submodule at `third_parties/duckdb/`).
 
 ---
 
@@ -10,45 +11,81 @@ Discovered during porting the DuckDB storage engine plugin to MariaDB 12.
 |---|---|
 | `` `backticks` `` | `"double quotes"` (SQL standard) |
 
-MariaDB uses backticks by default for quoting identifiers. DuckDB follows the SQL standard and uses double quotes. All SQL generation code in the plugin must use double quotes.
+MariaDB uses backticks by default for quoting identifiers. DuckDB follows the SQL standard and uses double quotes.
 
-**Affected files**: `ddl_convertor.cc`, `dml_convertor.cc`, `ha_duckdb.cc`, `delta_appender.cc`, `ha_duckdb_pushdown.cc`
+**Fix applied**: `backticks_to_double_quotes()` in `duckdb_query.cc` converts every backtick to a double quote in all SQL sent to DuckDB via `duckdb_query()`. DDL/DML codegen in `ddl_convertor.cc`, `dml_convertor.cc`, `ha_duckdb.cc`, `delta_appender.cc` uses double quotes directly.
 
-**Fix applied**: replaced all backtick literals with double quotes in codegen; added `std::replace` in `ha_duckdb_pushdown.cc` for `SELECT_LEX::print()` output.
+SELECT pushdown (`ha_duckdb_pushdown.cc`) uses the original SQL text from `THD::query()` (which contains backticks), so the conversion happens inside `duckdb_query()`.
 
 ---
 
-## 2. Function Name Rewriting by SELECT_LEX::print()
+## 2. Function Compatibility
 
-MariaDB's `SELECT_LEX::print()` rewrites user-facing function names to internal canonical names. Some of these canonical names are not supported by DuckDB.
+MariaDB function semantics differ from DuckDB in several areas. These are handled by **runtime function overrides** registered at startup via `register_mysql_compat_functions()` in `duckdb_mysql_compat.cc`. No DuckDB source patches are used.
 
-### Confirmed incompatible
+### Overridden functions (registered in `duckdb_mysql_compat.cc`)
 
-| User writes | print() outputs | DuckDB status | Fix |
-|---|---|---|---|
-| `LENGTH()` | `octet_length()` | NO - No VARCHAR overload (only BLOB/BIT) | Patch: added VARCHAR overload via `patches/0001-octet_length-varchar.patch` |
-
-### Confirmed compatible (aliases already exist in DuckDB)
-
-| User writes | print() outputs | DuckDB alias |
+| Function | Issue | Fix |
 |---|---|---|
-| `LOWER()` | `lcase()` | `LcaseFun -> LowerFun` |
-| `UPPER()` | `ucase()` | `UcaseFun -> UpperFun` |
-| `IFNULL()` / `NVL()` | `ifnull()` | Parser rewrites to `COALESCE` |
+| `octet_length(VARCHAR)` | DuckDB builtin only has BLOB overload | Added VARCHAR→BIGINT overload (byte count) |
+| `length(VARCHAR)` | DuckDB returns character count; MariaDB returns byte count | Overridden to return byte count |
+| `length(BLOB)` | DuckDB builtin `length()` only works on VARCHAR | Added BLOB→BIGINT overload |
+| `ascii(VARCHAR)` | DuckDB returns Unicode codepoint; MariaDB returns first byte value | Overridden to return first byte |
+| `ord(VARCHAR)` | DuckDB returns Unicode codepoint; MariaDB returns multibyte byte-value | Overridden for MariaDB semantics |
+| `hex()` | DuckDB builtin missing several type overloads | Full overload set (VARCHAR, BLOB, BIGINT, UBIGINT, HUGEINT, UHUGEINT, DOUBLE, FLOAT) |
+| `oct()` | Not in DuckDB | Full implementation with all numeric + string overloads |
+| `bin()` | Not in DuckDB | Full implementation with all numeric + string overloads |
+| `locate(substr, str [, pos])` | DuckDB has `instr(str, substr)` with reversed arg order | Custom 2-arg and 3-arg implementations |
+| `mid(s, p [, n])` | Not in DuckDB | SQL macro delegating to `substr()` |
+| `addtime(TIMESTAMP/TIME, VARCHAR)` | DuckDB INTERVAL doesn't parse MariaDB `'D H:M:S.us'` format | Custom implementation parsing MariaDB interval strings |
+| `subtime(TIMESTAMP/TIME, VARCHAR)` | Same as addtime | Custom implementation |
+| `rtrim(VARCHAR, VARCHAR)` | DuckDB removes individual chars from set; MariaDB removes substring | Overridden for substring semantics |
+| `ltrim(VARCHAR, VARCHAR)` | Same as rtrim | Overridden for substring semantics |
+| `regexp_instr(VARCHAR, VARCHAR)` | Not in DuckDB | Custom implementation using RE2 |
+| `regexp_replace(VARCHAR, VARCHAR, VARCHAR)` | DuckDB has it but with different overload set | Custom 3-arg implementation using RE2 |
+| `regexp_substr(VARCHAR, VARCHAR)` | Not in DuckDB | Custom implementation using RE2 |
+| `json_unquote(VARCHAR)` | Not in DuckDB | Custom implementation (strip quotes + unescape) |
+| `json_contains(VARCHAR, VARCHAR, VARCHAR)` | DuckDB only has 2-arg form | 3-arg placeholder (returns false — needs proper implementation) |
+
+### Compatible aliases (already work in DuckDB)
+
+| User writes | MariaDB canonical | DuckDB status |
+|---|---|---|
+| `LOWER()` | `lcase()` | Alias exists |
+| `UPPER()` | `ucase()` | Alias exists |
+| `IFNULL()` / `NVL()` | `ifnull()` | Rewritten to `COALESCE` |
 | `CEIL()` | `ceiling()` | Supported natively |
 | `POWER()` | `pow()` | Supported natively |
 | `SUBSTRING()` | `substr()` | Supported natively |
 
 ### Potentially incompatible (not yet triggered)
 
-| User writes | print() outputs | DuckDB status |
+| User writes | MariaDB canonical | DuckDB status |
 |---|---|---|
-| `SCHEMA()` | `database()` | NO - No `database()` function in DuckDB |
-| `ATAN2(x,y)` | `atan(x,y)` | MAYBE - Arity may differ |
+| `SCHEMA()` | `database()` | No `database()` function in DuckDB |
+| `ATAN2(x,y)` | `atan(x,y)` | Arity may differ |
 
 ---
 
-## 3. Data Type Handling
+## 3. SQL Syntax Rewriting (SELECT pushdown)
+
+SELECT pushdown uses the original SQL text from `THD::query()`. MariaDB-specific syntax is rewritten in `ha_duckdb_pushdown.cc` (`init_scan()`) before sending to DuckDB:
+
+| MariaDB syntax | DuckDB equivalent | Status |
+|---|---|---|
+| `GROUP BY ... WITH ROLLUP` | `GROUP BY ROLLUP(...)` | Rewritten |
+| `CONVERT(expr, TYPE)` | `CAST(expr AS TYPE)` | Rewritten |
+| `CURRENT_TIME()` / `CURRENT_DATE()` / `CURRENT_TIMESTAMP()` | `current_time` / `current_date` / `current_timestamp` (keywords) | Rewritten (parens removed) |
+| `STRAIGHT_JOIN` | `CROSS JOIN` | Rewritten |
+| Conditionless `JOIN` (no ON/USING) | `CROSS JOIN` | Rewritten |
+| `REGEXP` / `NOT REGEXP` / `RLIKE` / `NOT RLIKE` | `~` / `!~` | Rewritten |
+| `LIMIT offset, count` | `LIMIT count OFFSET offset` | Rewritten |
+| `HIGH_PRIORITY`, `SQL_NO_CACHE`, `SQL_CACHE`, `SQL_BUFFER_RESULT`, `SQL_SMALL_RESULT`, `SQL_BIG_RESULT`, `SQL_CALC_FOUND_ROWS` | -- | Stripped |
+| `FORCE INDEX(...)`, `USE INDEX(...)`, `IGNORE INDEX(...)` | -- | Stripped |
+
+---
+
+## 4. Data Type Handling
 
 ### DECIMAL Appender
 
@@ -58,38 +95,50 @@ DuckDB upstream Appender API does not accept raw `Append<intN_t>()` for DECIMAL 
 
 ### Text types
 
-MariaDB `MEDIUMTEXT`, `LONGTEXT`, `TEXT`, `TINYTEXT` all map to DuckDB `VARCHAR`. This works, but functions operating on these columns may hit function signature mismatches (e.g., the `octet_length` issue above).
+MariaDB `MEDIUMTEXT`, `LONGTEXT`, `TEXT`, `TINYTEXT` all map to DuckDB `VARCHAR`.
 
 ---
 
-## 4. DuckDB API Differences (AliSQL fork vs upstream 1.2.1)
+## 5. DuckDB API Differences (AliSQL fork vs upstream v1.5.2)
 
 The AliSQL fork of DuckDB has custom extensions to the API that do not exist in upstream DuckDB:
 
-| Feature | AliSQL fork | Upstream 1.2.1 |
+| Feature | AliSQL fork | Upstream v1.5.2 |
 |---|---|---|
 | `scheduler_process_partial` config option | YES | NO - Does not exist |
 | `appender_allocator_flush_threshold` config option | YES | NO - Does not exist |
 | `Appender(conn, schema, table, AppenderType)` constructor | YES | NO - No `AppenderType` parameter |
-| `LengthFun` for VARCHAR | Uses `StrLenOperator` (byte count) | Uses `StringLengthOperator` (codepoint count) |
+| `LengthFun` for VARCHAR | Uses `StrLenOperator` (byte count) | Uses `StringLengthOperator` (codepoint count) — overridden at runtime via `duckdb_mysql_compat.cc` |
 
 ---
 
-## 5. DuckDB Extensions
+## 6. DuckDB Extensions
 
-| Extension | Required for | Default in upstream? | Action needed |
-|---|---|---|---|
-| **ICU** | `SET TimeZone = ...` | NO | Added via `cmake/duckdb_extensions.cmake` |
-| **JSON** | JSON functions | NO | Added via `cmake/duckdb_extensions.cmake` |
-| `core_functions` | Basic functions | YES | -- |
-| `parquet` | Parquet I/O | YES | -- |
-| `jemalloc` | Memory allocator (Linux x86_64) | YES | -- |
+Loaded via `cmake/duckdb_extensions.cmake`:
 
-Build flags: `EXTENSION_STATIC_BUILD=1` required for static linking. `DISABLE_BUILTIN_EXTENSIONS=TRUE` must **not** be set.
+| Extension | Required for | Explicitly loaded? |
+|---|---|---|
+| **ICU** | `SET TimeZone = ...`, locale-aware collations | YES |
+| **JSON** | JSON functions | YES |
+| **core_functions** | Basic scalar/aggregate functions | YES |
+
+Build flags in `cmake/duckdb.cmake`: `EXTENSION_STATIC_BUILD=1`, `DUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1`, `DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1`.
 
 ---
 
-## 6. Potential Future Incompatibilities
+## 7. ABI Compatibility
+
+DuckDB is built as a static library (`libduckdb_bundle.a`) via `ExternalProject_Add` in `cmake/duckdb.cmake`.
+
+| Concern | Detail |
+|---|---|
+| **`_GLIBCXX_DEBUG`** | MariaDB debug builds define `_GLIBCXX_DEBUG` which changes `sizeof(std::vector)` etc. The plugin target strips this via `-U_GLIBCXX_DEBUG -U_GLIBCXX_ASSERTIONS` in `CMakeLists.txt`. Mismatch causes SIGSEGV in `~DuckDB()`. |
+| **C++ standard** | Plugin is built with C++17 (`CXX_STANDARD 17`). DuckDB v1.5.2 requires C++17. |
+| **`_GLIBCXX_USE_CXX11_ABI`** | Not explicitly set — uses the compiler default (ABI=1). Both DuckDB and the plugin use the same default. |
+
+---
+
+## 8. Potential Future Incompatibilities
 
 These have not been triggered yet but are likely to cause issues when more complex queries are pushed down:
 
@@ -102,19 +151,3 @@ These have not been triggered yet but are likely to cause issues when more compl
 | `FOUND_ROWS()` | -- | No equivalent |
 | `LAST_INSERT_ID()` | -- | No equivalent |
 | Collations | -- | MariaDB collation rules do not transfer to DuckDB |
-
----
-
-## 7. Patch Management
-
-DuckDB patches are stored in `patches/` and applied via `PATCH_COMMAND` in `cmake/duckdb.cmake`:
-
-```cmake
-PATCH_COMMAND   git -C "${DUCKDB_SUBMODULE_DIR}" checkout -- . &&
-                git -C "${DUCKDB_SUBMODULE_DIR}" apply --whitespace=nowarn
-                  "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-octet_length-varchar.patch"
-```
-
-To add a new patch:
-1. Create a `git diff` patch file in `patches/`
-2. Chain it in `PATCH_COMMAND` with `&&`

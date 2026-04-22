@@ -31,19 +31,74 @@ Tables created with `ENGINE=DuckDB` store data in DuckDB's native format. Querie
 
 ## Building
 
-The engine is built as part of the MariaDB server tree. It lives under `storage/duckdb/` and uses `ExternalProject_Add` to build DuckDB from source (submodule at `third_parties/duckdb/`).
+The engine is built as part of the MariaDB server tree. It lives under `storage/duckdb/` and uses `ExternalProject_Add` to build upstream DuckDB v1.5.2 from source (git submodule at `third_parties/duckdb/`).
+
+Until the patch is accepted into MariaDB upstream, clone one of the prepared branches from the server fork:
 
 ```bash
-# Clone MariaDB Server
-git clone https://github.com/MariaDB/server.git mariadb-server
+# Pick the branch matching your target MariaDB version
+git clone --recurse-submodules -b bb-11.4-duckdb https://github.com/drrtuy/mdb-server.git mariadb-server
+# or: -b 11.8-duckdb
+# or: -b 12.3-duckdb
 cd mariadb-server
 
-# Clone the DuckDB engine into the storage directory (with submodules)
-git clone --recurse-submodules https://github.com/drrtuy/duckdb-engine.git storage/duckdb
+# Install build dependencies (requires root)
+./storage/duckdb/duckdb/build.sh -D
 
-# Build
-./storage/duckdb/build.sh
+# Build and install
+./storage/duckdb/duckdb/build.sh
 ```
+
+### Build packages
+
+**RPM** (Rocky/Fedora/Amazon Linux):
+
+```bash
+./storage/duckdb/duckdb/build.sh -p
+```
+
+**DEB** (Debian/Ubuntu):
+
+```bash
+./storage/duckdb/duckdb/build.sh -p
+```
+
+## Cross-Engine Queries
+
+The engine supports cross-engine joins — a single `SELECT` can combine DuckDB tables with tables from other engines (e.g. InnoDB). When the query planner detects a mix of engines, it:
+
+1. Opens the non-DuckDB tables via MariaDB's handler API.
+2. Registers them in a thread-local table registry.
+3. Pushes the **entire query** — including all `WHERE`, `JOIN`, `GROUP BY`, and `ORDER BY` clauses — down to DuckDB as a single SQL statement.
+4. DuckDB's replacement scan callback transparently redirects references to non-DuckDB tables to the `_mdb_scan` table function, which streams rows from the MariaDB handler into DuckDB's vectorized pipeline.
+
+Because the full query text (with filters) is pushed down, DuckDB's optimizer can apply predicates, reorder joins, and build hash tables over the streamed InnoDB rows — the non-DuckDB side is a full table scan, but DuckDB handles all the filtering and aggregation internally.
+
+This means queries like the following just work:
+
+```sql
+SELECT d.id, d.amount, i.name
+  FROM analytics.orders d          -- ENGINE=DuckDB
+  JOIN inventory.products i        -- ENGINE=InnoDB
+    ON d.product_id = i.id
+ WHERE d.amount > 1000;
+```
+
+DuckDB handles the join, aggregation, and sorting; InnoDB rows are streamed in on demand. No data copying or ETL is required.
+InnoDB and other engines tables are scanned via `ha_rnd_next` and predicate pushdown functionality is WIP.
+
+## Current Limitations
+
+- **DECIMAL precision > 38** — DuckDB supports up to 38 digits; wider MariaDB DECIMALs will fail on DDL conversion.
+- **Some MariaDB functions are yet not pushdown-compatible** — `GROUP_CONCAT()`, `DATE_FORMAT()`, `JSON_CONTAINS()`, `FOUND_ROWS()`, `LAST_INSERT_ID()`, and a few others have no DuckDB equivalent or differ in syntax. Such queries fall back to MariaDB execution.
+- **Strict GROUP BY** — DuckDB rejects `SELECT` columns not in `GROUP BY` and not aggregated, even when MariaDB's `sql_mode` allows it.
+- **XA transactions** — `XA PREPARE` is not supported by the engine.
+- **Collations** — MariaDB UCA-based collation rules are approximated via DuckDB's built-in `NOCASE`/`NOACCENT` collations for UTF-8 charsets; non-UTF8 charsets fall back to binary comparison. See [`docs/collation-mapping.md`](docs/collation-mapping.md) for the full mapping and known gaps.
+- **Cross-engine scan is yet single-threaded** — external (non-DuckDB) tables are scanned via `ha_rnd_next` on a single thread; only the DuckDB side of the query is parallelized.
+- **ALTER COLUMN DROP DEFAULT** — not propagated to DuckDB catalog.
+- **Timezone propagation** — `TIMESTAMP` columns are stored as `TIMESTAMPTZ`; timezone must be set consistently between MariaDB and DuckDB contexts to avoid shifts.
+
+See [`docs/mariadb-duckdb-incompatibilities.md`](docs/mariadb-duckdb-incompatibilities.md) for a detailed compatibility matrix.
 
 ## License
 
