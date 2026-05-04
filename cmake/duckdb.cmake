@@ -58,14 +58,35 @@ set -e
 BUILD_DIR="$1"; OUTPUT="$2"; AR="$3"
 TMPDIR="${BUILD_DIR}/_bundle_tmp"
 rm -rf "${TMPDIR}"; mkdir -p "${TMPDIR}"
+
+# DuckDB's build produces libduckdb_static.a that contains every src/
+# and third_party/ object via ALL_OBJECT_FILES.  The per-third_party
+# libduckdb_*.a archives contain the SAME objects, so we exclude them
+# to avoid duplicate .o entries in the bundle.
+#
+# generated_extension_loader.o is NOT in libduckdb_static.a: in DuckDB's
+# top-level CMakeLists add_subdirectory(src) runs BEFORE
+# add_subdirectory(extension), so the loader's PARENT_SCOPE addition to
+# ALL_OBJECT_FILES happens after libduckdb_static has been defined.
+# Without this object, the plugin has an undefined reference to
+# duckdb::ExtensionHelper::LoadAllExtensions (called from DuckDB's
+# constructor).  So we explicitly bundle:
+#   1. libduckdb_static.a                              (core + third_party)
+#   2. libduckdb_generated_extension_loader.a          (LoadAllExtensions,
+#                                                       LoadExtension)
+#   3. extension/*/lib*_extension.a                    (CoreFunctions, icu,
+#                                                       json, parquet, ...)
 i=0
-find "${BUILD_DIR}" -name '*.a' \
-     ! -name 'libduckdb_bundle.a' \
-     ! -path '*/_bundle_tmp/*' | while read -r lib; do
+for lib in \
+    "${BUILD_DIR}"/src/libduckdb_static.a \
+    "${BUILD_DIR}"/extension/libduckdb_generated_extension_loader.a \
+    "${BUILD_DIR}"/extension/*/lib*_extension.a
+do
+  [ -f "$lib" ] || continue
   i=$((i+1))
   d="${TMPDIR}/${i}"
   mkdir -p "$d"
-  cd "$d" && "$AR" x "$lib"
+  (cd "$d" && "$AR" x "$lib")
 done
 find "${TMPDIR}" \( -name '*.o' -o -name '*.obj' \) -print0 \
   | xargs -0 "$AR" crs "${OUTPUT}"
@@ -91,8 +112,6 @@ ExternalProject_Add(duckdb_build
     -DBUILD_BENCHMARKS=OFF
     -DBUILD_TPCE=OFF
     -DEXTENSION_STATIC_BUILD=1
-    -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1
-    -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1
     "-DDUCKDB_EXTENSION_CONFIGS=${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_extensions.cmake"
     -DENABLE_SANITIZER=FALSE
     -DENABLE_UBSAN=OFF
