@@ -31,7 +31,7 @@ SET(DUCKDB_INCLUDE_DIR   "${DUCKDB_SUBMODULE_DIR}/src/include")
 IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
   MESSAGE(FATAL_ERROR
     "DuckDB submodule not found at ${DUCKDB_SUBMODULE_DIR}\n"
-    "Run:  git submodule update --init storage/duckdb/duckdb/third_parties/duckdb"
+    "Run:  git submodule update --init ${DUCKDB_SUBMODULE_DIR}"
   )
 ENDIF()
 

@@ -1,4 +1,4 @@
-INCLUDE(${CMAKE_SOURCE_DIR}/storage/duckdb/duckdb/cmake/duckdb_target_setup.cmake)
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/duckdb/cmake/duckdb_target_setup.cmake)
 
 SET(DUCKDB_CONVERTOR_SOURCES
   ddl_convertor.cc

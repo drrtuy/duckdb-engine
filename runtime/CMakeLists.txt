@@ -1,4 +1,4 @@
-INCLUDE(${CMAKE_SOURCE_DIR}/storage/duckdb/duckdb/cmake/duckdb_target_setup.cmake)
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/duckdb/cmake/duckdb_target_setup.cmake)
 
 SET(DUCKDB_RUNTIME_SOURCES
   duckdb_config.cc
