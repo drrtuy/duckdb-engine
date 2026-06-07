@@ -9,8 +9,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -27,8 +27,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db2	t2_rename
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -42,8 +42,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -58,8 +58,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -74,8 +74,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -89,8 +89,8 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "D
 TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 2]
@@ -108,8 +108,8 @@ TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db1	t3_rename
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -127,8 +127,8 @@ TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db1	t3
 db2	t2
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -143,8 +143,8 @@ TABLE_SCHEMA	TABLE_NAME
 db1	t1_rename
 db2	t2
 db2	t3
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 3]
@@ -160,8 +160,8 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
 TABLE_SCHEMA	TABLE_NAME
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
-duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'")
 table_schema	table_name	
 VARCHAR	VARCHAR	
 [ Rows: 1]

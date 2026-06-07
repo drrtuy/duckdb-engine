@@ -12,7 +12,7 @@ SET GLOBAL duckdb_use_double_for_decimal = on;
 --echo #2.1 low precision(<=38)  with low precision value
 CREATE TABLE t1(id int primary key, c1 decimal(38, 5)) engine=duckdb;
 --echo # should be decimal(38, 5)
-SELECT duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
+SELECT run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
 
 
 INSERT INTO t1 values (1, 123456789012345678901234567890123.12345);
@@ -39,7 +39,7 @@ DROP TABLE t1;
 --echo #2.3 high precision column(>38) with low precision value(<38)
 CREATE TABLE t1(id int primary key, c1 decimal(40, 5)) engine=duckdb;
 --echo # should be double
-SELECT duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
+SELECT run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
 
 INSERT INTO t1 values (4, 123456789012345678901234567890.12345);
 SELECT * FROM t1 WHERE id = 4;
@@ -51,7 +51,7 @@ SELECT * FROM t1 WHERE id = 5;
 --error 1264
 INSERT INTO t1 values (6, 12345678901234567890123456789012345678.12345);
 SELECT * FROM t1 WHERE id = 6;
-SELECT duckdb_query_udf("INSERT INTO t1 values (5, 12345678901234567890123456789012345678.12345)");
+SELECT run_in_duckdb("INSERT INTO t1 values (5, 12345678901234567890123456789012345678.12345)");
 SELECT * FROM t1 WHERE id = 6;
 DROP TABLE t1;
 
@@ -63,7 +63,7 @@ SET GLOBAL duckdb_use_double_for_decimal = off;
 --echo #3.1 low precision(<=38)  with low precision value
 CREATE TABLE t1(id int primary key, c1 decimal(38, 5)) engine=duckdb; 
 --echo # should be decimal(38, 5)
-SELECT duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
+SELECT run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
 
 INSERT INTO t1 values (7, 123456789012345678901234567890123.12345);
 SELECT * FROM t1 WHERE id = 7;
@@ -90,7 +90,7 @@ DROP TABLE t1;
 --echo #duckdb use decimal(38, dec) for both high and low precision(<=38) 
 CREATE TABLE t1(id int primary key, c1 decimal(40, 5)) engine=duckdb;
 --echo # should be decimal(38, 5)
-SELECT duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
+SELECT run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'test' AND table_name = 't1' and column_name = 'c1'");
 
 INSERT INTO t1 values (10, 123456789012345678901234567890123.12345);
 SELECT * FROM t1 WHERE id = 10;

@@ -1,5 +1,4 @@
 --source ../include/have_duckdb.inc
---source ../include/have_duckdb_udf.inc
 --echo #
 --echo # check collation config when execute
 --echo #
@@ -190,7 +189,7 @@ SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 SELECT a FROM t_duckdb where a = 'á'; SELECT a FROM t_innodb where a = 'á';
 
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -233,7 +232,7 @@ SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 SELECT a FROM t_duckdb where a = 'á'; SELECT a FROM t_innodb where a = 'á';
 
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -282,7 +281,7 @@ INSERT INTO t_innodb VALUES (1, 'a');
 SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
 SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
 
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
 DELETE FROM t_innodb;
 
 # ALTER TABLE
@@ -366,6 +365,5 @@ DROP DATABASE charset_and_collation;
 SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
 --enable_query_log
 
---source ../include/cleanup_duckdb_udf.inc
 
 --source ../include/cleanup_duckdb.inc

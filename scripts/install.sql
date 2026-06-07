@@ -1,1 +1,0 @@
-CREATE FUNCTION IF NOT EXISTS duckdb_query_udf RETURNS STRING SONAME 'ha_duckdb.so';

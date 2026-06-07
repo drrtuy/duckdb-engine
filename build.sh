@@ -386,8 +386,6 @@ if [[ $START_MDB = true ]]; then
     start_mdb
     setup_dev_user
 
-    info "Registering DuckDB UDFs"
-    "$INSTALL_PREFIX/bin/mariadb" < "$DUCKDB_SOURCE_PATH/scripts/install.sql"
 fi
 
 header "BUILD FINISHED"

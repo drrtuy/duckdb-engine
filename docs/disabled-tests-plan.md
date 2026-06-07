@@ -27,7 +27,7 @@ Status as of 2026-04-14. **Enabled: 24/47 tests. Disabled: 23. DuckDB: v1.5.2.**
 - **XA**: reject DML on DuckDB tables inside XA transactions (`ER_XAER_RMFAIL`)
 - **DDL**: reject ALTER TABLE without PK when `duckdb_require_primary_key=ON`
 - **Config**: propagate `appender_allocator_flush_threshold` to DuckDB `allocator_flush_threshold`
-- **Test infra**: `have_duckdb.inc` (engine check + utf8mb4 setup), `cleanup_duckdb.inc` (restore latin1), `cleanup_duckdb_udf.inc`, `have_mysqld_safe.inc`, `character-set-server=utf8mb4` in suite `my.cnf`
+- **Test infra**: `have_duckdb.inc` (engine check + utf8mb4 setup), `cleanup_duckdb.inc` (restore latin1), `have_mysqld_safe.inc`, `character-set-server=utf8mb4` in suite `my.cnf`
 
 ---
 

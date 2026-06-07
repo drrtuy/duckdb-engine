@@ -348,8 +348,8 @@ a
 SELECT a FROM t_innodb where a = 'á';
 a
 a
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
-duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
+run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -455,8 +455,8 @@ a
 SELECT a FROM t_innodb where a = 'á';
 a
 a
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
-duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
+run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]
@@ -577,8 +577,8 @@ a
 SELECT a FROM t_innodb where a = 'A';
 a
 a
-SELECT duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb");
-duckdb_query_udf("DELETE FROM charset_and_collation.t_duckdb")
+SELECT run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb");
+run_in_duckdb("DELETE FROM charset_and_collation.t_duckdb")
 Count	
 BIGINT	
 [ Rows: 1]

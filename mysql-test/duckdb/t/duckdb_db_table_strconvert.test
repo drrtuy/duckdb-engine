@@ -1,4 +1,3 @@
---source ../include/have_duckdb_udf.inc
 # Test for escape characters in the table name or database name.
 
 --echo #
@@ -40,8 +39,8 @@ INSERT INTO `my-table` (`id`, `name`) VALUES (4, 'Joe');
 UPDATE `my-table` SET `name` = 'Jack' WHERE `id` = 4;
 DELETE FROM `my-table` WHERE `id` = 4;
 
-SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'my-db'");
-SELECT duckdb_query_udf("DESC `my-db`.`my-table`");
+SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'my-db'");
+SELECT run_in_duckdb("DESC `my-db`.`my-table`");
 --let $checksum_duckdb_2 = query_get_value(CHECKSUM TABLE `my-table`, Checksum, 1)
 
 
@@ -49,7 +48,7 @@ SELECT duckdb_query_udf("DESC `my-db`.`my-table`");
 --echo # 3) ALTER TO INNODB
 --echo #
 ALTER TABLE `my-table` ENGINE = InnoDB;
-SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'my-db'");
+SELECT run_in_duckdb("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'my-db'");
 --let $checksum_innodb_2 = query_get_value(CHECKSUM TABLE `my-table`, Checksum, 1)
 --let $assert_cond = "$checksum_duckdb_2" = "$checksum_innodb_2"
 --let $assert_text= CHECKSUM is the same
@@ -60,7 +59,6 @@ SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.tables WHERE ta
 --echo # 4) CLEANUP
 --echo #
 DROP DATABASE `my-db`;
-SELECT duckdb_query_udf("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'");
+SELECT run_in_duckdb("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'my-db'");
 
---source ../include/cleanup_duckdb_udf.inc
 --source ../include/cleanup_duckdb.inc

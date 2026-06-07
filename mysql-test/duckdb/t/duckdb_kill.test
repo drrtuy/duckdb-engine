@@ -2,7 +2,6 @@
 
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
---source ../include/have_duckdb_udf.inc
 
 --echo #
 --echo # Prepare the test
@@ -26,7 +25,7 @@ END|
 delimiter ;|
 
 CREATE TABLE integers(i int primary key) ENGINE=duckdb;
-SELECT duckdb_query_udf("INSERT INTO test.integers FROM range(10000)");
+SELECT run_in_duckdb("INSERT INTO test.integers FROM range(10000)");
 
 connect (con1, localhost, root,,);
 connect (con2, localhost, root,,);
@@ -184,7 +183,7 @@ SELECT COUNT(*) FROM integers;
 
 
 --echo #
---echo # 6. Kill query beween mysql prepare and duckdb_query
+--echo # 6. Kill query beween mysql prepare and run_in_duckdb
 --echo #
 
 connection con1;
@@ -194,7 +193,7 @@ connection con2;
 let $ignore= `SELECT @id := $ID`;
 
 connection con1;
-SET DEBUG_SYNC= 'before_duckdb_query SIGNAL con1_prepared WAIT_FOR con2_killed_con1';
+SET DEBUG_SYNC= 'before_run_in_duckdb SIGNAL con1_prepared WAIT_FOR con2_killed_con1';
 --send_eval SELECT COUNT(*) FROM integers
 
 connection con2;

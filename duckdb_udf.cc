@@ -17,112 +17,94 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335 USA
 */
 
-#include <my_global.h>
-#include <mysql/plugin.h>
+/*
+  Function plugin: run_in_duckdb(sql_string)
+
+  Executes a SQL query directly in DuckDB and returns the result as a string.
+  Registered as a MariaDB_FUNCTION_PLUGIN alongside the storage engine plugin
+  in ha_duckdb.cc's maria_declare_plugin block.
+*/
+
+#define MYSQL_SERVER
+#include "mariadb.h"
+#include "item.h"
+#include <mysql/plugin_function.h>
 
 #undef UNKNOWN
 
 #include "duckdb_query.h"
 #include "duckdb_manager.h"
 
-/*
-  UDF: duckdb_query(sql_string)
-  Executes a SQL query directly in DuckDB and returns the result as a string.
-  This is the MariaDB equivalent of AliSQL's CALL dbms_duckdb.query(...).
-*/
-
-extern "C"
+class Item_func_run_in_duckdb : public Item_str_func
 {
+public:
+  Item_func_run_in_duckdb(THD *thd, Item *a) : Item_str_func(thd, a) {}
 
-  my_bool duckdb_query_udf_init(UDF_INIT *initid, UDF_ARGS *args,
-                                char *message)
+  LEX_CSTRING func_name_cstring() const override
   {
-    if (args->arg_count != 1)
-    {
-      strncpy(message, "duckdb_query() requires exactly one string argument",
-              MYSQL_ERRMSG_SIZE - 1);
-      return 1;
-    }
-
-    if (args->arg_type[0] != STRING_RESULT)
-      args->arg_type[0]= STRING_RESULT;
-
-    initid->maybe_null= 1;
-    initid->max_length= 65535;
-    initid->ptr= NULL;
-    return 0;
+    static LEX_CSTRING name= {STRING_WITH_LEN("run_in_duckdb")};
+    return name;
   }
 
-  void duckdb_query_udf_deinit(UDF_INIT *initid)
+  bool fix_length_and_dec(THD *) override
   {
-    if (initid->ptr)
-    {
-      delete[] initid->ptr;
-      initid->ptr= NULL;
-    }
+    collation.set(&my_charset_bin);
+    max_length= 65535;
+    set_maybe_null();
+    return FALSE;
   }
 
-  char *duckdb_query_udf(UDF_INIT *initid, UDF_ARGS *args, char *result,
-                         unsigned long *length, char *is_null, char *error)
+  String *val_str(String *str) override
   {
-    if (!args->args[0])
-    {
-      *is_null= 1;
+    DBUG_ASSERT(fixed());
+    String *sql_arg= args[0]->val_str(str);
+    if ((null_value= args[0]->null_value))
       return NULL;
-    }
 
-    /* Free previous result if any */
-    if (initid->ptr)
-    {
-      delete[] initid->ptr;
-      initid->ptr= NULL;
-    }
-
-    std::string sql(args->args[0], args->lengths[0]);
+    std::string sql(sql_arg->ptr(), sql_arg->length());
 
     auto conn= myduck::DuckdbManager::CreateConnection();
     if (!conn)
     {
-      *error= 1;
+      null_value= 1;
       return NULL;
     }
 
     auto res= myduck::duckdb_query(*conn, sql);
 
-    if (res->HasError())
-    {
-      std::string err_msg= res->GetError();
-      *length= (unsigned long) err_msg.size();
-      if (*length < 255)
-      {
-        memcpy(result, err_msg.c_str(), *length);
-        return result;
-      }
-      initid->ptr= new char[*length + 1];
-      memcpy(initid->ptr, err_msg.c_str(), *length);
-      initid->ptr[*length]= '\0';
-      return initid->ptr;
-    }
-
     if (res->type == duckdb::QueryResultType::STREAM_RESULT)
     {
-      auto &stream_result= res->Cast<duckdb::StreamQueryResult>();
-      res= stream_result.Materialize();
+      auto &stream= res->Cast<duckdb::StreamQueryResult>();
+      res= stream.Materialize();
     }
 
-    std::string output= res->ToString();
+    std::string output= res->HasError() ? res->GetError() : res->ToString();
 
-    *length= (unsigned long) output.size();
-    if (*length < 255)
+    if (str->copy(output.c_str(), output.length(), &my_charset_bin))
     {
-      memcpy(result, output.c_str(), *length);
-      return result;
+      null_value= 1;
+      return NULL;
     }
 
-    initid->ptr= new char[*length + 1];
-    memcpy(initid->ptr, output.c_str(), *length);
-    initid->ptr[*length]= '\0';
-    return initid->ptr;
+    null_value= 0;
+    return str;
   }
 
-} /* extern "C" */
+  Item *shallow_copy(THD *thd) const override
+  { return get_item_copy<Item_func_run_in_duckdb>(thd, this); }
+};
+
+
+class Create_func_run_in_duckdb : public Create_func_arg1
+{
+public:
+  Item *create_1_arg(THD *thd, Item *arg1) override
+  { return new (thd->mem_root) Item_func_run_in_duckdb(thd, arg1); }
+
+  static Create_func_run_in_duckdb s_singleton;
+};
+
+Create_func_run_in_duckdb Create_func_run_in_duckdb::s_singleton;
+
+Plugin_function plugin_descriptor_function_run_in_duckdb(
+    &Create_func_run_in_duckdb::s_singleton);

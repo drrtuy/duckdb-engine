@@ -30,7 +30,7 @@ d	tinyint(3) unsigned	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_tinyint begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_tinyint ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -41,21 +41,21 @@ d	4	UTINYINT	NULL
 
 
 # ② Print CONSTRAINTs of t_tinyint ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_tinyint ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyint'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_tinyint ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_tinyint%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_tinyint%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -94,7 +94,7 @@ d	smallint(5) unsigned	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_smallint begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_smallint ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -105,21 +105,21 @@ d	4	USMALLINT	NULL
 
 
 # ② Print CONSTRAINTs of t_smallint ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_smallint ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_smallint'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_smallint ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_smallint%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_smallint%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -158,7 +158,7 @@ d	mediumint(8) unsigned	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_mediumint begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_mediumint ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -169,21 +169,21 @@ d	4	UINTEGER	NULL
 
 
 # ② Print CONSTRAINTs of t_mediumint ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_mediumint ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumint'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_mediumint ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumint%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumint%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -222,7 +222,7 @@ d	int(10) unsigned	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_int begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_int ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -233,21 +233,21 @@ d	4	UINTEGER	NULL
 
 
 # ② Print CONSTRAINTs of t_int ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_int ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_int'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_int ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_int%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_int%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -286,7 +286,7 @@ d	bigint(20) unsigned	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_bigint begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_bigint ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -297,21 +297,21 @@ d	4	UBIGINT	NULL
 
 
 # ② Print CONSTRAINTs of t_bigint ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_bigint ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bigint'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_bigint ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bigint%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bigint%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -350,7 +350,7 @@ d	tinyint(1)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_bool begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_bool ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -361,21 +361,21 @@ d	4	TINYINT	8
 
 
 # ② Print CONSTRAINTs of t_bool ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_bool ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bool'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_bool ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bool%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bool%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -414,7 +414,7 @@ d	float	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_float begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_float ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -425,21 +425,21 @@ d	4	FLOAT	24
 
 
 # ② Print CONSTRAINTs of t_float ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_float ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_float ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_float%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_float%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -478,7 +478,7 @@ e	float	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_float begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_float ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -489,21 +489,21 @@ e	4	FLOAT	24
 
 
 # ② Print CONSTRAINTs of t_float ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_float ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_float'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_float ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_float%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_float%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -542,7 +542,7 @@ d	double	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_double begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_double ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -553,21 +553,21 @@ d	4	DOUBLE	53
 
 
 # ② Print CONSTRAINTs of t_double ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_double ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_double ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_double%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_double%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -606,7 +606,7 @@ e	double	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_double begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_double ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -617,21 +617,21 @@ e	4	DOUBLE	53
 
 
 # ② Print CONSTRAINTs of t_double ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_double ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_double'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_double ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_double%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_double%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -668,7 +668,7 @@ i	decimal(9,0)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_decimal begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_decimal ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -678,21 +678,21 @@ i	3	DECIMAL(9,0)	9
 
 
 # ② Print CONSTRAINTs of t_decimal ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_decimal ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_decimal'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_decimal ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_decimal%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_decimal%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -735,7 +735,7 @@ c3	decimal(38,5)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t1 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t1 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -746,7 +746,7 @@ c3	4	DECIMAL(38,5)	38
 
 
 # ② Print CONSTRAINTs of t1 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 1]
@@ -754,14 +754,14 @@ t1	NOT NULL	NOT NULL
 
 
 # ③ Print INDEXs of t1 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t1 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -799,7 +799,7 @@ c1	decimal(38,5)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t1 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t1 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -808,7 +808,7 @@ c1	2	DECIMAL(38,5)	38
 
 
 # ② Print CONSTRAINTs of t1 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 1]
@@ -816,14 +816,14 @@ t1	NOT NULL	NOT NULL
 
 
 # ③ Print INDEXs of t1 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t1 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -861,7 +861,7 @@ c1	decimal(40,5)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t1 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t1 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -870,7 +870,7 @@ c1	2	DECIMAL(38,5)	38
 
 
 # ② Print CONSTRAINTs of t1 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 1]
@@ -878,14 +878,14 @@ t1	NOT NULL	NOT NULL
 
 
 # ③ Print INDEXs of t1 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t1 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t1%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -925,7 +925,7 @@ d	bit(64)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_bit begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_bit ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -936,21 +936,21 @@ d	4	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_bit ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_bit ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_bit'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_bit ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bit%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_bit%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -997,7 +997,7 @@ h	char(64)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_char begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_char ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 8]
@@ -1012,21 +1012,21 @@ h	8	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_char ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_char ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_char'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_char ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_char%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_char%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1073,7 +1073,7 @@ h	varchar(32)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_varchar begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_varchar ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 8]
@@ -1088,21 +1088,21 @@ h	8	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_varchar ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_varchar ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_varchar ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varchar%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varchar%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1147,7 +1147,7 @@ h	tinytext	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_varchar begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_varchar ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 7]
@@ -1161,21 +1161,21 @@ h	7	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_varchar ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_varchar ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varchar'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_varchar ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varchar%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varchar%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1218,7 +1218,7 @@ f	text	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_text begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_text ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
@@ -1231,21 +1231,21 @@ f	6	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_text ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_text ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_text'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_text ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_text%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_text%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1286,7 +1286,7 @@ e	mediumtext	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_mediumtext begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_mediumtext ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -1298,21 +1298,21 @@ e	5	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_mediumtext ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_mediumtext ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumtext'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_mediumtext ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumtext%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumtext%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1355,7 +1355,7 @@ f	longtext	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_longtext begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_longtext ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
@@ -1368,21 +1368,21 @@ f	6	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_longtext ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_longtext ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_longtext'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_longtext ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_longtext%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_longtext%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1425,7 +1425,7 @@ f	tinyblob	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_tinyblob begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_tinyblob ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
@@ -1438,21 +1438,21 @@ f	6	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_tinyblob ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_tinyblob ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_tinyblob'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_tinyblob ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_tinyblob%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_tinyblob%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1495,7 +1495,7 @@ f	blob	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_blob begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_blob ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
@@ -1508,21 +1508,21 @@ f	6	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_blob ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_blob ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_blob'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_blob ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_blob%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_blob%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1563,7 +1563,7 @@ e	mediumblob	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_mediumblob begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_mediumblob ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -1575,21 +1575,21 @@ e	5	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_mediumblob ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_mediumblob ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mediumblob'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_mediumblob ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumblob%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mediumblob%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1632,7 +1632,7 @@ f	longblob	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_longblob begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_longblob ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
@@ -1645,21 +1645,21 @@ f	6	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_longblob ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_longblob ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_longblob'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_longblob ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_longblob%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_longblob%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1694,7 +1694,7 @@ b	binary(32)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_binary begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_binary ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -1703,21 +1703,21 @@ b	2	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_binary ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_binary ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_binary'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_binary ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_binary%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_binary%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1752,7 +1752,7 @@ b	binary(32)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_varbinary begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_varbinary ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -1761,21 +1761,21 @@ b	2	BLOB	NULL
 
 
 # ② Print CONSTRAINTs of t_varbinary ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_varbinary ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_varbinary'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_varbinary ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varbinary%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_varbinary%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1812,7 +1812,7 @@ c	year(4)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_year begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_year ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -1822,21 +1822,21 @@ c	3	INTEGER	32
 
 
 # ② Print CONSTRAINTs of t_year ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_year ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_year'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_year ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_year%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_year%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1877,7 +1877,7 @@ e	date	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_date begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_date ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -1889,21 +1889,21 @@ e	5	DATE	NULL
 
 
 # ② Print CONSTRAINTs of t_date ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_date ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_date'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_date ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_date%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_date%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1959,7 +1959,7 @@ e	time	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -1971,21 +1971,21 @@ e	5	TIME	NULL
 
 
 # ② Print CONSTRAINTs of t_time ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2041,7 +2041,7 @@ e	time(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_6 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_6 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -2053,21 +2053,21 @@ e	5	TIME	NULL
 
 
 # ② Print CONSTRAINTs of t_time_6 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_6 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_6'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_6 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_6%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_6%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2119,7 +2119,7 @@ c	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_datetime begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_datetime ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -2129,21 +2129,21 @@ c	3	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_datetime ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_datetime ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_datetime ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_datetime%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_datetime%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2180,7 +2180,7 @@ c	datetime(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_datetime_6 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_datetime_6 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -2190,21 +2190,21 @@ c	3	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_datetime_6 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_datetime_6 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime_6'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_datetime_6 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_datetime_6%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_datetime_6%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2245,7 +2245,7 @@ e	timestamp	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_timestamp begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_timestamp ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -2257,21 +2257,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_timestamp ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_timestamp ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_timestamp ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_timestamp%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_timestamp%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2312,7 +2312,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_timestamp_6 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_timestamp_6 ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -2324,21 +2324,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_timestamp_6 ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_timestamp_6 ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp_6'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_timestamp_6 ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_timestamp_6%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_timestamp_6%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2375,7 +2375,7 @@ c	set('v1','v2','v3')	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_json begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_json ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -2385,21 +2385,21 @@ c	3	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_json ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_json ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_json'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_json ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_json%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_json%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2436,7 +2436,7 @@ c	varchar(32)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_null begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_null ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -2446,21 +2446,21 @@ c	3	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_null ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_null ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_null'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_null ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_null%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_null%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2497,7 +2497,7 @@ c	text	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_ascii begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_ascii ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -2507,21 +2507,21 @@ c	3	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_ascii ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_ascii ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_ascii'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_ascii ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_ascii%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_ascii%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -2560,7 +2560,7 @@ d	varchar(32)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_mb4_emoji begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_mb4_emoji ##
-duckdb_query_udf("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
@@ -2571,21 +2571,21 @@ d	4	VARCHAR	NULL
 
 
 # ② Print CONSTRAINTs of t_mb4_emoji ##
-duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_mb4_emoji ##
-duckdb_query_udf("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_mb4_emoji'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_mb4_emoji ##
-duckdb_query_udf("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mb4_emoji%'")
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_mb4_emoji%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]

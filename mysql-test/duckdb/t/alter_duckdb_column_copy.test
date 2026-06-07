@@ -1,4 +1,3 @@
---source ../include/have_duckdb_udf.inc
 --echo #################
 --echo # TEST FOR COPY #
 --echo #################
@@ -6,4 +5,3 @@
 --let $copy_ddl = 1
 --source ../include/alter_duckdb_column.inc
 
---source ../include/cleanup_duckdb_udf.inc

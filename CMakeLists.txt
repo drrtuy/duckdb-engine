@@ -63,9 +63,4 @@ IF(TARGET duckdb)
     ${CMAKE_CURRENT_SOURCE_DIR}/convertor
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
   )
-
-  INSTALL(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/install.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/uninstall.sql
-    DESTINATION ${INSTALL_MYSQLSHAREDIR}/duckdb)
 ENDIF()

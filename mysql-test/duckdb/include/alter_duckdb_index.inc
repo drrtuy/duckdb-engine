@@ -4,8 +4,8 @@ USE db_alter_idx;
 --enable_query_log
 
 --write_file $MYSQL_TMP_DIR/duckdb_index_meta.inc
-  SELECT duckdb_query_udf("SELECT schema_name, table_name, index_name, comment, is_unique, is_primary, expressions FROM duckdb_indexes WHERE table_name = 't'");
-  SELECT duckdb_query_udf("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints WHERE table_name = 't'");
+  SELECT run_in_duckdb("SELECT schema_name, table_name, index_name, comment, is_unique, is_primary, expressions FROM duckdb_indexes WHERE table_name = 't'");
+  SELECT run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints WHERE table_name = 't'");
   SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, INDEX_COMMENT, NON_UNIQUE, COLUMN_NAME FROM information_schema.statistics WHERE TABLE_NAME = 't';
   --echo
 EOF

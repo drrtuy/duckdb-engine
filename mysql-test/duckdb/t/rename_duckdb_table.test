@@ -1,6 +1,5 @@
 --source ../include/have_duckdb.inc
 
---source ../include/have_duckdb_udf.inc
 --echo #
 --echo # 1) Prepare
 --echo #
@@ -13,7 +12,7 @@ CREATE TABLE db2.t2(a INT PRIMARY KEY) ENGINE = DUCKDB;
 --write_file $MYSQL_TMP_DIR/duckdb_meta.inc
   --sorted_result
   SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE ENGINE = "DuckDB";
-  SELECT duckdb_query_udf("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
+  SELECT run_in_duckdb("SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'duckdb' AND table_schema != 'mysql'");
 EOF
 --source $MYSQL_TMP_DIR/duckdb_meta.inc
 

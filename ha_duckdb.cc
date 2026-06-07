@@ -24,6 +24,7 @@
 
 #include <my_global.h>
 #include <mysql/plugin.h>
+#include <mysql/plugin_function.h>
 #include "sql_class.h"
 #include "sql_table.h"
 
@@ -1349,7 +1350,10 @@ static struct st_mysql_show_var duckdb_status_variables[]= {
 static struct st_mysql_storage_engine duckdb_storage_engine= {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
-maria_declare_plugin(duckdb){
+extern Plugin_function plugin_descriptor_function_run_in_duckdb;
+
+maria_declare_plugin(duckdb)
+{
     MYSQL_STORAGE_ENGINE_PLUGIN,
     &duckdb_storage_engine,
     "DUCKDB",
@@ -1363,4 +1367,20 @@ maria_declare_plugin(duckdb){
     duckdb_system_variables,       /* system variables */
     "1.0",                         /* string version */
     MariaDB_PLUGIN_MATURITY_ALPHA  /* maturity */
-} maria_declare_plugin_end;
+},
+{
+    MariaDB_FUNCTION_PLUGIN,
+    &plugin_descriptor_function_run_in_duckdb,
+    "RUN_IN_DUCKDB",
+    "drrtuy,lfedorov",
+    "Execute a SQL query in DuckDB and return the result as a string",
+    PLUGIN_LICENSE_GPL,
+    NULL,                          /* Plugin Init */
+    NULL,                          /* Plugin Deinit */
+    0x0100,                        /* version number (1.0) */
+    NULL,                          /* status variables */
+    NULL,                          /* system variables */
+    "1.0",                         /* string version */
+    MariaDB_PLUGIN_MATURITY_ALPHA  /* maturity */
+}
+maria_declare_plugin_end;

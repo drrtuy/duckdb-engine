@@ -1,3 +1,1 @@
 usr/lib/mysql/plugin/ha_duckdb.so
-usr/share/mariadb/duckdb/install.sql
-usr/share/mariadb/duckdb/uninstall.sql

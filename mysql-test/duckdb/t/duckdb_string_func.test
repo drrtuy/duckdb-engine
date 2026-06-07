@@ -5,7 +5,6 @@
 # 3. Some set functions are not support yet, such as CHAR(), ELT(), EXPORT_SET(), FIELD(), FORMAT(), MAKE_SET().
 # 4. Character set and collation related functions are not supported, such as SOUNDEX(), WEIGHT_STRING().
 
---source ../include/have_duckdb_udf.inc
 
 --disable_query_log
 SET @saved_duckdb_dml_in_batch = @@GLOBAL.duckdb_dml_in_batch;
@@ -517,4 +516,3 @@ DROP TABLE t_duckdb;
 DROP DATABASE test_duckdb;
 
 SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
---source ../include/cleanup_duckdb_udf.inc

@@ -1,6 +1,5 @@
 --source ../include/have_duckdb.inc
 --source include/have_debug.inc
---source ../include/have_duckdb_udf.inc
 
 
 --disable_query_log
@@ -29,7 +28,6 @@ CREATE TABLE test_table (
 --let $db_name=create_table_constraint
 --source ../include/show_duckdb_table_structure.inc
 
---source ../include/cleanup_duckdb_udf.inc
 --source ../include/cleanup_duckdb.inc
 
 --disable_query_log

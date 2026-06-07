@@ -1,4 +1,3 @@
---source ../include/have_duckdb_udf.inc
 --echo ####################
 --echo # TEST FOR INSTANT #
 --echo ####################
@@ -14,4 +13,3 @@
 --let $copy_ddl = 0
 --source ../include/alter_duckdb_column.inc
 
---source ../include/cleanup_duckdb_udf.inc

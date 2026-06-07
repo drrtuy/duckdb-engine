@@ -75,4 +75,3 @@ DuckDB source is at `third_parties/duckdb/` (git submodule). No patches are appl
 ### Configuration
 
 `duckdb.cnf` — MariaDB config snippet that loads `ha_duckdb.so`. Installed to `/etc/my.cnf.d/`.
-`scripts/install.sql` / `scripts/uninstall.sql` — Register/remove DuckDB UDFs.

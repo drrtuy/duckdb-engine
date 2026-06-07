@@ -1,4 +1,3 @@
---source ../include/have_duckdb_udf.inc
 SET GLOBAL duckdb_require_primary_key=OFF;
 
 --echo #
@@ -20,9 +19,9 @@ DROP DATABASE IF EXISTS `011fq123`;
 CREATE DATABASE `011fq123`;
 USE `09898141`;
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = '09898141';
-SELECT duckdb_query_udf("SELECT schema_name FROM information_schema.schemata WHERE schema_name = '09898141'");
+SELECT run_in_duckdb("SELECT schema_name FROM information_schema.schemata WHERE schema_name = '09898141'");
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = '011fq123';
-SELECT duckdb_query_udf("SELECT schema_name FROM information_schema.schemata WHERE schema_name = '011fq123'");
+SELECT run_in_duckdb("SELECT schema_name FROM information_schema.schemata WHERE schema_name = '011fq123'");
 
 
 --echo #
@@ -45,13 +44,13 @@ CREATE TABLE `321` (
     `009` BIGINT NOT NULL DEFAULT '0' PRIMARY KEY
 ) ENGINE=DuckDB;
 SELECT table_name FROM information_schema.tables WHERE table_schema='09898141';
-SELECT duckdb_query_udf("SELECT table_name FROM information_schema.tables WHERE table_schema='09898141'");
+SELECT run_in_duckdb("SELECT table_name FROM information_schema.tables WHERE table_schema='09898141'");
 SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='001';
-SELECT duckdb_query_udf("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='001'");
+SELECT run_in_duckdb("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='001'");
 SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='111a';
-SELECT duckdb_query_udf("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='111a'");
+SELECT run_in_duckdb("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='111a'");
 SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='321';
-SELECT duckdb_query_udf("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='321'");
+SELECT run_in_duckdb("SELECT column_name FROM information_schema.columns WHERE table_schema='09898141' and table_name='321'");
 
 --echo #
 --echo # Test: insert(delete and update are not currently supported)
@@ -60,24 +59,24 @@ USE `09898141`;
 INSERT INTO `001` VALUES (1, 'a'),(2, 'b'),(3, 'c'),(4, 'd'),(5, 'e');
 INSERT INTO `111a` VALUES (1), (2), (3), (4), (5);
 SELECT * from `09898141`.`001`;
-SELECT duckdb_query_udf("SELECT * FROM `09898141`.`001`");
+SELECT run_in_duckdb("SELECT * FROM `09898141`.`001`");
 SELECT * from `09898141`.`111a`;
-SELECT duckdb_query_udf("SELECT * from `09898141`.`111a`");
+SELECT run_in_duckdb("SELECT * from `09898141`.`111a`");
 
 
 --echo #
 --echo # Test: select
 --echo #
 SELECT * FROM `001` ORDER BY `00000000000` DESC;
-SELECT duckdb_query_udf("SELECT * FROM `09898141`.`001` ORDER BY `00000000000` DESC");
+SELECT run_in_duckdb("SELECT * FROM `09898141`.`001` ORDER BY `00000000000` DESC");
 SELECT COUNT(*) FROM `001` WHERE `00000000000` > 2 GROUP BY `00000000000`;
-SELECT duckdb_query_udf("SELECT COUNT(*) FROM `09898141`.`001` WHERE `00000000000` > 2 GROUP BY `00000000000`");
+SELECT run_in_duckdb("SELECT COUNT(*) FROM `09898141`.`001` WHERE `00000000000` > 2 GROUP BY `00000000000`");
 
 USE `011fq123`;
 SELECT `#0x1141` FROM `09898141`.`111a` ORDER BY `#0x1141` DESC;
-SELECT duckdb_query_udf("SELECT `#0x1141` FROM `09898141`.`111a` ORDER BY `#0x1141` DESC");
+SELECT run_in_duckdb("SELECT `#0x1141` FROM `09898141`.`111a` ORDER BY `#0x1141` DESC");
 SELECT `0a01131` FROM `09898141`.`001` ORDER BY `0a01131` DESC;
-SELECT duckdb_query_udf("SELECT `0a01131` FROM `09898141`.`001` ORDER BY `0a01131` DESC");
+SELECT run_in_duckdb("SELECT `0a01131` FROM `09898141`.`001` ORDER BY `0a01131` DESC");
 
 --echo #
 --echo # Test: alter table
@@ -85,9 +84,9 @@ SELECT duckdb_query_udf("SELECT `0a01131` FROM `09898141`.`001` ORDER BY `0a0113
 USE `09898141`;
 ALTER TABLE `001` ADD COLUMN `0A` BIGINT DEFAULT 0;
 SHOW CREATE TABLE `001`;
-SELECT duckdb_query_udf("PRAGMA table_info(`09898141`.`001`)");
+SELECT run_in_duckdb("PRAGMA table_info(`09898141`.`001`)");
 SELECT * FROM `001`;
-SELECT duckdb_query_udf("SELECT * FROM `09898141`.`001`");
+SELECT run_in_duckdb("SELECT * FROM `09898141`.`001`");
 ALTER TABLE `001` MODIFY `0A` INT;
 ALTER TABLE `001` RENAME COLUMN `0A` TO `0B`;
 ALTER TABLE `001` MODIFY `0B` INT DEFAULT '0';
@@ -96,12 +95,12 @@ ALTER TABLE `09898141`.`001` MODIFY `0B` INT NULL;
 ALTER TABLE `09898141`.`001` MODIFY `0B` INT;
 ALTER TABLE `09898141`.`001` RENAME TO `101`;
 SHOW CREATE TABLE `101`;
-SELECT duckdb_query_udf("PRAGMA table_info(`09898141`.`101`)");
+SELECT run_in_duckdb("PRAGMA table_info(`09898141`.`101`)");
 SELECT * FROM `101`;
-SELECT duckdb_query_udf("SELECT * FROM `09898141`.`101`");
+SELECT run_in_duckdb("SELECT * FROM `09898141`.`101`");
 ALTER TABLE `101` DROP COLUMN `0B`;
 SELECT * FROM `101`;
-SELECT duckdb_query_udf("SELECT * FROM `09898141`.`101`");
+SELECT run_in_duckdb("SELECT * FROM `09898141`.`101`");
 
 
 --echo #
@@ -121,7 +120,7 @@ CREATE TABLE mydb1.t (i INT, d DECIMAL, f FLOAT);
 INSERT INTO mydb1.t VALUES(1,1,1);
 CREATE TABLE mydb1.y ENGINE=DuckDB AS SELECT AVG(i), AVG(d), AVG(f) FROM mydb1.t;  
 SHOW CREATE TABLE mydb1.y; 
-SELECT duckdb_query_udf("PRAGMA table_info(mydb1.y)");
+SELECT run_in_duckdb("PRAGMA table_info(mydb1.y)");
 
 
 --echo #
@@ -142,14 +141,14 @@ CREATE TABLE `my db`.`my table` (
 INSERT INTO `my db`.`my table` VALUES(1);
 SELECT `my column` FROM `my db`.`my table`;
 
-SELECT duckdb_query_udf("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'my db'");
+SELECT run_in_duckdb("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'my db'");
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'my db';
 
-SELECT duckdb_query_udf("PRAGMA table_info(`my db`.`my table`)");
+SELECT run_in_duckdb("PRAGMA table_info(`my db`.`my table`)");
 SHOW CREATE TABLE `my db`.`my table`;
 
 DROP DATABASE `my db`;
-SELECT duckdb_query_udf("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'my db'");
+SELECT run_in_duckdb("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'my db'");
 
 #
 # CLEANUP

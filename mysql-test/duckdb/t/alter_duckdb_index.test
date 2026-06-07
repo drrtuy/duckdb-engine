@@ -1,4 +1,3 @@
---source ../include/have_duckdb_udf.inc
 --echo ####################
 --echo # TEST FOR INSTANT #
 --echo ####################

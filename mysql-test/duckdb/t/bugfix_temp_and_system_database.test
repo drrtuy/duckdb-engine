@@ -1,19 +1,18 @@
 --source ../include/have_duckdb.inc
 
---source ../include/have_duckdb_udf.inc
 # DuckDB has default databases named 'temp' and 'system', if we try to create
 # schema named 'temp' or 'system', we get an error.
 
 --echo #
 --echo # TEST FOR `temp` and `system`
 --echo #
-SELECT duckdb_query_udf("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
+SELECT run_in_duckdb("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
 
 # temp schema
 CREATE DATABASE `temp`;
 USE `temp`;
 CREATE TABLE t1(a INT KEY) ENGINE = DuckDB;
-SELECT duckdb_query_udf("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
+SELECT run_in_duckdb("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
 
 RENAME TABLE t1 TO t2;
 ALTER TABLE t2 RENAME TO t1;
@@ -41,7 +40,7 @@ DROP TABLE t1;
 CREATE DATABASE `system`;
 USE `system`;
 CREATE TABLE t1(a INT KEY) ENGINE = DuckDB;
-SELECT duckdb_query_udf("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
+SELECT run_in_duckdb("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
 
 RENAME TABLE t1 TO t2;
 ALTER TABLE t2 RENAME TO t1;
@@ -75,4 +74,4 @@ CREATE DATABASE `d``b`;
 SET GLOBAL duckdb_dml_in_batch = default;
 DROP DATABASE `temp`;
 DROP DATABASE `system`;
-SELECT duckdb_query_udf("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
+SELECT run_in_duckdb("SELECT * FROM information_schema.schemata WHERE catalog_name in (\"system\", \"temp\") or schema_name in (\"system\", \"temp\")");
