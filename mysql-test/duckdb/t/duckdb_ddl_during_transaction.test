@@ -39,9 +39,9 @@ ALTER TABLE t1 DROP COLUMN c0;
 
 --connection con1
 CALL mtr.add_suppression("Call to EndRow before all columns have been appended to");
---error ER_DUCKDB_APPENDER_ERROR
+--error ER_GET_ERRMSG
 INSERT INTO t1 (c1) VALUES ('xyz');
---error ER_DUCKDB_PREPARE_ERROR
+--error ER_GET_ERRMSG
 COMMIT;
 
 SELECT * FROM t1;
@@ -61,7 +61,7 @@ SELECT * FROM t2;
 ALTER TABLE t1 DROP COLUMN c1, ADD COLUMN c2 DATE;
 
 --connection con1
---error ER_DUCKDB_SEND_RESULT_ERROR
+--error ER_GET_ERRMSG
 SELECT * FROM t1;
 COMMIT;
 

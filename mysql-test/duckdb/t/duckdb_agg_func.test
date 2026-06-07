@@ -56,7 +56,7 @@ SELECT AVG(col1), AVG(col2), AVG(col3), AVG(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT AVG(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -71,7 +71,7 @@ SELECT BIT_AND(col1), BIT_AND(col2), BIT_AND(col3)
 FROM t_duckdb;
 
 # DECIMAL, DOUBLE, TIME, DATE, TIMESTAMP, VARCHAR, BLOB is not supoorted yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT BIT_AND(col4), BIT_AND(col5), BIT_AND(col6),
        BIT_AND(col7), BIT_AND(col8), BIT_AND(col9),
        BIT_AND(col10)
@@ -88,7 +88,7 @@ SELECT BIT_OR(col1), BIT_OR(col2), BIT_OR(col3)
 FROM t_duckdb;
 
 # DECIMAL, DOUBLE, TIME, DATE, TIMESTAMP, VARCHAR, BLOB is not supoorted yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT BIT_OR(col4), BIT_OR(col5), BIT_OR(col6),
        BIT_OR(col7), BIT_OR(col8), BIT_OR(col9),
        BIT_OR(col10)
@@ -105,7 +105,7 @@ SELECT BIT_XOR(col1), BIT_XOR(col2), BIT_XOR(col3)
 FROM t_duckdb;
 
 # DECIMAL, DOUBLE, TIME, DATE, TIMESTAMP, VARCHAR, BLOB is not supoorted yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT BIT_XOR(col4), BIT_XOR(col5), BIT_XOR(col6),
        BIT_XOR(col7), BIT_XOR(col8), BIT_XOR(col9),
        BIT_XOR(col10)
@@ -207,7 +207,7 @@ SELECT STD(col1), STD(col2), STD(col3), STD(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT STD(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -226,7 +226,7 @@ SELECT STDDEV(col1), STDDEV(col2), STDDEV(col3), STDDEV(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT STDDEV(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -245,7 +245,7 @@ SELECT STDDEV_POP(col1), STDDEV_POP(col2), STDDEV_POP(col3), STDDEV_POP(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT STDDEV_POP(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -264,7 +264,7 @@ SELECT STDDEV_SAMP(col1), STDDEV_SAMP(col2), STDDEV_SAMP(col3), STDDEV_SAMP(col4
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT STDDEV_SAMP(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -283,7 +283,7 @@ SELECT SUM(col1), SUM(col2), SUM(col3), SUM(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT SUM(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -302,7 +302,7 @@ SELECT VAR_POP(col1), VAR_POP(col2), VAR_POP(col3), VAR_POP(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT VAR_POP(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -321,7 +321,7 @@ SELECT VAR_SAMP(col1), VAR_SAMP(col2), VAR_SAMP(col3), VAR_SAMP(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT VAR_SAMP(col11)
 FROM t_duckdb WHERE id <= 3;
 
@@ -340,7 +340,7 @@ SELECT VARIANCE(col1), VARIANCE(col2), VARIANCE(col3), VARIANCE(col4),
 FROM t_duckdb;
 
 # AVG(Blob) is not supported yet.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT VARIANCE(col11)
 FROM t_duckdb WHERE id <= 3;
 

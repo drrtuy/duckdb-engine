@@ -29,7 +29,6 @@
 #undef UNKNOWN
 #include "duckdb_charset_collation.h"
 #include "duckdb_config.h"
-#include "duckdb_error.h"
 #include "sql_class.h"
 #include "sql_alter.h"
 #include "sql_table.h" /* primary_key_name */
@@ -50,7 +49,7 @@ bool report_duckdb_table_struct_error(const char *not_supported,
     char buf[512];
     snprintf(buf, sizeof(buf), "%s is not supported. Try %s '%s'",
              not_supported, try_instead, column);
-    my_error(ER_DUCKDB_TABLE_STRUCT_INVALID, MYF(0), buf);
+    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_GENERIC, buf, "DuckDB");
   }
   return true;
 }

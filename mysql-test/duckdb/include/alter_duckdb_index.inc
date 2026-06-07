@@ -25,19 +25,19 @@ CREATE INDEX ke ON t(e) COMMENT 'index e';
 --echo # 2) Special indexes
 --echo #
 DROP TABLE t;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error ER_GET_ERRMSG
 CREATE TABLE t (id INT PRIMARY KEY, a INT, b VARCHAR(10), c INT, d JSON, UNIQUE INDEX uk_a((ABS(a))), INDEX uk_d((CAST(CAST(d AS JSON) AS UNSIGNED ARRAY)))) ENGINE = DuckDB;
 
 --echo
 --echo # functional index is not supported.
 CREATE TABLE t(a INT, b INT, c INT, d INT, e INT, PRIMARY KEY(a) COMMENT 'primary key') ENGINE = DuckDB;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error ER_GET_ERRMSG
 eval ALTER TABLE t ADD INDEX uk_a((ABS(a))), ALGORITHM = $algorithm;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error ER_GET_ERRMSG
 CREATE UNIQUE INDEX uk_a ON t ((ABS(a)));
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error ER_GET_ERRMSG
 eval ALTER TABLE t ADD UNIQUE INDEX uk_d((CAST(CAST(d AS JSON) AS UNSIGNED ARRAY))), ALGORITHM = $algorithm;
---error ER_DUCKDB_TABLE_STRUCT_INVALID
+--error ER_GET_ERRMSG
 CREATE UNIQUE INDEX uk_d ON t ((CAST(CAST(d AS JSON) AS UNSIGNED ARRAY)));
 --source $MYSQL_TMP_DIR/duckdb_index_meta.inc
 

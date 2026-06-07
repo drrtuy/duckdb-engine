@@ -26,7 +26,6 @@ SET(CMAKE_CXX_FLAGS_DEBUG
     "${CMAKE_CXX_FLAGS_DEBUG} -U_GLIBCXX_DEBUG -U_GLIBCXX_ASSERTIONS")
 
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb.cmake)
-INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_errors.cmake)
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_target_setup.cmake)
 
 # Provide MariaDB server include paths to sub-libraries.
@@ -42,9 +41,6 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include
 ADD_SUBDIRECTORY(common)
 ADD_SUBDIRECTORY(convertor)
 ADD_SUBDIRECTORY(runtime)
-
-# GenError must run before duckdb_error.h is generated.
-ADD_DEPENDENCIES(duckdb_error_h GenError)
 
 # Plugin sources (handler layer + UDFs whose extern "C" symbols must be
 # in the final .so for dlsym() loading).

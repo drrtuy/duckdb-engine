@@ -56,7 +56,7 @@ let $wait_condition= SELECT MY_KILL_QUERY(@id);
 
 # con1 check itself's query was killed
 connection con1;
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 --reap
 
 # con1's connection is not killed
@@ -88,11 +88,11 @@ SELECT COUNT(*) FROM integers;
 connection con1;
 
 SET MAX_EXECUTION_TIME=100;
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6, integers i7, integers i8, integers i9, integers i10, integers i11, integers i12, integers i13;
 
 SET MAX_EXECUTION_TIME=0;
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT /*+ MAX_EXECUTION_TIME(100) */ i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6, integers i7, integers i8, integers i9, integers i10, integers i11, integers i12, integers i13;
 
 SELECT COUNT(*) FROM integers;
@@ -103,12 +103,12 @@ connection default;
 
 SET max_execution_time = 1000;
 SET DEBUG = '+d, simulate_interrupt_duckdb_row';
---error ER_DUCKDB_SEND_RESULT_ERROR
+--error ER_GET_ERRMSG
 SELECT * FROM integers;
 SET DEBUG = 'reset';
 
 SET DEBUG = '+d, simulate_interrupt_duckdb_chunk';
---error ER_DUCKDB_SEND_RESULT_ERROR
+--error ER_GET_ERRMSG
 SELECT * FROM integers;
 SET DEBUG = 'reset';
 
@@ -207,7 +207,7 @@ let $wait_condition= SELECT MY_KILL_QUERY(@id);
 set debug_sync='now SIGNAL con2_killed_con1';
 
 connection con1;
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 --reap
 
 connection con1;

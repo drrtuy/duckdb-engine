@@ -26,7 +26,7 @@ SELECT id, sum(id) FROM t1 GROUP BY col1;
 --error ER_WRONG_FIELD_WITH_GROUP
 SELECT id, sum(id) FROM t2 GROUP BY col1;
 
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT col1 FROM t1 GROUP BY id;
 SELECT col1 FROM t2 GROUP BY id;
 

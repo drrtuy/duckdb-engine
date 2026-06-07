@@ -15,7 +15,7 @@ SELECT * FROM t2 WHERE col1 = x'41';
 SELECT * FROM t2 WHERE col1 = b'01000001';
 
 # Bit strings starting with 0x are not currently supported.
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT id, hex(col1) FROM t2 WHERE col1 = 0xFF;
 
 SELECT id, hex(col1) FROM t2 WHERE col1 = x'FF';

@@ -98,7 +98,7 @@ SELECT * FROM t1 WHERE id = 10;
 --echo #3.4 high precision column(>38) with high precision value(>38)
 --echo #duckdb use decimal(38, dec)
 
---error ER_DUCKDB_QUERY_ERROR, ER_DUCKDB_APPENDER_ERROR
+--error ER_GET_ERRMSG, ER_DUCKDB_APPENDER_ERROR
 INSERT INTO t1 values (11, 1234567890123456789012345678901234.12345);
 SELECT * FROM t1 WHERE id = 11;
 

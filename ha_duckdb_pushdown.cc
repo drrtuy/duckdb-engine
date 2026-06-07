@@ -27,7 +27,6 @@
 
 #include "ha_duckdb_pushdown.h"
 #include "duckdb_select.h"
-#include "duckdb_error.h"
 #include "duckdb_query.h"
 #include "duckdb_context.h"
 #include "cross_engine_scan.h"
@@ -715,11 +714,11 @@ int ha_duckdb_select_handler::init_scan()
   if (!query_result || query_result->HasError())
   {
     if (query_result)
-      my_error(ER_DUCKDB_CLIENT, MYF(0),
-                      query_result->GetError().c_str());
+      my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
+               query_result->GetError().c_str(), "DuckDB");
     else
-      my_error(ER_DUCKDB_CLIENT, MYF(0),
-                      "DuckDB query returned null result");
+      my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
+               "DuckDB query returned null result", "DuckDB");
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
 

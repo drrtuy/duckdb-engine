@@ -61,7 +61,7 @@ SELECT CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','GMT','MET') FROM t;
 
 # timezone 
 SELECT CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00') FROM t;
 
 --echo ---------------------------
@@ -137,7 +137,7 @@ SELECT DATE(DATE '2003-12-31') FROM t;
 # Incompatibilities 7
 SET timestamp = 1753226301;
 SELECT DATE(TIME '01:02:03');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT DATE(TIME '01:02:03') FROM t;
 SET timestamp = default;
 
@@ -207,7 +207,7 @@ SET timestamp = default;
 
 # Incompatibilities 6: %u, %V, %X is not supoorted now.
 SELECT DATE_FORMAT(TIMESTAMP '2009-10-04 22:23:00.123456', '%V, %X, %u');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT DATE_FORMAT(TIMESTAMP '2009-10-04 22:23:00.123456', '%V, %X, %u') FROM t;
 
 --echo ---------------------------
@@ -407,7 +407,7 @@ SELECT MAKETIME(12,15,30) FROM t;
 
 # Incompatibilities 3
 SELECT MAKETIME(838,59,59);
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT MAKETIME(838,59,59) FROM t;
 
 --echo --------------------------
@@ -655,7 +655,7 @@ SELECT TIME_FORMAT(TIME '01:02:03', '%H %k %h %I %l') FROM t;
 
 # Incompatibilities 3
 SELECT TIME_FORMAT(TIME '100:02:03', '%H %k %h %I %l');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT TIME_FORMAT(TIME '100:02:03', '%H %k %h %I %l') FROM t;
 
 --echo --------------------------
@@ -667,7 +667,7 @@ SELECT TIME_TO_SEC(TIME '22:23:00') FROM t;
 
 # Incompatibilities 3
 SELECT TIME_TO_SEC(TIME '220:23:00');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT TIME_TO_SEC(TIME '220:23:00') FROM t;
 
 --echo --------------------------
@@ -680,7 +680,7 @@ SELECT TO_DAYS('2007-10-07') FROM t;
 # Incompatibilities 7
 SET timestamp = 1753226301;
 SELECT TO_DAYS(TIME '12:00:00');
---error ER_DUCKDB_CLIENT
+--error ER_GET_ERRMSG
 SELECT TO_DAYS(TIME '12:00:00') FROM t;
 SET timestamp = default;
 

@@ -641,12 +641,12 @@ ERROR HY000: Table storage engine 'DuckDB' does not support the create option 'n
 # 4.2 ALTER TABLE
 CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'c'
+ERROR HY000: Got error 168 'non-utf8 charset is not supported. Try using utf8mb4 charset for column 'c'' from DuckDB
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'a'
+ERROR HY000: Got error 168 'non-utf8 charset is not supported. Try using utf8mb4 charset for column 'a'' from DuckDB
 ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: non-utf8 charset is not supported. Try using utf8mb4 charset for column 'b'
+ERROR HY000: Got error 168 'non-utf8 charset is not supported. Try using utf8mb4 charset for column 'b'' from DuckDB
 #
 # Test 5. UTF8MB4 with Emoji
 #

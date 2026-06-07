@@ -19,6 +19,5 @@ MACRO(duckdb_setup_target _target)
   IF(DUCKDB_WERROR)
     TARGET_COMPILE_OPTIONS(${_target} PRIVATE -Werror)
   ENDIF()
-  # Ensure duckdb_error.h is generated before compilation.
-  ADD_DEPENDENCIES(${_target} duckdb_error_h)
+  ADD_DEPENDENCIES(${_target} GenError)
 ENDMACRO()

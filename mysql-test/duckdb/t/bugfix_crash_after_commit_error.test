@@ -8,7 +8,7 @@ begin;
 insert into t1 values (1);
 insert into t1 values (1);
 
---error ER_DUCKDB_COMMIT_ERROR
+--error ER_GET_ERRMSG
 commit;
 drop table t1;
 
@@ -23,6 +23,6 @@ begin;
 insert into t1 values (1);
 insert into t1 values (1);
 
---error ER_DUCKDB_COMMIT_ERROR
+--error ER_GET_ERRMSG
 commit;
 drop table t1;
