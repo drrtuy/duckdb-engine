@@ -14,15 +14,12 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335 USA
 
 #
-# Build DuckDB static library from submodule source.
+# Build DuckDB static libraries from submodule source.
 #
 # The upstream DuckDB repo lives at storage/duckdb/third_parties/duckdb/
 # as a git submodule.  We build it via ExternalProject so its CMake targets
 # (including one named "duckdb") don't clash with the MariaDB plugin target
 # of the same name created by MYSQL_ADD_PLUGIN().
-#
-# After the cmake build we merge every produced .a into a single
-# libduckdb_bundle.a — the same thing DuckDB's own `make bundle-library` does.
 #
 
 SET(DUCKDB_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_parties/duckdb")
@@ -45,58 +42,23 @@ ELSE()
 ENDIF()
 
 SET(_DUCKDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/duckdb-build")
-SET(DUCKDB_LIB        "${_DUCKDB_BUILD_DIR}/libduckdb_bundle.a")
 
-# Write a small helper script that merges all .a into one fat archive.
-# Each archive is extracted into its own subdirectory to avoid object-name
-# collisions between different libraries.
-FILE(WRITE "${CMAKE_CURRENT_BINARY_DIR}/bundle_duckdb.sh"
-[=[
-#!/bin/sh
-set -e
-BUILD_DIR="$1"; OUTPUT="$2"; AR="$3"
-TMPDIR="${BUILD_DIR}/_bundle_tmp"
-rm -rf "${TMPDIR}"; mkdir -p "${TMPDIR}"
-
-# DuckDB's build produces libduckdb_static.a that contains every src/
-# and third_party/ object via ALL_OBJECT_FILES.  The per-third_party
-# libduckdb_*.a archives contain the SAME objects, so we exclude them
-# to avoid duplicate .o entries in the bundle.
-#
-# generated_extension_loader.o is NOT in libduckdb_static.a: in DuckDB's
-# top-level CMakeLists add_subdirectory(src) runs BEFORE
-# add_subdirectory(extension), so the loader's PARENT_SCOPE addition to
-# ALL_OBJECT_FILES happens after libduckdb_static has been defined.
-# Without this object, the plugin has an undefined reference to
-# duckdb::ExtensionHelper::LoadAllExtensions (called from DuckDB's
-# constructor).  So we explicitly bundle:
-#   1. libduckdb_static.a                              (core + third_party)
-#   2. libduckdb_generated_extension_loader.a          (LoadAllExtensions,
-#                                                       LoadExtension)
-#   3. extension/*/lib*_extension.a                    (CoreFunctions, icu,
-#                                                       json, parquet, ...)
-i=0
-for lib in \
-    "${BUILD_DIR}"/src/libduckdb_static.a \
-    "${BUILD_DIR}"/extension/libduckdb_generated_extension_loader.a \
-    "${BUILD_DIR}"/extension/*/lib*_extension.a
-do
-  [ -f "$lib" ] || continue
-  i=$((i+1))
-  d="${TMPDIR}/${i}"
-  mkdir -p "$d"
-  (cd "$d" && "$AR" x "$lib")
-done
-find "${TMPDIR}" \( -name '*.o' -o -name '*.obj' \) -print0 \
-  | xargs -0 "$AR" crs "${OUTPUT}"
-rm -rf "${TMPDIR}"
-]=]
+# The individual static archives DuckDB produces (for the three extensions
+# listed in cmake/duckdb_extensions.cmake: core_functions, icu, json).
+SET(_DUCKDB_STATIC_LIBS
+  "${_DUCKDB_BUILD_DIR}/src/libduckdb_static.a"
+  "${_DUCKDB_BUILD_DIR}/extension/libduckdb_generated_extension_loader.a"
+  "${_DUCKDB_BUILD_DIR}/extension/core_functions/libcore_functions_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/icu/libicu_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/jemalloc/libjemalloc_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/parquet/libparquet_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/json/libjson_extension.a"
 )
 
 MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===")
 
 ExternalProject_Add(duckdb_build
-  PREFIX          "${CMAKE_CURRENT_BINARY_DIR}/duckdb-prefix"
+  PREFIX          "${_DUCKDB_BUILD_DIR}"
   SOURCE_DIR      "${DUCKDB_SUBMODULE_DIR}"
   BINARY_DIR      "${_DUCKDB_BUILD_DIR}"
   CMAKE_ARGS
@@ -115,24 +77,19 @@ ExternalProject_Add(duckdb_build
     -DENABLE_SANITIZER=FALSE
     -DENABLE_UBSAN=OFF
     -DOVERRIDE_GIT_DESCRIBE=v1.5.2-0-g0000000000
-  INSTALL_COMMAND ""
-  BUILD_BYPRODUCTS "${DUCKDB_LIB}"
+  INSTALL_COMMAND  ""
+  BUILD_BYPRODUCTS ${_DUCKDB_STATIC_LIBS}
+  USES_TERMINAL_BUILD ON
 )
 
-# Bundle step: merge all static archives into one fat archive.
-ExternalProject_Add_Step(duckdb_build bundle
-  COMMAND sh "${CMAKE_CURRENT_BINARY_DIR}/bundle_duckdb.sh"
-             "${_DUCKDB_BUILD_DIR}" "${DUCKDB_LIB}" "${CMAKE_AR}"
-  DEPENDEES   build
-  COMMENT     "Bundling DuckDB static libraries into libduckdb_bundle.a"
-)
-
-ADD_LIBRARY(libduckdb STATIC IMPORTED GLOBAL)
-SET_TARGET_PROPERTIES(libduckdb PROPERTIES IMPORTED_LOCATION "${DUCKDB_LIB}")
+# Expose all DuckDB archives as a single INTERFACE target so the rest of the
+# cmake tree links against "libduckdb" unchanged.
+ADD_LIBRARY(libduckdb INTERFACE)
+TARGET_LINK_LIBRARIES(libduckdb INTERFACE -Wl,--start-group ${_DUCKDB_STATIC_LIBS} -Wl,--end-group)
 ADD_DEPENDENCIES(libduckdb duckdb_build)
 
 MESSAGE(STATUS "DuckDB include: ${DUCKDB_INCLUDE_DIR}")
-MESSAGE(STATUS "DuckDB library: ${DUCKDB_LIB}")
+MESSAGE(STATUS "DuckDB libs:    ${_DUCKDB_STATIC_LIBS}")
 
 INCLUDE_DIRECTORIES(BEFORE SYSTEM "${DUCKDB_INCLUDE_DIR}")
 INCLUDE_DIRECTORIES(BEFORE SYSTEM "${DUCKDB_SUBMODULE_DIR}/third_party/re2")
