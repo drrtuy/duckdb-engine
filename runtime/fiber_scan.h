@@ -24,9 +24,9 @@
 
 #include <string>
 
-struct THD;
+class THD;
 struct TABLE;
-struct Item;
+class Item;
 template <class T> class List;
 
 namespace myduck
