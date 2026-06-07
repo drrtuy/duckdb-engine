@@ -53,8 +53,6 @@ SET(DUCKDB_PLUGIN_SOURCES
 MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES}
   STORAGE_ENGINE
   MODULE_ONLY
-  COMPONENT duckdb-engine
-  CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/duckdb.cnf
   LINK_LIBRARIES duckdb_runtime duckdb_convertor duckdb_common ${DUCKDB_LIBRARY}
 )
 
@@ -65,12 +63,9 @@ IF(TARGET duckdb)
     ${CMAKE_CURRENT_SOURCE_DIR}/convertor
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
   )
-ENDIF()
 
-IF(TARGET duckdb)
   INSTALL(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/install.sql
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/uninstall.sql
-    DESTINATION ${INSTALL_MYSQLSHAREDIR}/duckdb
-    COMPONENT duckdb-engine)
+    DESTINATION ${INSTALL_MYSQLSHAREDIR}/duckdb)
 ENDIF()
