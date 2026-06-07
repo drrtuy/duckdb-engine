@@ -1358,9 +1358,9 @@ maria_declare_plugin(duckdb){
     PLUGIN_LICENSE_GPL,
     duckdb_init_func,              /* Plugin Init */
     duckdb_deinit_func,            /* Plugin Deinit */
-    0x0010,                        /* version number (1.0) */
+    0x0100,                        /* version number (1.0) */
     duckdb_status_variables,       /* status variables */
     duckdb_system_variables,       /* system variables */
     "1.0",                         /* string version */
-    MariaDB_PLUGIN_MATURITY_STABLE /* maturity */
+    MariaDB_PLUGIN_MATURITY_ALPHA  /* maturity */
 } maria_declare_plugin_end;
