@@ -25,13 +25,6 @@
 SET(DUCKDB_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_parties/duckdb")
 SET(DUCKDB_INCLUDE_DIR   "${DUCKDB_SUBMODULE_DIR}/src/include")
 
-IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
-  MESSAGE(FATAL_ERROR
-    "DuckDB submodule not found at ${DUCKDB_SUBMODULE_DIR}\n"
-    "Run:  git submodule update --init ${DUCKDB_SUBMODULE_DIR}"
-  )
-ENDIF()
-
 INCLUDE(ExternalProject)
 
 # Map MariaDB build type to a DuckDB-friendly one.
@@ -56,6 +49,7 @@ SET(_DUCKDB_STATIC_LIBS
 )
 
 MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===")
+ADD_SUBMODULE(third_parties/duckdb)
 
 ExternalProject_Add(duckdb_build
   PREFIX          "${_DUCKDB_BUILD_DIR}"
