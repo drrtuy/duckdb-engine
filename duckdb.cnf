@@ -2,4 +2,3 @@
 plugin-maturity=gamma
 plugin-load-add=ha_duckdb.so
 duckdb-allow-run-in-duckdb=ON
-#loose-duckdb-memory-limit=10G

@@ -6,14 +6,12 @@ set -o pipefail
 SCRIPT_LOCATION=$(dirname "$0")
 source "$SCRIPT_LOCATION/utils.sh"
 
-MDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION"/../../../)
 DUCKDB_SOURCE_PATH=$(realpath "$SCRIPT_LOCATION")
-BUILD_PATH=$(realpath "$MDB_SOURCE_PATH"/../DuckdbBuildOf_$(basename "$MDB_SOURCE_PATH"))
-MTR_PATH="$BUILD_PATH/mysql-test"
-MTR="$MTR_PATH/mtr"
+MARIADB_PREFIX="/usr"
+MTR_PATH=""
+VARDIR="$DUCKDB_SOURCE_PATH/build/mtr-var"
 SUITE="duckdb"
 SUITE_DIR="$DUCKDB_SOURCE_PATH/mysql-test"
-BUILD_PLUGIN_DIR="$BUILD_PATH/storage/duckdb-engine/duck"
 
 # ─── Defaults ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +34,8 @@ usage() {
     echo "  -a, --all         Run all tests in the suite"
     echo ""
     echo "Options:"
+    echo "  --mariadb-prefix <dir>  MariaDB installation (default: $MARIADB_PREFIX)"
+    echo "  --mtr-dir <dir>   Installed mariadb-test dir (default: <prefix>/share/mariadb/mariadb-test)"
     echo "  -r, --record      Record test result (update .result file)"
     echo "  -e, --extern      Use externally running MariaDB (auto-detects socket)"
     echo "  --socket <path>   Socket path for extern (default: auto-detect)"
@@ -60,6 +60,8 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --mariadb-prefix) MARIADB_PREFIX=$(realpath -m "$2"); shift 2 ;;
+        --mtr-dir)      MTR_PATH=$(realpath -m "$2"); shift 2 ;;
         -a|--all)       RUN_ALL=true; shift ;;
         -r|--record)    RECORD=true; shift ;;
         -e|--extern)    EXTERN=true; shift ;;
@@ -78,25 +80,22 @@ done
 
 # ─── Validate ───────────────────────────────────────────────────────────────────
 
+MTR_PATH="${MTR_PATH:-$MARIADB_PREFIX/share/mariadb/mariadb-test}"
+MTR="$MTR_PATH/mtr"
+# Installed by 'cmake --install' (MARIADB_ADD_PLUGIN installs mysql-test/
+# into <mariadb-test>/plugin/<target>); installed MTR discovers suites there
+# and uses the installed ha_duckdb.so.
+INSTALLED_SUITE_DIR="$MTR_PATH/plugin/duckdb/$SUITE"
+
 if [[ ! -x "$MTR" ]]; then
-    fail "MTR not found at $MTR. Build first with build.sh"
+    fail "MTR not found at $MTR. Install the MariaDB test package or pass --mtr-dir"
+fi
+if [[ ! -d "$INSTALLED_SUITE_DIR" ]]; then
+    fail "Suite not installed at $INSTALLED_SUITE_DIR. Install first with build.sh"
 fi
 
-# Symlink source mysql-test into build tree so MTR discovers the suite
-# via its storage/*/*/mysql-test search pattern
-if [[ ! -d "$BUILD_PLUGIN_DIR/mysql-test" ]]; then
-    ln -sf "$SUITE_DIR" "$BUILD_PLUGIN_DIR/mysql-test"
-    info "Symlinked test suite into build tree"
-fi
-
-# MTR discovers plugins via glob storage/*/*.so (one level).
-# ha_duckdb.so lives in storage/duckdb-engine/duck/ (two levels).
-# Symlink it one level up so MTR finds it for managed-server mode.
-PARENT_PLUGIN_DIR="$BUILD_PATH/storage/duckdb-engine"
-if [[ -f "$BUILD_PLUGIN_DIR/ha_duckdb.so" && ! -e "$PARENT_PLUGIN_DIR/ha_duckdb.so" ]]; then
-    ln -sf "$BUILD_PLUGIN_DIR/ha_duckdb.so" "$PARENT_PLUGIN_DIR/ha_duckdb.so"
-    info "Symlinked ha_duckdb.so for MTR plugin discovery"
-fi
+# Run the current source tests, not the copy from the last install.
+cp -rT "$SUITE_DIR/$SUITE" "$INSTALLED_SUITE_DIR"
 
 if [[ "$RUN_ALL" == false && -z "$TEST_NAME" ]]; then
     # Interactive: show menu of available tests
@@ -131,6 +130,7 @@ MTR_CMD=("perl" "$MTR"
     --parallel="$PARALLEL"
     --force
     --max-test-fail=0
+    --vardir="$VARDIR"
 )
 
 if [[ "$RECORD" == true ]]; then
@@ -171,7 +171,7 @@ else
 fi
 info "Parallel:   ${_CLR_YELLOW}$PARALLEL"
 info "Suite dir:  ${_CLR_YELLOW}$SUITE_DIR/duckdb"
-info "Build dir:  ${_CLR_YELLOW}$BUILD_PATH"
+info "MTR dir:    ${_CLR_YELLOW}$MTR_PATH"
 separator
 echo ""
 
@@ -186,14 +186,19 @@ cd "$MTR_PATH"
 rc=$?
 set -e
 
+# --record writes into the installed copy; bring results back to the source.
+if [[ "$RECORD" == true ]]; then
+    cp "$INSTALLED_SUITE_DIR"/r/*.result "$SUITE_DIR/$SUITE/r/"
+fi
+
 echo ""
 if [[ $rc -eq 0 ]]; then
     success "All tests passed"
 else
     error "Tests failed (exit code $rc)"
     # Show log location for failed tests
-    if [[ -d "$MTR_PATH/var/log" ]]; then
-        info "Logs: ${_CLR_YELLOW}$MTR_PATH/var/log/"
+    if [[ -d "$VARDIR/log" ]]; then
+        info "Logs: ${_CLR_YELLOW}$VARDIR/log/"
     fi
     exit $rc
 fi

@@ -48,7 +48,9 @@ SET(_DUCKDB_STATIC_LIBS
 )
 
 MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===")
-ADD_SUBMODULE(third_parties/duckdb)
+IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
+  MESSAGE(FATAL_ERROR "DuckDB submodule is missing: run 'git submodule update --init third_parties/duckdb'")
+ENDIF()
 
 # Local patches applied on top of the pinned submodule commit.
 #
@@ -68,7 +70,7 @@ SET(_DUCKDB_GIT_DESCRIBE "v1.5.5-0-g0000000000")
 SET(_DUCKDB_EXTRA_CXX_FLAGS "")
 # GCC 16+ warns about DuckDB classes in SFINAE contexts (upstream issue, not ours).
 # Silence it for DuckDB's own ExternalProject build too.
-MY_CHECK_CXX_COMPILER_FLAG("-Wsfinae-incomplete")
+CHECK_CXX_COMPILER_FLAG("-Wsfinae-incomplete" have_CXX__Wsfinae_incomplete)
 IF(have_CXX__Wsfinae_incomplete)
   STRING(APPEND _DUCKDB_EXTRA_CXX_FLAGS " -Wno-sfinae-incomplete")
 ENDIF()

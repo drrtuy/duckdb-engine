@@ -62,46 +62,65 @@ Tables created with `ENGINE=DuckDB` store data in DuckDB's native format. Querie
 
 ## Building
 
-The engine is built as part of the MariaDB server tree. It lives under `storage/duckdb/` and uses `ExternalProject_Add` to build DuckDB v1.5.5 from source.
+The engine is built outside the MariaDB server tree against an installed MariaDB plugin SDK (`find_package(mariadb-plugin)`, MDEV-40608). DuckDB v1.5.5 is built from the `third_parties/duckdb` submodule via `ExternalProject_Add`.
 
-Clone the branch matching your target MariaDB version. The engine is already part of the tree under `storage/duckdb/`:
+### Prerequisites
+
+A MariaDB installation that provides both the server and the Development component (`share/cmake/mariadb-plugin/`), of the same version, under one prefix. Either:
+
+- the `MariaDB-devel` (RPM) or `libmariadb-dev` (DEB) package of a MariaDB release that includes MDEV-40608, or
+- a server built from source and installed together with the Development component, e.g. `cmake --install <server-build> --component Development`.
+
+The plugin is ABI-bound to the server it was built against: `build.sh` refuses to install it into a server whose version differs from the SDK's.
+
+### Build and install
 
 ```bash
-# Pick the branch matching your target MariaDB version
-git clone --recurse-submodules -b 11.4 https://github.com/MariaDB/server.git mariadb-server
-# or: -b 11.8
-# or: -b 12.3
-cd mariadb-server
+git clone --recurse-submodules git@github.com:drrtuy/duckdb-engine.git
+cd duckdb-engine
 
 # Install build dependencies (requires root)
-./storage/duckdb/build.sh -D
+./build.sh -D
 
-# Build and install
-./storage/duckdb/build.sh
+# Build only (into ./build)
+./build.sh -t RelWithDebInfo -c
+
+# Build, install into the server, keep the existing datadir and start the server
+./build.sh -t RelWithDebInfo -n -S
 ```
 
-### Build dependencies
+Without `-n`, `build.sh` deletes and re-initializes the datadir (`/var/lib/mysql` by default).
 
-Before building packages, install the build dependencies. This is a one-time setup that installs the system packages and toolchain required to compile the server and the DuckDB engine (requires root):
+`cmake --install` puts `ha_duckdb.so` into the server plugin directory, `duckdb.cnf` into the server's additional config directory and the MTR suite into `<mariadb-test>/plugin/duckdb`. If the server does not read that config directory, load the engine with `INSTALL SONAME 'ha_duckdb';`.
 
-```bash
-./storage/duckdb/build.sh -D
-```
+Paths and layout:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--mariadb-prefix <dir>` | `/usr` | MariaDB installation with the Development component; used as `CMAKE_PREFIX_PATH` and as the server prefix |
+| `--build-dir <dir>` | `./build` | Plugin build directory |
+| `--datadir <dir>` | `/var/lib/mysql` | Server data directory |
+| `--layout DEB\|RPM\|STANDALONE` | `RPM` for `-p rpm`, `STANDALONE` for `-p tgz`, otherwise `DEB` | Install layout of the server; must match it, otherwise the plugin lands where the server does not look for it |
+
+Run `./build.sh -h` for the full list of options.
 
 ### Build packages
 
-With the dependencies installed, build a distributable package for your platform.
-
-**RPM** (Rocky/Fedora/Amazon Linux):
-
 ```bash
-./storage/duckdb/build.sh -p
+./build.sh -t RelWithDebInfo -p rpm   # Rocky/Fedora/Amazon Linux
+./build.sh -t RelWithDebInfo -p deb   # Debian/Ubuntu
+./build.sh -t RelWithDebInfo -p tgz
 ```
 
-**DEB** (Debian/Ubuntu):
+### Tests (MTR)
+
+`run_mtr.sh` runs the suite with the installed MTR (`<prefix>/share/mariadb/mariadb-test`, override with `--mtr-dir`) against the installed engine, so run `build.sh` without `-c` first. Source tests are copied into the installed suite before each run, and `-r` copies recorded results back to `mysql-test/duckdb/r/`.
 
 ```bash
-./storage/duckdb/build.sh -p
+./run_mtr.sh create_table_column      # one test
+./run_mtr.sh -r create_table_column   # run and record
+./run_mtr.sh -a                       # all tests
+./run_mtr.sh -a -e                    # all tests against a running server
 ```
 
 ## Cross-Engine Queries

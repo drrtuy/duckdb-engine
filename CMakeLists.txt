@@ -1,11 +1,16 @@
+cmake_minimum_required(VERSION 3.12)
+project(duckdb LANGUAGES C CXX)
+find_package(mariadb-plugin REQUIRED)
+INCLUDE(CheckCXXCompilerFlag)
+
 IF(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  MESSAGE_ONCE(duckdb "DuckDB: not Linux, skipping")
+  MESSAGE(STATUS "DuckDB: not Linux, skipping")
   return()
 ENDIF()
 
 IF(NOT (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR
         CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64"))
-  MESSAGE_ONCE(duckdb "DuckDB: not x86_64 or aarch64, skipping")
+  MESSAGE(STATUS "DuckDB: not x86_64 or aarch64, skipping")
   return()
 ENDIF()
 
@@ -13,14 +18,14 @@ ENDIF()
 # container): CMAKE_SYSTEM_PROCESSOR still reports x86_64, but the target is
 # 32-bit. DuckDB (and its jemalloc extension) is 64-bit only.
 IF(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  MESSAGE_ONCE(duckdb "DuckDB: not a 64-bit build, skipping")
+  MESSAGE(STATUS "DuckDB: not a 64-bit build, skipping")
   return()
 ENDIF()
 
 # Check C++17 compiler support
-MY_CHECK_CXX_COMPILER_FLAG("-std=c++17")
+CHECK_CXX_COMPILER_FLAG("-std=c++17" have_CXX__std_c__17)
 IF(NOT have_CXX__std_c__17)
-  MESSAGE_ONCE(duckdb "DuckDB: C++ compiler does not support -std=c++17, skipping")
+  MESSAGE(STATUS "DuckDB: C++ compiler does not support -std=c++17, skipping")
   RETURN()
 ENDIF()
 
@@ -37,12 +42,16 @@ SET(DUCKDB_PLUGIN_SOURCES
   duckdb_udf.cc
 )
 
-MYSQL_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
-                 COMPONENT duckdb-engine)
-SET(CPACK_RPM_duckdb-engine_PACKAGE_SUMMARY "DuckDB storage engine for MariaDB server" PARENT_SCOPE)
+MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
+                   AUTHOR "drrtuy,lfedorov"
+                   VERSION 1.0
+                   DESCRIPTION "DuckDB storage engine"
+                   COMPONENT duckdb-engine
+                   CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/duckdb.cnf)
+SET(CPACK_RPM_duckdb-engine_PACKAGE_SUMMARY "DuckDB storage engine for MariaDB server")
 SET(CPACK_RPM_duckdb-engine_PACKAGE_DESCRIPTION "The MariaDB DuckDB storage
 engine embeds DuckDB as a pluggable storage engine, enabling fast analytical
-(OLAP) query processing directly inside MariaDB." PARENT_SCOPE)
+(OLAP) query processing directly inside MariaDB.")
 
 IF(TARGET duckdb)
 
@@ -50,13 +59,8 @@ IF(TARGET duckdb)
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_target_setup.cmake)
 
   # Provide MariaDB server include paths to sub-libraries.
-  # MYSQL_ADD_PLUGIN normally does this, but it runs after ADD_SUBDIRECTORY.
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include
-                      ${CMAKE_SOURCE_DIR}/sql
-                      ${CMAKE_BINARY_DIR}/include
-                      ${PCRE_INCLUDE_DIRS}
-                      ${SSL_INCLUDE_DIRS}
-                      ${ZLIB_INCLUDE_DIRS})
+  # MARIADB_ADD_PLUGIN does this only for the plugin target itself.
+  LINK_LIBRARIES(mariadb_private mysqlservices)
 
   # Build sub-libraries.
   ADD_SUBDIRECTORY(common)
@@ -76,3 +80,5 @@ IF(TARGET duckdb)
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
   )
 ENDIF()
+
+include(CPack)
