@@ -19,6 +19,7 @@
 
 #define MYSQL_SERVER 1
 #include <my_global.h>
+#include <type_traits>
 #include "sql_class.h"
 #include "sql_select.h"
 #include "sql_window.h"
@@ -68,11 +69,24 @@ private:
   bool m_found= false;
 };
 
+// MariaDB changed walk(processor, walk_subquery, arg) to
+// walk(processor, arg, flags). Detect the signature for the installed SDK.
+template <typename ItemType>
+static void walk_field_refs(ItemType *item, Field_enumerator *enumerator)
+{
+  if constexpr (std::is_invocable_v<decltype(&ItemType::walk), ItemType *,
+                                  decltype(&Item::enumerate_field_refs_processor),
+                                  Field_enumerator *, unsigned>)
+    item->walk(&Item::enumerate_field_refs_processor, enumerator, 0);
+  else
+    item->walk(&Item::enumerate_field_refs_processor, false, enumerator);
+}
+
 static void inspect_item_for_invisible_fields(
     Item *item, Invisible_field_enumerator &enumerator)
 {
   if (item && !enumerator.found())
-    item->walk(&Item::enumerate_field_refs_processor, false, &enumerator);
+    walk_field_refs(item, &enumerator);
 }
 
 static bool query_references_invisible_fields(THD *thd)

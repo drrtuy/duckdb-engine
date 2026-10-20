@@ -30,8 +30,6 @@
 MYSQL_THD create_background_thd();
 void destroy_background_thd(MYSQL_THD thd);
 
-extern "C" pthread_key(struct st_my_thread_var *, THR_KEY_mysys);
-
 namespace myduck
 {
 
@@ -202,11 +200,11 @@ FiberScanState::~FiberScanState()
       finish cleanly (same pattern as mdb_scan_function).
     */
     THD *prev_thd= _current_thd();
-    void *prev_mysys= pthread_getspecific(THR_KEY_mysys);
+    struct st_my_thread_var *prev_mysys= my_thread_var;
 
     set_current_thd(fiber_thd);
     if (fiber_thd && fiber_thd->mysys_var)
-      pthread_setspecific(THR_KEY_mysys, fiber_thd->mysys_var);
+      set_mysys_var(fiber_thd->mysys_var);
 
     while (!finished)
     {
@@ -217,7 +215,7 @@ FiberScanState::~FiberScanState()
     }
 
     set_current_thd(prev_thd);
-    pthread_setspecific(THR_KEY_mysys, prev_mysys);
+    set_mysys_var(prev_mysys);
   }
 
   delete result;
@@ -303,7 +301,7 @@ void fiber_scan_func(void *arg)
   THD *thd= state->fiber_thd;
 
   /*
-    TLS (current_thd + THR_KEY_mysys) is already set by the caller
+    TLS (current_thd + my_thread_var) is already set by the caller
     (mdb_scan_function) before fiber_context_spawn/continue.
     Do NOT use thd_attach_thd/thd_detach_thd here — they assert
     !current_thd which fails because fibers share the OS thread.

@@ -136,7 +136,7 @@ ha_duckdb_select_handler::init_scan()
            • yield() when DataChunk is full, continue() for next chunk
 ```
 
-The fiber runs on the same OS thread as DuckDB. TLS (`current_thd`, `THR_KEY_mysys`) is swapped around fiber spawn/continue calls.
+The fiber runs on the same OS thread as DuckDB. TLS (`current_thd`, `my_thread_var`) is swapped around fiber spawn/continue calls.
 
 #### Pushdown modes: `duckdb_cross_engine_ryow`
 

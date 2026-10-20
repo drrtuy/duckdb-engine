@@ -42,12 +42,28 @@ SET(DUCKDB_PLUGIN_SOURCES
   duckdb_udf.cc
 )
 
+# The MariaDB test-data package owns the default plugin test path.
+# Avoid duplicates there, then install this suite under its own name below.
+IF(DEB)
+  SET(DUCKDB_SAVED_MYSQLTESTDIR "${INSTALL_MYSQLTESTDIR}")
+  SET(INSTALL_MYSQLTESTDIR "")
+ENDIF()
+
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
                    AUTHOR "drrtuy,lfedorov"
                    VERSION 1.0
                    DESCRIPTION "DuckDB storage engine"
                    COMPONENT duckdb-engine
                    CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/duckdb.cnf)
+
+IF(DEB)
+  SET(INSTALL_MYSQLTESTDIR "${DUCKDB_SAVED_MYSQLTESTDIR}")
+  UNSET(DUCKDB_SAVED_MYSQLTESTDIR)
+  INSTALL(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mysql-test/duckdb/"
+    DESTINATION "${INSTALL_MYSQLTESTDIR}/suite/duckdb_engine"
+    COMPONENT Test)
+ENDIF()
+
 SET(CPACK_RPM_duckdb-engine_PACKAGE_SUMMARY "DuckDB storage engine for MariaDB server")
 SET(CPACK_RPM_duckdb-engine_PACKAGE_DESCRIPTION "The MariaDB DuckDB storage
 engine embeds DuckDB as a pluggable storage engine, enabling fast analytical
