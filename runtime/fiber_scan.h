@@ -114,6 +114,7 @@ struct FiberScanState
   bool fiber_started= false;
   bool finished= false;
   bool error= false;
+  std::string error_msg;
 
   int init(TABLE *tbl,
            const duckdb::vector<duckdb::idx_t> &col_ids,

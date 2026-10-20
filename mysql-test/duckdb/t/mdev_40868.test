@@ -1,22 +1,26 @@
 --source ../include/have_duckdb.inc
---source include/not_msan.inc
---disable_warnings
 
 #
 # MDEV-40868 SIGABRT in duckdb::Value::CastAs on UNION of DuckDB
 # and InnoDB table.  Invalid DATETIME '0000-00-00' used to throw
 # out of select_to_duckdb::send_data and abort the server.
-# send_data now converts the exception into a THD error and returns
-# -1; the fiber scan finishes without crashing.
+# The conversion error must be reported to the client instead of
+# crashing the server or silently returning an empty result.
 #
 
 call mtr.add_suppression("FIBER: execution error");
 
-CREATE TABLE t1 (c2 DATETIME);
+CREATE TABLE t1 (c2 DATETIME) ENGINE=InnoDB;
 INSERT INTO t1 VALUES ('0000-00-00');
 CREATE TABLE t2 (c1 INT PRIMARY KEY) ENGINE=DuckDB;
 
+--error ER_GET_ERRMSG
 SELECT * FROM t2 UNION SELECT * FROM t1;
+
+SET SESSION duckdb_cross_engine_ryow=1;
+--error ER_GET_ERRMSG
+SELECT * FROM t2 UNION SELECT * FROM t1;
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
 
 # Server must still be usable after the conversion error.
 SELECT 1 AS still_alive;

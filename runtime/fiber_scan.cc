@@ -26,6 +26,7 @@
 
 #include "fiber_scan.h"
 #include "duckdb_log.h"
+#include "duckdb/common/error_data.hpp"
 
 MYSQL_THD create_background_thd();
 void destroy_background_thd(MYSQL_THD thd);
@@ -100,12 +101,12 @@ select_to_duckdb::select_to_duckdb(THD *thd_arg,
 
 int select_to_duckdb::send_data(List<Item> &items)
 {
+  List_iterator_fast<Item> it(items);
+  Item *item;
+  duckdb::idx_t col= 0;
+
   try
   {
-    List_iterator_fast<Item> it(items);
-    Item *item;
-    duckdb::idx_t col= 0;
-
     while ((item= it++))
     {
       if (col < types_->size())
@@ -115,28 +116,23 @@ int select_to_duckdb::send_data(List<Item> &items)
       }
       col++;
     }
-    row_count_++;
-
-    if (row_count_ >= STANDARD_VECTOR_SIZE)
-    {
-      buffer_->SetChildCardinality(row_count_);
-      row_count_= 0;
-      fiber_context_yield(ctx_);
-    }
-
-    return thd->killed ? -1 : 0;
   }
   catch (const std::exception &ex)
   {
-    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_GENERIC, ex.what(), "DuckDB");
-    return -1;
-  }
-  catch (...)
-  {
     my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_GENERIC,
-             "Unknown error converting row to DuckDB", "DuckDB");
+             duckdb::ErrorData(ex).RawMessage().c_str(), "DuckDB");
     return -1;
   }
+  row_count_++;
+
+  if (row_count_ >= STANDARD_VECTOR_SIZE)
+  {
+    buffer_->SetChildCardinality(row_count_);
+    row_count_= 0;
+    fiber_context_yield(ctx_);
+  }
+
+  return thd->killed ? -1 : 0;
 }
 
 bool select_to_duckdb::send_eof()
@@ -358,7 +354,10 @@ void fiber_scan_func(void *arg)
   {
     sql_print_error("FIBER: parse/init error for: %s", sql.c_str());
     if (thd->is_error())
+    {
       sql_print_error("FIBER: THD error: %s", thd->get_stmt_da()->message());
+      state->error_msg= thd->get_stmt_da()->message();
+    }
     state->error= true;
     state->finished= true;
     thd->end_statement();
@@ -379,6 +378,7 @@ void fiber_scan_func(void *arg)
   {
     sql_print_error("FIBER: execution error: %s",
                     thd->get_stmt_da()->message());
+    state->error_msg= thd->get_stmt_da()->message();
     state->error= true;
   }
 

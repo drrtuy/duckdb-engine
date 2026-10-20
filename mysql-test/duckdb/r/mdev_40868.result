@@ -1,9 +1,13 @@
 call mtr.add_suppression("FIBER: execution error");
-CREATE TABLE t1 (c2 DATETIME);
+CREATE TABLE t1 (c2 DATETIME) ENGINE=InnoDB;
 INSERT INTO t1 VALUES ('0000-00-00');
 CREATE TABLE t2 (c1 INT PRIMARY KEY) ENGINE=DuckDB;
 SELECT * FROM t2 UNION SELECT * FROM t1;
-c1
+ERROR HY000: Got error 122 'Invalid Input Error: _mdb_scan of `test`.`t1` failed: Got error 168 'Failed to cast value: timestamp field value out of range: "0000-00-00 00:00:00"' from DuckDB' from DuckDB
+SET SESSION duckdb_cross_engine_ryow=1;
+SELECT * FROM t2 UNION SELECT * FROM t1;
+ERROR HY000: Got error 122 'Invalid Input Error: Failed to cast value: timestamp field value out of range: "0000-00-00 00:00:00"' from DuckDB
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
 SELECT 1 AS still_alive;
 still_alive
 1
