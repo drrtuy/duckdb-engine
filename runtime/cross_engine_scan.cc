@@ -41,8 +41,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
-extern "C" pthread_key(struct st_my_thread_var *, THR_KEY_mysys);
-
 namespace myduck
 {
 
@@ -408,15 +406,15 @@ static void mdb_scan_function(duckdb::ClientContext &context,
     /*
       Save caller TLS and install fiber THD context.
       Fibers share the OS thread, so we must swap current_thd and
-      THR_KEY_mysys manually around spawn/continue.
+      my_thread_var manually around spawn/continue.
     */
     THD *prev_thd= _current_thd();
-    void *prev_mysys= pthread_getspecific(THR_KEY_mysys);
+    struct st_my_thread_var *prev_mysys= my_thread_var;
     THD *fiber_thd= state.fiber->fiber_thd;
 
     set_current_thd(fiber_thd);
     if (fiber_thd && fiber_thd->mysys_var)
-      pthread_setspecific(THR_KEY_mysys, fiber_thd->mysys_var);
+      set_mysys_var(fiber_thd->mysys_var);
 
     if (!state.fiber->fiber_started)
     {
@@ -432,7 +430,7 @@ static void mdb_scan_function(duckdb::ClientContext &context,
 
     /* Restore caller TLS */
     set_current_thd(prev_thd);
-    pthread_setspecific(THR_KEY_mysys, prev_mysys);
+    set_mysys_var(prev_mysys);
 
     if (state.fiber->error)
     {
