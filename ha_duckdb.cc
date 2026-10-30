@@ -1545,6 +1545,13 @@ static MYSQL_SYSVAR_ULONGLONG(max_threads, myduck::global_max_threads,
                               "DuckDB max threads (0 = default)", NULL,
                               myduck::update_threads_cb, 0, 0, 1048576, 0);
 
+static MYSQL_SYSVAR_ULONGLONG(async_threads, myduck::global_async_threads,
+                              PLUGIN_VAR_RQCMDARG,
+                              "DuckDB async I/O threads (0 = run I/O tasks "
+                              "synchronously on the query threads)",
+                              NULL, myduck::update_async_threads_cb, 0, 0,
+                              1048576, 0);
+
 static MYSQL_SYSVAR_BOOL(use_direct_io, myduck::global_use_dio,
                          PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
                          "Use Direct I/O for DuckDB data files", NULL, NULL,
@@ -1649,6 +1656,7 @@ static struct st_mysql_sys_var *duckdb_system_variables[]= {
     /* Global proxy */
     MYSQL_SYSVAR(memory_limit), MYSQL_SYSVAR(temp_directory),
     MYSQL_SYSVAR(max_temp_directory_size), MYSQL_SYSVAR(max_threads),
+    MYSQL_SYSVAR(async_threads),
     MYSQL_SYSVAR(use_direct_io), MYSQL_SYSVAR(scheduler_process_partial),
     MYSQL_SYSVAR(checkpoint_threshold), MYSQL_SYSVAR(use_double_for_decimal),
     MYSQL_SYSVAR(require_primary_key),

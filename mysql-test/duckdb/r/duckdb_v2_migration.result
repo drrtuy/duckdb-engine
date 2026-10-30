@@ -1,0 +1,123 @@
+DROP DATABASE IF EXISTS duckdb_v2_migration;
+CREATE DATABASE duckdb_v2_migration;
+USE duckdb_v2_migration;
+#
+# Statically linked extensions are registered and loaded
+#
+SELECT run_in_duckdb("SELECT extension_name, loaded FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'icu', 'json', 'parquet') ORDER BY extension_name");
+run_in_duckdb("SELECT extension_name, loaded FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'icu', 'json', 'parquet') ORDER BY extension_name")
+extension_name	loaded	
+VARCHAR	BOOLEAN	
+[ Rows: 4]
+core_functions	true
+icu	true
+json	true
+parquet	true
+
+
+#
+# Configuration set by DuckdbManager
+#
+SELECT run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall, current_setting('allow_community_extensions') AS community, current_setting('lock_configuration') AS locked, current_setting('error_on_division_by_zero') AS div0_error");
+run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall, current_setting('allow_community_extensions') AS community, current_setting('lock_configuration') AS locked, current_setting('error_on_division_by_zero') AS div0_error")
+autoinstall	community	locked	div0_error	
+BOOLEAN	BOOLEAN	BOOLEAN	BOOLEAN	
+[ Rows: 1]
+false	false	true	false
+
+
+#
+# The configuration is locked: SQL reaching DuckDB cannot change it
+#
+SELECT run_in_duckdb("SET autoinstall_known_extensions=true");
+run_in_duckdb("SET autoinstall_known_extensions=true")
+Invalid Input Error: Cannot change configuration option ""autoinstall_known_extensions"" - the configuration has been locked
+SELECT run_in_duckdb("SET lock_configuration=false");
+run_in_duckdb("SET lock_configuration=false")
+Invalid Input Error: Cannot change configuration option ""lock_configuration"" - the configuration has been locked
+SELECT run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall");
+run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall")
+autoinstall	
+BOOLEAN	
+[ Rows: 1]
+false
+
+
+#
+# Extensions that are not linked are not downloaded
+#
+SELECT run_in_duckdb("SELECT quack_serve('localhost:0')") LIKE '%quack%' AS quack_not_available;
+quack_not_available
+1
+#
+# Settings propagated from MariaDB system variables stay changeable
+#
+SET @saved_async_threads= @@GLOBAL.duckdb_async_threads;
+SELECT @@GLOBAL.duckdb_async_threads;
+@@GLOBAL.duckdb_async_threads
+0
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+run_in_duckdb("SELECT current_setting('async_threads') AS async_threads")
+async_threads	
+BIGINT	
+[ Rows: 1]
+0
+
+
+SET GLOBAL duckdb_async_threads= 2;
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+run_in_duckdb("SELECT current_setting('async_threads') AS async_threads")
+async_threads	
+BIGINT	
+[ Rows: 1]
+2
+
+
+SET GLOBAL duckdb_async_threads= @saved_async_threads;
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+run_in_duckdb("SELECT current_setting('async_threads') AS async_threads")
+async_threads	
+BIGINT	
+[ Rows: 1]
+0
+
+
+#
+# New databases use the v2.0.0 storage format
+#
+SELECT run_in_duckdb("SELECT tags FROM duckdb_databases() WHERE NOT internal AND database_name NOT IN ('memory', 'temp')");
+run_in_duckdb("SELECT tags FROM duckdb_databases() WHERE NOT internal AND database_name NOT IN ('memory', 'temp')")
+tags	
+MAP(VARCHAR, VARCHAR)	
+[ Rows: 1]
+{storage_version=v2.0.0+}
+
+
+CREATE TABLE r (id INT PRIMARY KEY, s VARCHAR(10)) ENGINE=DuckDB;
+INSERT INTO r VALUES (1, 'abc'), (2, 'xaz'), (3, 'xyz');
+#
+# REGEXP is a partial (search) match, as in MariaDB
+#
+SELECT id, s REGEXP 'b', s NOT REGEXP 'b', s RLIKE 'a' FROM r ORDER BY id;
+id	s REGEXP 'b'	s NOT REGEXP 'b'	s RLIKE 'a'
+1	1	0	1
+2	0	1	1
+3	0	1	0
+SELECT id FROM r WHERE s REGEXP 'a' ORDER BY id;
+id
+1
+2
+#
+# Modulo by zero returns NULL, as in MariaDB
+#
+CREATE TABLE d (a INT PRIMARY KEY, z INT) ENGINE=DuckDB;
+INSERT INTO d VALUES (7, 0), (8, 2);
+SELECT a, a % z FROM d ORDER BY a;
+a	a % z
+7	NULL
+8	0
+SELECT a, a % 0 FROM d ORDER BY a;
+a	a % 0
+7	NULL
+8	NULL
+DROP DATABASE duckdb_v2_migration;

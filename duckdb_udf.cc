@@ -92,12 +92,6 @@ public:
 
     auto res= myduck::duckdb_query(*conn, sql);
 
-    if (res->type == duckdb::QueryResultType::STREAM_RESULT)
-    {
-      auto &stream= res->Cast<duckdb::StreamQueryResult>();
-      res= stream.Materialize();
-    }
-
     std::string output= res->HasError() ? res->GetError() : res->ToString();
 
     if (str->copy(output.c_str(), output.length(), &my_charset_bin))

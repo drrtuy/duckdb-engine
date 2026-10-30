@@ -117,7 +117,7 @@ int select_to_duckdb::send_data(List<Item> &items)
 
   if (row_count_ >= STANDARD_VECTOR_SIZE)
   {
-    buffer_->SetCardinality(row_count_);
+    buffer_->SetChildCardinality(row_count_);
     row_count_= 0;
     fiber_context_yield(ctx_);
   }
@@ -129,7 +129,7 @@ bool select_to_duckdb::send_eof()
 {
   if (row_count_ > 0)
   {
-    buffer_->SetCardinality(row_count_);
+    buffer_->SetChildCardinality(row_count_);
     row_count_= 0;
   }
   finished_= true;

@@ -239,8 +239,9 @@ bool DeltaAppender::Initialize(TABLE *table)
     std::string schema_name("main");
     try
     {
-      m_appender= std::make_unique<duckdb::Appender>(*m_con, schema_name,
-                                                     m_tmp_table_name);
+      m_appender= std::make_unique<duckdb::Appender>(
+          *m_con, duckdb::Identifier(schema_name),
+          duckdb::Identifier(m_tmp_table_name));
     }
     catch (std::exception &ex)
     {
@@ -275,8 +276,9 @@ bool DeltaAppender::Initialize(TABLE *table)
   {
     try
     {
-      m_appender= std::make_unique<duckdb::Appender>(*m_con, m_schema_name,
-                                                     m_table_name);
+      m_appender= std::make_unique<duckdb::Appender>(
+          *m_con, duckdb::Identifier(m_schema_name),
+          duckdb::Identifier(m_table_name));
     }
     catch (std::exception &ex)
     {

@@ -1,0 +1,69 @@
+--source ../include/have_duckdb.inc
+
+#
+# Behavior that depends on the embedded DuckDB v2.0.0 and on how the plugin
+# configures it.
+#
+
+--disable_warnings
+DROP DATABASE IF EXISTS duckdb_v2_migration;
+--enable_warnings
+CREATE DATABASE duckdb_v2_migration;
+USE duckdb_v2_migration;
+
+--echo #
+--echo # Statically linked extensions are registered and loaded
+--echo #
+SELECT run_in_duckdb("SELECT extension_name, loaded FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'icu', 'json', 'parquet') ORDER BY extension_name");
+
+--echo #
+--echo # Configuration set by DuckdbManager
+--echo #
+SELECT run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall, current_setting('allow_community_extensions') AS community, current_setting('lock_configuration') AS locked, current_setting('error_on_division_by_zero') AS div0_error");
+
+--echo #
+--echo # The configuration is locked: SQL reaching DuckDB cannot change it
+--echo #
+SELECT run_in_duckdb("SET autoinstall_known_extensions=true");
+SELECT run_in_duckdb("SET lock_configuration=false");
+SELECT run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall");
+
+--echo #
+--echo # Extensions that are not linked are not downloaded
+--echo #
+SELECT run_in_duckdb("SELECT quack_serve('localhost:0')") LIKE '%quack%' AS quack_not_available;
+
+--echo #
+--echo # Settings propagated from MariaDB system variables stay changeable
+--echo #
+SET @saved_async_threads= @@GLOBAL.duckdb_async_threads;
+SELECT @@GLOBAL.duckdb_async_threads;
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+SET GLOBAL duckdb_async_threads= 2;
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+SET GLOBAL duckdb_async_threads= @saved_async_threads;
+SELECT run_in_duckdb("SELECT current_setting('async_threads') AS async_threads");
+
+--echo #
+--echo # New databases use the v2.0.0 storage format
+--echo #
+SELECT run_in_duckdb("SELECT tags FROM duckdb_databases() WHERE NOT internal AND database_name NOT IN ('memory', 'temp')");
+
+CREATE TABLE r (id INT PRIMARY KEY, s VARCHAR(10)) ENGINE=DuckDB;
+INSERT INTO r VALUES (1, 'abc'), (2, 'xaz'), (3, 'xyz');
+
+--echo #
+--echo # REGEXP is a partial (search) match, as in MariaDB
+--echo #
+SELECT id, s REGEXP 'b', s NOT REGEXP 'b', s RLIKE 'a' FROM r ORDER BY id;
+SELECT id FROM r WHERE s REGEXP 'a' ORDER BY id;
+
+--echo #
+--echo # Modulo by zero returns NULL, as in MariaDB
+--echo #
+CREATE TABLE d (a INT PRIMARY KEY, z INT) ENGINE=DuckDB;
+INSERT INTO d VALUES (7, 0), (8, 2);
+SELECT a, a % z FROM d ORDER BY a;
+SELECT a, a % 0 FROM d ORDER BY a;
+
+DROP DATABASE duckdb_v2_migration;

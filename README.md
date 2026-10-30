@@ -21,27 +21,27 @@ Create a table with `ENGINE=DuckDB` and analytical queries against it are execut
 
 TPC-H Scale Factor 10 (~11 GB raw data, 86.6M rows total, ~60M in `lineitem`).
 
-**Hardware / environment:** Intel Core i7-13700H (14 cores / 20 threads), 64 GB RAM, NVMe SSD (ext4). MariaDB 11.4.13 with embedded DuckDB v1.5.2, `duckdb_memory_limit=8 GiB`, `threads=20`. Warm runs; numbers stable to ~±15%.
+**Hardware / environment:** Intel Core i7-13700H (14 cores / 20 threads), 64 GB RAM, NVMe SSD (ext4). MariaDB 11.4.14 with embedded DuckDB v2.0.0, default `duckdb_memory_limit`, `threads=20`. Single warm run (`tpch/run_all.sh`); numbers stable to ~±15%.
 
 | Metric | Result |
 |---|---|
-| Data loading (in-engine `COPY`) | 33 seconds |
-| All 22 TPC-H queries | **4.30 seconds** total |
+| Data loading (Parquet via `read_parquet()`) | 33 seconds |
+| All 22 TPC-H queries | **3.75 seconds** total |
 
 ### Per-query latency (seconds, warm)
 
 | Query | Time | Query | Time | Query | Time |
 |---|---:|---|---:|---|---:|
-| q01 | 0.253 | q09 | 0.337 | q17 | 0.116 |
-| q02 | 0.076 | q10 | 0.253 | q18 | 0.318 |
-| q03 | 0.134 | q11 | 0.049 | q19 | 0.207 |
-| q04 | 0.135 | q12 | 0.152 | q20 | 0.166 |
-| q05 | 0.142 | q13 | 0.606 | q21 | 0.486 |
-| q06 | 0.070 | q14 | 0.128 | q22 | 0.113 |
-| q07 | 0.133 | q15 | 0.101 | **Total** | **4.30** |
-| q08 | 0.145 | q16 | 0.178 | | |
+| q01 | 0.208 | q09 | 0.353 | q17 | 0.108 |
+| q02 | 0.066 | q10 | 0.305 | q18 | 0.335 |
+| q03 | 0.153 | q11 | 0.059 | q19 | 0.142 |
+| q04 | 0.140 | q12 | 0.138 | q20 | 0.131 |
+| q05 | 0.130 | q13 | 0.462 | q21 | 0.227 |
+| q06 | 0.064 | q14 | 0.109 | q22 | 0.095 |
+| q07 | 0.129 | q15 | 0.089 | **Total** | **3.75** |
+| q08 | 0.135 | q16 | 0.170 | | |
 
-Each query also pays a small fixed cost (~40 ms) for client connect and pushdown setup — noticeable on the cheapest queries, negligible on the heavy analytical ones. See [`docs/tpch_sf10_query_benchmark.md`](docs/tpch_sf10_query_benchmark.md) and [`docs/tpch_sf10_ingestion_benchmark.md`](docs/tpch_sf10_ingestion_benchmark.md) for full methodology.
+Each query also pays a small fixed cost (~40 ms) for client connect and pushdown setup — noticeable on the cheapest queries, negligible on the heavy analytical ones. See [`docs/tpch_sf10_duckdb_v2_benchmark.md`](docs/tpch_sf10_duckdb_v2_benchmark.md) for the comparison with DuckDB v1.5.2 (4.30 s total), and [`docs/tpch_sf10_query_benchmark.md`](docs/tpch_sf10_query_benchmark.md) and [`docs/tpch_sf10_ingestion_benchmark.md`](docs/tpch_sf10_ingestion_benchmark.md) for the v1.5.2 methodology.
 
 ## Tutorials
 
@@ -62,7 +62,7 @@ Tables created with `ENGINE=DuckDB` store data in DuckDB's native format. Querie
 
 ## Building
 
-The engine is built outside the MariaDB server tree against an installed MariaDB plugin SDK (`find_package(mariadb-plugin)`, MDEV-40608). DuckDB v1.5.5 is built from the `third_parties/duckdb` submodule via `ExternalProject_Add`.
+The engine is built outside the MariaDB server tree against an installed MariaDB plugin SDK (`find_package(mariadb-plugin)`, MDEV-40608). DuckDB v2.0.0 is built from the `third_parties/duckdb` submodule via `ExternalProject_Add`.
 
 ### Prerequisites
 

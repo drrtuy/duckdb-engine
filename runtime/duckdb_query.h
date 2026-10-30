@@ -26,11 +26,14 @@
 
 #include "duckdb.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 
 class THD;
 
 namespace myduck
 {
+
+using DuckdbChunkStream= duckdb::QueryResultStream<duckdb::ChunkFormat>;
 
 enum class SqlRegionType
 {
@@ -46,20 +49,30 @@ SqlRegionType scan_sql_region(const std::string &sql, size_t start,
 bool mariadb_query_has_unsafe_quote_escape(THD *thd, const char *query,
                                             size_t length);
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+/*
+  Blocking: runs the query to completion and returns the retained
+  (materialized) result. For DML, DDL and metadata queries.
+*/
+duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query);
 
-duckdb::unique_ptr<duckdb::QueryResult>
-duckdb_stream_query(duckdb::Connection &connection, const std::string &query);
+/*
+  Submits the query and opens a chunk stream on it, so rows are produced
+  on demand and the result is never materialized. On failure returns
+  nullptr and sets @p error.
+*/
+duckdb::unique_ptr<DuckdbChunkStream>
+duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
+                    std::string &error);
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config= true);
 
-duckdb::unique_ptr<duckdb::QueryResult>
-duckdb_stream_query(THD *thd, const std::string &query,
+duckdb::unique_ptr<DuckdbChunkStream>
+duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
                     bool need_config= true);
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(const std::string &query);
 
 } // namespace myduck

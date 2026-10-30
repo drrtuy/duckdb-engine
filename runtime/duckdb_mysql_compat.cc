@@ -358,11 +358,10 @@ static void json_contains_3arg_func(duckdb::DataChunk &args,
   auto &json_vec= args.data[0];
   auto &candidate_vec= args.data[1];
   auto &path_vec= args.data[2];
-  auto count= args.size();
 
   duckdb::TernaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
                                    duckdb::string_t, bool>(
-      json_vec, candidate_vec, path_vec, result, count,
+      json_vec, candidate_vec, path_vec, result,
       [](duckdb::string_t json, duckdb::string_t candidate,
          duckdb::string_t path) -> bool {
         /* Minimal implementation: delegate to DuckDB's own functions
@@ -498,12 +497,12 @@ static void WriteHugeIntOctBytes(T x, char *&output, idx_t buffer_size)
 
 struct HexStrOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto data= input.GetData();
     auto size= input.GetSize();
 
-    auto target= StringVector::EmptyString(result, size * 2);
+    auto target= heap.EmptyString(size * 2);
     auto output= target.GetDataWriteable();
 
     for (idx_t i= 0; i < size; ++i)
@@ -521,7 +520,7 @@ struct HexStrOperator {
 
 struct HexIntegralOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto num_leading_zero=
         CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
@@ -532,7 +531,7 @@ struct HexIntegralOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -540,7 +539,7 @@ struct HexIntegralOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHexBytes(static_cast<uint64_t>(input), output, buffer_size);
@@ -552,7 +551,7 @@ struct HexIntegralOperator {
 
 struct HexHugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     idx_t num_leading_zero=
         CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
@@ -560,7 +559,7 @@ struct HexHugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -568,7 +567,7 @@ struct HexHugeIntOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntHexBytes<hugeint_t>(input, output, buffer_size);
@@ -580,7 +579,7 @@ struct HexHugeIntOperator {
 
 struct HexUhugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     idx_t num_leading_zero=
         CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
@@ -588,7 +587,7 @@ struct HexUhugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -596,7 +595,7 @@ struct HexUhugeIntOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntHexBytes<uhugeint_t>(input, output, buffer_size);
@@ -608,11 +607,11 @@ struct HexUhugeIntOperator {
 
 struct HexFloatOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     int64_t input_integer= std::round(input);
     return HexIntegralOperator::Operation<int64_t, string_t>(input_integer,
-                                                             result);
+                                                             heap);
   }
 };
 
@@ -622,7 +621,7 @@ struct HexFloatOperator {
 
 struct OctIntegralOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto num_leading_zero=
         CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
@@ -633,7 +632,7 @@ struct OctIntegralOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -641,7 +640,7 @@ struct OctIntegralOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteOctBytes(static_cast<uint64_t>(input), output, buffer_size);
@@ -653,7 +652,7 @@ struct OctIntegralOperator {
 
 struct OctHugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     idx_t num_leading_zero=
         CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
@@ -662,7 +661,7 @@ struct OctHugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -670,7 +669,7 @@ struct OctHugeIntOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntOctBytes<hugeint_t>(input, output, buffer_size);
@@ -682,7 +681,7 @@ struct OctHugeIntOperator {
 
 struct OctUhugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     idx_t num_leading_zero=
         CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
@@ -691,7 +690,7 @@ struct OctUhugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -699,7 +698,7 @@ struct OctUhugeIntOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntOctBytes<uhugeint_t>(input, output, buffer_size);
@@ -711,17 +710,17 @@ struct OctUhugeIntOperator {
 
 struct OctFloatOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     int64_t input_integer= std::round(input);
     return OctIntegralOperator::Operation<int64_t, string_t>(input_integer,
-                                                             result);
+                                                             heap);
   }
 };
 
 struct OctStrOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     double d;
     std::string tmp(input.GetData(), input.GetSize());
@@ -731,7 +730,7 @@ struct OctStrOperator {
     bool success= (errno == 0 && end != tmp.c_str());
     if (!success)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -739,7 +738,7 @@ struct OctStrOperator {
     }
     else
     {
-      return OctFloatOperator::Operation<double, RESULT_TYPE>(d, result);
+      return OctFloatOperator::Operation<double, RESULT_TYPE>(d, heap);
     }
   }
 };
@@ -750,7 +749,7 @@ struct OctStrOperator {
 
 struct BinaryIntegralOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto num_leading_zero=
         CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
@@ -761,7 +760,7 @@ struct BinaryIntegralOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -769,7 +768,7 @@ struct BinaryIntegralOperator {
     }
 
     D_ASSERT(buffer_size > 0);
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteBinBytes(static_cast<uint64_t>(input), output, buffer_size);
@@ -781,7 +780,7 @@ struct BinaryIntegralOperator {
 
 struct BinaryHugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto num_leading_zero=
         CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
@@ -789,14 +788,14 @@ struct BinaryHugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
       return target;
     }
 
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntBinBytes<hugeint_t>(input, output, buffer_size);
@@ -808,7 +807,7 @@ struct BinaryHugeIntOperator {
 
 struct BinaryUhugeIntOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     auto num_leading_zero=
         CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
@@ -816,14 +815,14 @@ struct BinaryUhugeIntOperator {
 
     if (buffer_size == 0)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
       return target;
     }
 
-    auto target= StringVector::EmptyString(result, buffer_size);
+    auto target= heap.EmptyString(buffer_size);
     auto output= target.GetDataWriteable();
 
     WriteHugeIntBinBytes<uhugeint_t>(input, output, buffer_size);
@@ -835,17 +834,17 @@ struct BinaryUhugeIntOperator {
 
 struct BinaryFloatOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     int64_t input_integer= std::round(input);
     return BinaryIntegralOperator::Operation<int64_t, string_t>(input_integer,
-                                                                result);
+                                                                heap);
   }
 };
 
 struct BinaryStrOperator {
   template <class INPUT_TYPE, class RESULT_TYPE>
-  static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result)
+  static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap)
   {
     double d;
     std::string tmp(input.GetData(), input.GetSize());
@@ -855,7 +854,7 @@ struct BinaryStrOperator {
     bool success= (errno == 0 && end != tmp.c_str());
     if (!success)
     {
-      auto target= StringVector::EmptyString(result, 1);
+      auto target= heap.EmptyString(1);
       auto output= target.GetDataWriteable();
       *output= '0';
       target.Finalize();
@@ -863,7 +862,7 @@ struct BinaryStrOperator {
     }
     else
     {
-      return BinaryFloatOperator::Operation<double, RESULT_TYPE>(d, result);
+      return BinaryFloatOperator::Operation<double, RESULT_TYPE>(d, heap);
     }
   }
 };
@@ -950,11 +949,10 @@ static void locate_3arg_func(duckdb::DataChunk &args,
   auto &needle_vec= args.data[0];
   auto &haystack_vec= args.data[1];
   auto &pos_vec= args.data[2];
-  auto count= args.size();
 
   duckdb::TernaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
                                    int64_t, int64_t>(
-      needle_vec, haystack_vec, pos_vec, result, count,
+      needle_vec, haystack_vec, pos_vec, result,
       [](duckdb::string_t needle, duckdb::string_t haystack,
          int64_t pos) -> int64_t {
         if (pos < 1)
@@ -998,14 +996,11 @@ static void locate_3arg_func(duckdb::DataChunk &args,
    ================================================================ */
 
 static duckdb::unique_ptr<duckdb::FunctionData>
-regexp_replace_bind(duckdb::ClientContext &context,
-                    duckdb::ScalarFunction &,
-                    duckdb::vector<duckdb::unique_ptr<duckdb::Expression>>
-                        &arguments)
+regexp_replace_bind(duckdb::BindScalarFunctionInput &input)
 {
   auto data= duckdb::make_uniq<duckdb::RegexpReplaceBindData>();
   data->constant_pattern= duckdb::regexp_util::TryParseConstantPattern(
-      context, *arguments[1], data->constant_string);
+      input.TryGetConstant(1), data->constant_string);
   data->global_replace= true;
   data->options.set_log_errors(false);
   return duckdb::unique_ptr<duckdb::FunctionData>(std::move(data));
@@ -1016,7 +1011,7 @@ static void regexp_replace_global_func(duckdb::DataChunk &args,
                                        duckdb::Vector &result)
 {
   auto &func_expr= state.expr.Cast<duckdb::BoundFunctionExpression>();
-  auto &info= func_expr.bind_info->Cast<duckdb::RegexpReplaceBindData>();
+  auto &info= func_expr.BindInfo()->Cast<duckdb::RegexpReplaceBindData>();
 
   auto &strings= args.data[0];
   auto &patterns= args.data[1];
@@ -1028,7 +1023,7 @@ static void regexp_replace_global_func(duckdb::DataChunk &args,
                       ->Cast<duckdb::RegexLocalState>();
     duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
                                     duckdb::string_t>(
-        strings, replaces, result, args.size(),
+        strings, replaces, result,
         [&](duckdb::string_t input, duckdb::string_t replace) {
           std::string s= input.GetString();
           duckdb_re2::RE2::GlobalReplace(
@@ -1039,22 +1034,16 @@ static void regexp_replace_global_func(duckdb::DataChunk &args,
   }
   else
   {
-    duckdb::TernaryExecutor::ExecuteWithNulls<duckdb::string_t,
-                                              duckdb::string_t,
-                                              duckdb::string_t,
-                                              duckdb::string_t>(
-        strings, patterns, replaces, result, args.size(),
+    duckdb::TernaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                     duckdb::string_t, duckdb::string_t>(
+        strings, patterns, replaces, result,
         [&](duckdb::string_t input, duckdb::string_t pattern,
-            duckdb::string_t replace, duckdb::ValidityMask &mask,
-            duckdb::idx_t idx) -> duckdb::string_t {
+            duckdb::string_t replace) -> duckdb::optional<duckdb::string_t> {
           duckdb_re2::RE2 re(
               duckdb_re2::StringPiece(pattern.GetData(), pattern.GetSize()),
               info.options);
           if (!re.ok())
-          {
-            mask.SetInvalid(idx);
-            return duckdb::string_t();
-          }
+            return duckdb::nullopt;
           std::string s= input.GetString();
           duckdb_re2::RE2::GlobalReplace(
               &s, re,
@@ -1570,7 +1559,7 @@ static void register_regexp_functions(duckdb::Catalog &catalog,
         {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR,
          duckdb::LogicalType::VARCHAR},
         duckdb::LogicalType::VARCHAR, regexp_replace_global_func,
-        regexp_replace_bind, nullptr, nullptr, duckdb::RegexInitLocalState));
+        regexp_replace_bind, nullptr, duckdb::RegexInitLocalState));
     duckdb::CreateScalarFunctionInfo info(std::move(set));
     info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
     catalog.CreateFunction(transaction, info);
@@ -1585,28 +1574,22 @@ static void register_regexp_functions(duckdb::Catalog &catalog,
         duckdb::LogicalType::VARCHAR,
         [](duckdb::DataChunk &args, duckdb::ExpressionState &,
            duckdb::Vector &result) {
-          duckdb::BinaryExecutor::ExecuteWithNulls<duckdb::string_t,
-                                                   duckdb::string_t,
-                                                   duckdb::string_t>(
-              args.data[0], args.data[1], result, args.size(),
-              [&](duckdb::string_t expr, duckdb::string_t pat,
-                  duckdb::ValidityMask &mask,
-                  duckdb::idx_t idx) -> duckdb::string_t {
+          duckdb::BinaryExecutor::Execute<duckdb::string_t, duckdb::string_t,
+                                          duckdb::string_t>(
+              args.data[0], args.data[1], result,
+              [&](duckdb::string_t expr, duckdb::string_t pat)
+                  -> duckdb::optional<duckdb::string_t> {
                 duckdb_re2::RE2 re(
                     duckdb_re2::StringPiece(pat.GetData(), pat.GetSize()));
                 if (!re.ok())
-                {
-                  mask.SetInvalid(idx);
-                  return duckdb::string_t();
-                }
+                  return duckdb::nullopt;
                 duckdb_re2::StringPiece match;
                 duckdb_re2::StringPiece input(expr.GetData(), expr.GetSize());
                 if (re.Match(input, 0, expr.GetSize(),
                              duckdb_re2::RE2::UNANCHORED, &match, 1))
                   return duckdb::StringVector::AddString(
                       result, match.data(), match.size());
-                mask.SetInvalid(idx);
-                return duckdb::string_t();
+                return duckdb::nullopt;
               });
         }));
     duckdb::CreateScalarFunctionInfo info(std::move(set));
@@ -1688,7 +1671,7 @@ static void register_time_arith_functions(duckdb::Catalog &catalog,
                 int64_t us= parse_mariadb_interval_us(s.GetData(),
                                                       s.GetSize());
                 /* Wrap around 24h for DuckDB TIME range */
-                int64_t r= t.micros + us;
+                int64_t r= t.value + us;
                 const int64_t day_us= 86400LL * 1000000;
                 r= ((r % day_us) + day_us) % day_us;
                 return duckdb::dtime_t(r);
@@ -1716,7 +1699,7 @@ static void register_time_arith_functions(duckdb::Catalog &catalog,
               [](duckdb::dtime_t t, duckdb::string_t s) -> duckdb::dtime_t {
                 int64_t us= parse_mariadb_interval_us(s.GetData(),
                                                       s.GetSize());
-                int64_t r= t.micros - us;
+                int64_t r= t.value - us;
                 const int64_t day_us= 86400LL * 1000000;
                 r= ((r % day_us) + day_us) % day_us;
                 return duckdb::dtime_t(r);

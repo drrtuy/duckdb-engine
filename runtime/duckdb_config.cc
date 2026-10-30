@@ -30,6 +30,7 @@ ulonglong global_memory_limit= 0;
 char *global_duckdb_temp_directory= nullptr;
 ulonglong global_max_temp_directory_size= 0;
 ulonglong global_max_threads= 0;
+ulonglong global_async_threads= 0;
 ulonglong appender_allocator_flush_threshold= 0;
 ulonglong checkpoint_threshold= 268435456; /* 256 MB */
 my_bool global_use_dio= FALSE;
@@ -121,6 +122,15 @@ void update_threads_cb(MYSQL_THD thd, struct st_mysql_sys_var *var,
     oss << "RESET GLOBAL threads";
   else
     oss << "SET GLOBAL threads = " << global_max_threads;
+  duckdb_query(oss.str());
+}
+
+void update_async_threads_cb(MYSQL_THD thd, struct st_mysql_sys_var *var,
+                             void *var_ptr, const void *save)
+{
+  *(ulonglong *) var_ptr= *(const ulonglong *) save;
+  std::ostringstream oss;
+  oss << "SET GLOBAL async_threads = " << global_async_threads;
   duckdb_query(oss.str());
 }
 

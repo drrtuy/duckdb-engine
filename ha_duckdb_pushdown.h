@@ -27,6 +27,7 @@
 #undef UNKNOWN
 
 #include "duckdb.hpp"
+#include "duckdb_query.h"
 
 #include <vector>
 #include <string>
@@ -59,7 +60,7 @@ protected:
   int end_scan() override;
 
 private:
-  std::unique_ptr<duckdb::QueryResult> query_result;
+  std::unique_ptr<myduck::DuckdbChunkStream> query_stream;
   std::unique_ptr<duckdb::DataChunk> current_chunk;
   size_t current_row_index;
 

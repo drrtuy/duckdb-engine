@@ -81,7 +81,7 @@ See `docs/mariadb-duckdb-incompatibilities.md` for known function name rewrites 
 
 ### DuckDB source and patches
 
-DuckDB source is at `third_parties/duckdb/` (git submodule). One local patch is applied on top of the pinned submodule commit — `patches/duckdb-pr24061-setval.diff` (backport of upstream PR #24061 adding `setval()`, needed for AUTO_INCREMENT counter repositioning), applied via `PATCH_COMMAND` in `cmake/duckdb.cmake` and to be dropped when the submodule is bumped to a release containing the PR. Other compatibility is handled at runtime via `duckdb_mysql_compat.cc`. The build produces a static library; `_GLIBCXX_DEBUG` is explicitly undefined in CMakeLists.txt to avoid ABI mismatch with MariaDB's debug build.
+DuckDB source is at `third_parties/duckdb/` (git submodule, v2.0.0), built without local patches. Statically linked extensions are listed in `cmake/duckdb_extensions.cmake` and in `_DUCKDB_LINKED_EXTENSIONS` in `cmake/duckdb.cmake`, which renders DuckDB's static extension loader template into `duckdb_static_extension_loader.c`; `DuckdbManager::Initialize()` calls `duckdb_register_static_extensions()` before opening the database. Other compatibility is handled at runtime via `duckdb_mysql_compat.cc`. The build produces a static library; `_GLIBCXX_DEBUG` is explicitly undefined in CMakeLists.txt to avoid ABI mismatch with MariaDB's debug build.
 
 ### Configuration
 

@@ -79,11 +79,15 @@ checkpoint threshold). Relevant to security:
 
 - `enable_external_access` is **left at its default (enabled)** — filesystem
   access is permitted.
-- `autoload_known_extensions=true` and `autoinstall_known_extensions=true` are
-  **explicitly enabled**, so known extensions can be fetched and loaded on
-  demand.
-- No `allowed_directories`, `allow_community_extensions=false`, or
-  `lock_configuration` restrictions are applied.
+- `autoinstall_known_extensions=false` and `allow_community_extensions=false`:
+  all required extensions are linked statically, and no extension binary is
+  downloaded at query time. `autoload_known_extensions=true` remains, so an
+  extension already installed in the server user's extension directory can
+  still be loaded.
+- `lock_configuration=true` is set after initialization. Only the settings the
+  plugin itself propagates from MariaDB system variables and session state are
+  listed in `allowed_configs` (see `DuckdbManager::Initialize()`).
+- No `allowed_directories` restrictions are applied.
 
 These are reasonable defaults for a single-tenant analytical box, but they leave
 the DuckDB SQL surface fully open to anyone who can reach it via
@@ -105,12 +109,14 @@ user, on the shared instance, a caller can:
 - **Write arbitrary local files** as the server user
   (e.g. `COPY (...) TO '/path/file'`), which can corrupt data, fill disks, or
   serve as a step toward code execution.
-- **Reach the network** via auto-installable extensions such as `httpfs`,
-  enabling SSRF and exfiltration to remote endpoints.
+- **Reach the network** via extensions such as `httpfs` if they are already
+  installed (auto-install is disabled), enabling SSRF and exfiltration to
+  remote endpoints.
 - **Attach external databases** (`ATTACH`) and read/modify their contents.
-- **Change global DuckDB settings** on the shared instance (e.g. `SET GLOBAL
-  memory_limit`/`threads`), enabling resource-exhaustion / denial of service
-  that affects all sessions.
+- **Change global DuckDB settings** listed in `allowed_configs` on the shared
+  instance (e.g. `SET GLOBAL memory_limit`/`threads`), enabling
+  resource-exhaustion / denial of service that affects all sessions. Other
+  settings are locked.
 
 Note that MariaDB's usual file-access guards do **not** constrain these paths:
 neither the `FILE` privilege nor `secure_file_priv` is consulted for I/O
@@ -147,11 +153,9 @@ For operators:
 
 `run_in_duckdb()` is now gated behind the `duckdb_allow_run_in_duckdb` sysvar
 (OFF by default) and the `SUPER` privilege. Further engine hardening remains
-unimplemented (out of scope for this document but worth tracking): applying and
-locking DuckDB security configuration at instance creation —
-`enable_external_access=false`, disabling extension autoinstall/autoload,
-`allow_community_extensions=false`, `allowed_directories`, and
-`lock_configuration=true` — and/or replacing the coarse `SUPER` check with a
+unimplemented (out of scope for this document but worth tracking):
+`enable_external_access=false`, disabling extension autoload, and
+`allowed_directories` — and/or replacing the coarse `SUPER` check with a
 dedicated per-function privilege.
 
 ## References

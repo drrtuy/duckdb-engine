@@ -63,7 +63,7 @@ ALTER TABLE t3 ADD COLUMN b INT AUTO_INCREMENT UNIQUE;
 --echo # The rejected ALTER must leave the table untouched.
 SHOW CREATE TABLE t3;
 
---echo # --- setval() is available (local backport of DuckDB PR #24061) --------
+--echo # --- setval() is available (upstream DuckDB since v2.0.0) -------------
 SELECT run_in_duckdb("CREATE SEQUENCE db_autoinc.check_setval");
 SELECT run_in_duckdb("SELECT setval('db_autoinc.check_setval', 42)");
 SELECT run_in_duckdb("SELECT nextval('db_autoinc.check_setval')");

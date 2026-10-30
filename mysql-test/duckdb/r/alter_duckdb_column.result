@@ -623,8 +623,8 @@ table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
 db_alter_col	t	id	NULL	NO	INTEGER	NULL
-db_alter_col	t	B0	CAST('\x00' AS "BLOB")	NO	BLOB	NULL
-db_alter_col	t	B1	CAST('\x00\x00\x0D\x05' AS "BLOB")	NO	BLOB	NULL
+db_alter_col	t	B0	CAST('\x00' AS BLOB)	NO	BLOB	NULL
+db_alter_col	t	B1	CAST('\x00\x00\x0D\x05' AS BLOB)	NO	BLOB	NULL
 db_alter_col	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'	NO	BLOB	NULL
 
 
@@ -1501,8 +1501,8 @@ table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 4]
 db_alter_col	t	id	NULL	NO	INTEGER	NULL
-db_alter_col	t	B0	CAST('\x00' AS "BLOB")	NO	BLOB	NULL
-db_alter_col	t	B1	CAST('\x00\x00\x0D\x05' AS "BLOB")	NO	BLOB	NULL
+db_alter_col	t	B0	CAST('\x00' AS BLOB)	NO	BLOB	NULL
+db_alter_col	t	B1	CAST('\x00\x00\x0D\x05' AS BLOB)	NO	BLOB	NULL
 db_alter_col	t	B2	'\x00\x00\x00\x00\x00\x00\x00\x1F'	NO	BLOB	NULL
 
 

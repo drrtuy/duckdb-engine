@@ -88,6 +88,7 @@ IF(TARGET duckdb)
   target_link_libraries(duckdb duckdb_runtime duckdb_convertor duckdb_common
     ${DUCKDB_LIBRARY} atomic
   )
+  TARGET_SOURCES(duckdb PRIVATE ${DUCKDB_STATIC_EXTENSION_LOADER})
 
   duckdb_setup_target(duckdb)
   TARGET_INCLUDE_DIRECTORIES(duckdb PRIVATE

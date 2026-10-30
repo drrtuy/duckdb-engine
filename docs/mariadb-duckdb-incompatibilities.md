@@ -1,7 +1,7 @@
 # MariaDB - DuckDB Incompatibilities
 
 Discovered during porting the DuckDB storage engine plugin to MariaDB 12.
-DuckDB upstream version: **v1.5.5** (submodule at `third_parties/duckdb/`).
+DuckDB upstream version: **v2.0.0** (submodule at `third_parties/duckdb/`).
 
 ---
 

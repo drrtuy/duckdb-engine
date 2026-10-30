@@ -34,6 +34,7 @@ extern ulonglong global_memory_limit;
 extern char *global_duckdb_temp_directory;
 extern ulonglong global_max_temp_directory_size;
 extern ulonglong global_max_threads;
+extern ulonglong global_async_threads;
 extern ulonglong appender_allocator_flush_threshold;
 extern ulonglong checkpoint_threshold;
 extern my_bool global_use_dio;
@@ -52,6 +53,8 @@ void update_max_temp_directory_size_cb(MYSQL_THD thd,
                                        void *var_ptr, const void *save);
 void update_threads_cb(MYSQL_THD thd, struct st_mysql_sys_var *var,
                        void *var_ptr, const void *save);
+void update_async_threads_cb(MYSQL_THD thd, struct st_mysql_sys_var *var,
+                             void *var_ptr, const void *save);
 void update_scheduler_process_partial_cb(MYSQL_THD thd,
                                          struct st_mysql_sys_var *var,
                                          void *var_ptr, const void *save);

@@ -26,7 +26,6 @@
 
 #include "duckdb_query.h"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb_context.h"
 #include "duckdb_manager.h"
 #include "duckdb_log.h"
@@ -213,7 +212,7 @@ static std::string backticks_to_double_quotes(const std::string &sql)
   return out;
 }
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query)
 {
   const std::string q= backticks_to_double_quotes(query);
@@ -234,21 +233,17 @@ duckdb_query(duckdb::Connection &connection, const std::string &query)
   }
   catch (duckdb::Exception &e)
   {
-    auto result= duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData(e.what()));
-    return result;
+    return duckdb::make_uniq<duckdb::QueryResult>(duckdb::ErrorData(e.what()));
   }
   catch (std::exception &e)
   {
-    auto result= duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData(e.what()));
-    return result;
+    return duckdb::make_uniq<duckdb::QueryResult>(duckdb::ErrorData(e.what()));
   }
 }
 
-static duckdb::unique_ptr<duckdb::QueryResult>
-duckdb_pending_query(duckdb::Connection &connection, const std::string &query,
-                     duckdb::QueryResultOutputType output_type)
+duckdb::unique_ptr<DuckdbChunkStream>
+duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
+                    std::string &error)
 {
   const std::string q= backticks_to_double_quotes(query);
 
@@ -257,47 +252,25 @@ duckdb_pending_query(duckdb::Connection &connection, const std::string &query,
 
   try
   {
-    auto pending= connection.PendingQuery(q, output_type);
-    duckdb::unique_ptr<duckdb::QueryResult> res;
-    if (pending->HasError())
-      res= duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-          pending->GetErrorObject());
+    /*
+      Submit() + QueryResultStream keeps the result streaming: chunks are
+      produced as the caller fetches them. Connection::Query() would run the
+      query to completion and retain the whole result first.
+    */
+    auto res= connection.Submit(q);
+    if (res->HasError())
+      error= res->GetError();
     else
-      res= pending->Execute();
-
-    if ((myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT) &&
-        res->HasError())
-      sql_print_information("DuckDB error: %s", res->GetError().c_str());
-    return res;
-  }
-  catch (duckdb::Exception &e)
-  {
-    return duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData(e.what()));
+      return duckdb::make_uniq<DuckdbChunkStream>(std::move(res));
   }
   catch (std::exception &e)
   {
-    return duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData(e.what()));
+    error= duckdb::ErrorData(e).Message();
   }
-}
 
-static duckdb::unique_ptr<duckdb::MaterializedQueryResult>
-duckdb_query_single(duckdb::Connection &connection, const std::string &query)
-{
-  auto res= duckdb_pending_query(
-      connection, query, duckdb::QueryResultOutputType::FORCE_MATERIALIZED);
-  DBUG_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
-  return duckdb::unique_ptr_cast<duckdb::QueryResult,
-                                 duckdb::MaterializedQueryResult>(
-      std::move(res));
-}
-
-duckdb::unique_ptr<duckdb::QueryResult>
-duckdb_stream_query(duckdb::Connection &connection, const std::string &query)
-{
-  return duckdb_pending_query(
-      connection, query, duckdb::QueryResultOutputType::ALLOW_STREAMING);
+  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT)
+    sql_print_information("DuckDB error: %s", error.c_str());
+  return nullptr;
 }
 
 static std::string get_thd_schema(THD *thd)
@@ -307,13 +280,11 @@ static std::string get_thd_schema(THD *thd)
   return {};
 }
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
-duckdb_query(THD *thd, const std::string &query, bool need_config)
-{
-  if (mariadb_query_has_unsafe_quote_escape(thd, query.data(), query.size()))
-    return duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData("Unsafe MariaDB backslash quote escape in forwarded SQL"));
+static const char unsafe_quote_escape_error[]=
+    "Unsafe MariaDB backslash quote escape in forwarded SQL";
 
+static duckdb::Connection &prepare_thd_connection(THD *thd, bool need_config)
+{
   auto *ctx=
       static_cast<DuckdbThdContext *>(thd_get_ha_data(thd, duckdb_hton));
   if (!ctx)
@@ -327,35 +298,34 @@ duckdb_query(THD *thd, const std::string &query, bool need_config)
     ctx->config_duckdb_env(get_thd_schema(thd));
     ctx->config_duckdb_session(thd);
   }
-
-  return duckdb_query_single(ctx->get_connection(), query);
+  return ctx->get_connection();
 }
 
 duckdb::unique_ptr<duckdb::QueryResult>
-duckdb_stream_query(THD *thd, const std::string &query, bool need_config)
+duckdb_query(THD *thd, const std::string &query, bool need_config)
 {
   if (mariadb_query_has_unsafe_quote_escape(thd, query.data(), query.size()))
-    return duckdb::make_uniq<duckdb::MaterializedQueryResult>(
-        duckdb::ErrorData("Unsafe MariaDB backslash quote escape in forwarded SQL"));
+    return duckdb::make_uniq<duckdb::QueryResult>(
+        duckdb::ErrorData(unsafe_quote_escape_error));
 
-  auto *ctx=
-      static_cast<DuckdbThdContext *>(thd_get_ha_data(thd, duckdb_hton));
-  if (!ctx)
-  {
-    ctx= new DuckdbThdContext();
-    thd_set_ha_data(thd, duckdb_hton, ctx);
-  }
-
-  if (need_config)
-  {
-    ctx->config_duckdb_env(get_thd_schema(thd));
-    ctx->config_duckdb_session(thd);
-  }
-
-  return duckdb_stream_query(ctx->get_connection(), query);
+  return duckdb_query(prepare_thd_connection(thd, need_config), query);
 }
 
-duckdb::unique_ptr<duckdb::MaterializedQueryResult>
+duckdb::unique_ptr<DuckdbChunkStream>
+duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
+                    bool need_config)
+{
+  if (mariadb_query_has_unsafe_quote_escape(thd, query.data(), query.size()))
+  {
+    error= unsafe_quote_escape_error;
+    return nullptr;
+  }
+
+  return duckdb_stream_query(prepare_thd_connection(thd, need_config), query,
+                             error);
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(const std::string &query)
 {
   auto connection= DuckdbManager::CreateConnection();

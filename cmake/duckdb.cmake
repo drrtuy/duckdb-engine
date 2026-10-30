@@ -36,15 +36,21 @@ ENDIF()
 
 SET(_DUCKDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/duckdb-build")
 
-# The individual static archives DuckDB produces (for the three extensions
-# listed in cmake/duckdb_extensions.cmake: core_functions, icu, json).
+# Statically linked DuckDB capabilities and extensions, in load order.
+# Extensions must also be listed in cmake/duckdb_extensions.cmake.
+# local_extension_repository is left out on purpose: it would redirect
+# automatic installs to the DuckDB build tree.
+SET(_DUCKDB_LINKED_EXTENSIONS
+  httplib loadable_extensions core_functions icu json parquet)
+
 SET(_DUCKDB_STATIC_LIBS
-  "${_DUCKDB_BUILD_DIR}/src/libduckdb_static.a"
-  "${_DUCKDB_BUILD_DIR}/extension/libduckdb_generated_extension_loader.a"
+  "${_DUCKDB_BUILD_DIR}/src/main/http/libduckdb_httplib.a"
+  "${_DUCKDB_BUILD_DIR}/src/main/extension/libduckdb_loadable_extensions.a"
   "${_DUCKDB_BUILD_DIR}/extension/core_functions/libcore_functions_extension.a"
   "${_DUCKDB_BUILD_DIR}/extension/icu/libicu_extension.a"
-  "${_DUCKDB_BUILD_DIR}/extension/parquet/libparquet_extension.a"
   "${_DUCKDB_BUILD_DIR}/extension/json/libjson_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/parquet/libparquet_extension.a"
+  "${_DUCKDB_BUILD_DIR}/src/libduckdb_static.a"
 )
 
 MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===")
@@ -52,21 +58,30 @@ IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
   MESSAGE(FATAL_ERROR "DuckDB submodule is missing: run 'git submodule update --init third_parties/duckdb'")
 ENDIF()
 
-# Local patches applied on top of the pinned submodule commit.
-#
-# duckdb-pr24061-setval.diff: backport of upstream PR #24061 ("Add SetVal",
-# merged 2026-07-23, first release after v1.5.2) rewritten against the v1.5.2
-# API. Provides setval('seq', value[, is_called]) needed for AUTO_INCREMENT
-# counter repositioning (TRUNCATE, ALTER ... AUTO_INCREMENT=N, explicit-id
-# reconciliation). Drop when the submodule is bumped to a release containing
-# the PR: the apply below will fail loudly on an already-present setval.
-SET(_DUCKDB_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/duckdb-pr24061-setval.diff")
-SET(_DUCKDB_GIT_DESCRIBE "v1.5.5-0-g0000000000")
+SET(_DUCKDB_GIT_DESCRIBE "v2.0.0")
 
-# Upstream sets DUCKDB_EXTENSION_JEMALLOC_LINKED via add_extension_definitions(),
-# which runs in extension/ but NOT in src/, so allocator.cpp (in duckdb_static)
-# compiles the glibc malloc() path even though libjemalloc_extension.a is linked.
-# Define it globally + add the jemalloc header dir so the USE_JEMALLOC branch is active.
+# DuckDB v2 no longer builds an extension loader archive. Render its
+# static_extension_loader.c.in template (as duckdb_write_static_extension_loader()
+# in extension/extension_build_tools.cmake does) into a source defining
+# duckdb_register_static_extensions(), which DuckdbManager calls before
+# opening the database.
+SET(LINK_EXTENSION_LIST "")
+SET(DESCRIBE_DECLARATIONS "")
+SET(DESCRIBE_REGISTRATIONS "")
+FOREACH(_ext IN LISTS _DUCKDB_LINKED_EXTENSIONS)
+  STRING(APPEND LINK_EXTENSION_LIST " ${_ext}")
+  STRING(APPEND DESCRIBE_DECLARATIONS
+    "int32_t duckdb_extension_${_ext}_describe(duckdb_extension_descriptor *descriptor);\n")
+  STRING(APPEND DESCRIBE_REGISTRATIONS
+    "\tif (duckdb_register_static_extension(duckdb_extension_${_ext}_describe) != 0) {\n\t\tresult = 1;\n\t}\n")
+ENDFOREACH()
+STRING(STRIP "${LINK_EXTENSION_LIST}" LINK_EXTENSION_LIST)
+SET(DUCKDB_STATIC_EXTENSION_LOADER
+    "${CMAKE_CURRENT_BINARY_DIR}/duckdb_static_extension_loader.c")
+CONFIGURE_FILE(
+  "${DUCKDB_SUBMODULE_DIR}/extension/loader/static_extension_loader.c.in"
+  "${DUCKDB_STATIC_EXTENSION_LOADER}" @ONLY)
+
 SET(_DUCKDB_EXTRA_CXX_FLAGS "")
 # GCC 16+ warns about DuckDB classes in SFINAE contexts (upstream issue, not ours).
 # Silence it for DuckDB's own ExternalProject build too.
@@ -91,8 +106,6 @@ ExternalProject_Add(duckdb_build
   PREFIX          "${_DUCKDB_BUILD_DIR}"
   SOURCE_DIR      "${DUCKDB_SUBMODULE_DIR}"
   BINARY_DIR      "${_DUCKDB_BUILD_DIR}"
-  # Idempotent: skip when the working tree already carries the patch.
-  PATCH_COMMAND   bash -c "echo '${_DUCKDB_GIT_DESCRIBE}' >/dev/null && (git apply --reverse --check '${_DUCKDB_PATCH}' 2>/dev/null || git apply --verbose '${_DUCKDB_PATCH}')"
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=${_DUCKDB_BUILD_TYPE}
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}

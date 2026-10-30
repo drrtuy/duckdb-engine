@@ -32,6 +32,9 @@
 #include "cross_engine_scan.h"
 #include "duckdb_mysql_compat.h"
 
+/* Defined by the generated duckdb_static_extension_loader.c */
+extern "C" int32_t duckdb_register_static_extensions(void);
+
 namespace myduck
 {
 
@@ -96,22 +99,31 @@ bool DuckdbManager::Initialize()
 
   duckdb::DBConfig config;
 
-  config.options.use_direct_io= global_use_dio;
+  /* Direct I/O is a per-database storage option of the main database. */
+  if (global_use_dio)
+    config.options.main_database_options["io_mode"]=
+        duckdb::Value("DIRECT_IO");
 
   /*
-    Pin the on-disk storage format version to v1.5.2 for newly created
-    databases.  Modern column compression schemes (e.g. DICT_FSST) are gated
-    behind the storage version; with the conservative default DuckDB falls
-    back to the legacy separate Dictionary/FSST encodings, which makes the
-    database file substantially larger.  For a freshly created database
-    (no ATTACH storage_version override) StorageManager derives the storage
-    version from this option.
+    Use the DuckDB v2.0.0 on-disk storage format for newly created databases.
+    Modern column compression schemes are gated behind the storage version;
+    with the conservative default DuckDB falls back to legacy encodings, which
+    makes the database file substantially larger. For a freshly created
+    database StorageManager derives the storage version from this option;
+    an existing database file keeps the version it was created with.
+    Files written in this format cannot be opened by DuckDB v1.x.
   */
-  config.options.serialization_compatibility=
-      duckdb::SerializationCompatibility::FromString("v1.5.2");
+  config.options.storage_compatibility=
+      duckdb::StorageCompatibility::FromString("v2.0.0");
 
   if (global_max_threads != 0)
     config.options.maximum_threads= global_max_threads;
+
+  /*
+    DuckDB v2 starts a separate pool of async I/O threads, by default
+    min(4 * cores, 256) of them. Bound it inside mysqld.
+  */
+  config.options.async_threads= global_async_threads;
 
   /*
     When memory_limit sysvar is 0 (default), size DuckDB's memory as 80% of
@@ -165,6 +177,18 @@ bool DuckdbManager::Initialize()
   char path[FN_REFLEN];
   fn_format(path, DUCKDB_FILE_NAME, mysql_real_data_home, "", MYF(0));
 
+  /*
+    Register the statically linked extensions (generated loader, see
+    cmake/duckdb.cmake). DuckDB loads every registered extension when the
+    database is opened. Registration is idempotent.
+  */
+  if (duckdb_register_static_extensions() != 0)
+  {
+    sql_print_error("DuckDB: failed to register statically linked "
+                    "extensions");
+    return true;
+  }
+
   try
   {
     m_database= new duckdb::DuckDB(path, &config);
@@ -199,7 +223,14 @@ bool DuckdbManager::Initialize()
             "DuckDB initialization query failed: %s", result->GetError());
     };
     init_query("SET autoload_known_extensions=true");
-    init_query("SET autoinstall_known_extensions=true");
+    /*
+      All required extensions are linked statically. Never download
+      extension binaries from the network inside mysqld.
+    */
+    init_query("SET autoinstall_known_extensions=false");
+    init_query("SET allow_community_extensions=false");
+    /* MariaDB returns NULL (with a warning) for x DIV 0 and x MOD 0. */
+    init_query("SET GLOBAL error_on_division_by_zero=false");
 
     /*
       Register MariaDB-compatible SQL macros for functions that DuckDB
@@ -256,6 +287,21 @@ bool DuckdbManager::Initialize()
 
     /* Register cross-engine scan support (_mdb_scan + replacement scan) */
     register_cross_engine_scan(*m_database->instance);
+
+    /*
+      Lock the DuckDB configuration so SQL reaching DuckDB (pushdown,
+      run_in_duckdb) cannot change it, e.g. re-enable extension
+      auto-install. Only the settings the plugin itself propagates from
+      MariaDB system variables (duckdb_config.cc) and session state
+      (DuckdbThdContext) stay changeable.
+    */
+    init_query("SET allowed_configs=["
+               "'memory_limit', 'max_temp_directory_size', 'threads', "
+               "'async_threads', 'scheduler_process_partial', "
+               "'allocator_flush_threshold', 'checkpoint_threshold', "
+               "'TimeZone', 'default_collation', 'merge_join_threshold', "
+               "'disabled_optimizers', 'explain_output']");
+    init_query("SET lock_configuration=true");
 
     sql_print_information("DuckDB: DuckdbManager::Initialize succeed, path=%s",
                           path);

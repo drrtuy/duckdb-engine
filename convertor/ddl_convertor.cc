@@ -544,8 +544,10 @@ std::string FieldConvertor::translate()
     Get default value from Field directly (no dd::Column in MariaDB).
     In MariaDB, default expressions are stored in field->default_value
     (Virtual_column_info*), and simple defaults are stored in record[1].
+    The AUTO_INCREMENT column gets its nextval() default from
+    CreateTableConvertor; DuckDB rejects a second DEFAULT clause.
   */
-  if (!(field->flags & NO_DEFAULT_VALUE_FLAG))
+  if (!(field->flags & (NO_DEFAULT_VALUE_FLAG | AUTO_INCREMENT_FLAG)))
   {
     if (field->default_value)
     {

@@ -858,9 +858,11 @@ int ha_duckdb_select_handler::init_scan()
   }
 
   /*
-    Rewrite REGEXP / NOT REGEXP → regexp_matches().
+    Rewrite REGEXP / NOT REGEXP → the ~ / !~ operators.
     MariaDB: expr REGEXP pattern / expr NOT REGEXP pattern
-    DuckDB:  regexp_matches(expr, pattern) / NOT regexp_matches(expr, pattern)
+    DuckDB:  expr ~ pattern / expr !~ pattern
+    Since DuckDB v2.0.0 ~ is a partial (search) match by default
+    (regex_match_operator_semantics='partial'), as MariaDB REGEXP is.
   */
   {
     /* Replace NOT REGEXP first (longer), then REGEXP */
@@ -973,16 +975,13 @@ int ha_duckdb_select_handler::init_scan()
     }
   }
 
-  query_result= myduck::duckdb_stream_query(thd, sql, true);
+  std::string error;
+  query_stream= myduck::duckdb_stream_query(thd, sql, error, true);
 
-  if (!query_result || query_result->HasError())
+  if (!query_stream)
   {
-    if (query_result)
-      my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
-               query_result->GetError().c_str(), "DuckDB");
-    else
-      my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
-               "DuckDB query returned null result", "DuckDB");
+    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR, error.c_str(),
+             "DuckDB");
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
 
@@ -996,21 +995,37 @@ int ha_duckdb_select_handler::next_row()
 {
   DBUG_ENTER("ha_duckdb_select_handler::next_row");
 
-  if (!query_result)
+  if (!query_stream)
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
 
   /* Fetch a new chunk when the current one is exhausted */
   if (!current_chunk || current_row_index >= current_chunk->size())
   {
-    current_chunk.reset();
-    current_chunk= query_result->Fetch();
-
-    if (!current_chunk || current_chunk->size() == 0)
+    /*
+      QueryResultStream::Fetch() runs query tasks on this thread until a
+      chunk is buffered. It returns null at the end of the stream and on
+      an execution error (recorded on the stream), and throws once the
+      stream has failed.
+    */
+    try
     {
-      if (query_result->HasError())
+      do
+        current_chunk= query_stream->Fetch();
+      while (current_chunk && current_chunk->size() == 0);
+    }
+    catch (std::exception &e)
+    {
+      current_chunk.reset();
+      if (!query_stream->HasError())
+        query_stream->SetError(duckdb::ErrorData(e));
+    }
+
+    if (!current_chunk)
+    {
+      if (query_stream->HasError())
       {
         my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
-                 query_result->GetError().c_str(), "DuckDB");
+                 query_stream->GetError().c_str(), "DuckDB");
         DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
       }
       DBUG_RETURN(HA_ERR_END_OF_FILE);
@@ -1057,7 +1072,7 @@ int ha_duckdb_select_handler::end_scan()
     myduck::clear_external_tables();
 
   current_chunk.reset();
-  query_result.reset();
+  query_stream.reset();
   current_row_index= 0;
 
   free_tmp_table(thd, table);
