@@ -179,10 +179,19 @@ static int duckdb_close_connection(handlerton *hton, THD *thd)
       thd_get_ha_data(thd, duckdb_hton));
   if (ctx)
   {
-    delete ctx;
+    /* Unpublish first: duckdb_kill_query() reads it under LOCK_thd_data. */
     thd_set_ha_data(thd, duckdb_hton, nullptr);
+    delete ctx;
   }
   return 0;
+}
+
+static void duckdb_kill_query(handlerton *, THD *thd, enum thd_kill_levels)
+{
+  auto *ctx= static_cast<myduck::DuckdbThdContext *>(
+      thd_get_ha_data(thd, duckdb_hton));
+  if (ctx)
+    ctx->interrupt();
 }
 
 static int duckdb_register_trx(THD *thd)
@@ -234,6 +243,7 @@ static int duckdb_init_func(void *p)
   duckdb_hton->commit= duckdb_commit;
   duckdb_hton->rollback= duckdb_rollback;
   duckdb_hton->close_connection= duckdb_close_connection;
+  duckdb_hton->kill_query= duckdb_kill_query;
   duckdb_hton->drop_database= duckdb_drop_database;
 
   duckdb_hton->create_select= create_duckdb_select_handler;

@@ -68,6 +68,11 @@ duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
 duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config= true);
 
+/*
+  Also opens the THD's interruptible window (DuckdbThdContext::
+  begin_interruptible()); the caller closes it with end_interruptible()
+  once the stream is released.
+*/
 duckdb::unique_ptr<DuckdbChunkStream>
 duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
                     bool need_config= true);

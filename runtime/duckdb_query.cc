@@ -32,8 +32,6 @@
 
 #include <cctype>
 
-extern handlerton *duckdb_hton;
-
 namespace myduck
 {
 
@@ -285,13 +283,7 @@ static const char unsafe_quote_escape_error[]=
 
 static duckdb::Connection &prepare_thd_connection(THD *thd, bool need_config)
 {
-  auto *ctx=
-      static_cast<DuckdbThdContext *>(thd_get_ha_data(thd, duckdb_hton));
-  if (!ctx)
-  {
-    ctx= new DuckdbThdContext();
-    thd_set_ha_data(thd, duckdb_hton, ctx);
-  }
+  auto *ctx= get_thd_context(thd);
 
   if (need_config)
   {
@@ -321,8 +313,13 @@ duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
     return nullptr;
   }
 
-  return duckdb_stream_query(prepare_thd_connection(thd, need_config), query,
-                             error);
+  auto &connection= prepare_thd_connection(thd, need_config);
+  auto *ctx= get_thd_context(thd);
+  /* Opened after the session setup so a kill cannot fail it. */
+  ctx->begin_interruptible();
+  auto stream= duckdb_stream_query(connection, query, error);
+  ctx->interrupt_if_killed(thd);
+  return stream;
 }
 
 duckdb::unique_ptr<duckdb::QueryResult>

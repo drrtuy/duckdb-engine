@@ -454,7 +454,27 @@ ha_duckdb_select_handler::ha_duckdb_select_handler(THD *thd_arg,
   query_string.append(query.c_str(), query.length());
 }
 
-ha_duckdb_select_handler::~ha_duckdb_select_handler()= default;
+/* select_handler::execute() skips end_scan() on some error paths. */
+ha_duckdb_select_handler::~ha_duckdb_select_handler() { end_interruptible(); }
+
+void ha_duckdb_select_handler::end_interruptible()
+{
+  if (interruptible_ctx)
+  {
+    interruptible_ctx->end_interruptible();
+    interruptible_ctx= nullptr;
+  }
+}
+
+/* A DuckDB error caused by KILL / max_statement_time is reported as such. */
+static void report_duckdb_error(THD *thd, const std::string &error)
+{
+  if (thd->killed)
+    thd->send_kill_message();
+  else
+    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR, error.c_str(),
+             "DuckDB");
+}
 
 void ha_duckdb_select_handler::set_cross_engine(
     std::vector<std::string> &&tables)
@@ -975,13 +995,14 @@ int ha_duckdb_select_handler::init_scan()
     }
   }
 
+  interruptible_ctx= myduck::get_thd_context(thd);
+
   std::string error;
   query_stream= myduck::duckdb_stream_query(thd, sql, error, true);
 
   if (!query_stream)
   {
-    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR, error.c_str(),
-             "DuckDB");
+    report_duckdb_error(thd, error);
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
 
@@ -1024,8 +1045,7 @@ int ha_duckdb_select_handler::next_row()
     {
       if (query_stream->HasError())
       {
-        my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_INTERNAL_ERROR,
-                 query_stream->GetError().c_str(), "DuckDB");
+        report_duckdb_error(thd, query_stream->GetError());
         DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
       }
       DBUG_RETURN(HA_ERR_END_OF_FILE);
@@ -1074,6 +1094,7 @@ int ha_duckdb_select_handler::end_scan()
   current_chunk.reset();
   query_stream.reset();
   current_row_index= 0;
+  end_interruptible();
 
   free_tmp_table(thd, table);
   table= 0;

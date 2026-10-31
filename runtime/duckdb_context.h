@@ -26,6 +26,8 @@
 #include <my_global.h>
 #include <my_bitmap.h>
 
+#include <mutex>
+
 class THD;
 struct TABLE;
 
@@ -159,8 +161,25 @@ public:
   void set_batch_state(BatchState state) { batch_state= state; }
   BatchState get_batch_state() { return batch_state; }
 
+  /*
+    KILL QUERY / max_statement_time reach DuckDB only between
+    begin_interruptible() and end_interruptible(), i.e. while a pushed-down
+    SELECT runs. COMMIT and appender flushes never see an interrupt.
+  */
+  void begin_interruptible();
+  void end_interruptible();
+  /*
+    DuckDB drops a pending interrupt when a query starts, so a kill that
+    arrived before that is re-delivered here once the query is submitted.
+  */
+  void interrupt_if_killed(THD *thd);
+  /** Called by the killing thread with thd->LOCK_thd_data held. */
+  void interrupt();
+
 private:
   std::shared_ptr<duckdb::Connection> m_con;
+  std::mutex m_interrupt_mutex;
+  bool m_interruptible= false;
   bool in_copy_ddl= false;
   BatchState batch_state;
   std::unique_ptr<DeltaAppenders> m_appenders;
@@ -173,6 +192,9 @@ private:
   std::string m_current_timezone;
   std::string m_collation;
 };
+
+/** Return the THD's DuckDB context, creating it on first use. */
+DuckdbThdContext *get_thd_context(THD *thd);
 
 /** Return true (and push ER_XAER_RMFAIL) when THD is inside an XA
     transaction.  DuckDB does not support XA. */

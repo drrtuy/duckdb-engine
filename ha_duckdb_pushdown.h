@@ -34,6 +34,11 @@
 
 extern handlerton *duckdb_hton;
 
+namespace myduck
+{
+class DuckdbThdContext;
+}
+
 /**
   select_handler implementation for DuckDB.
 
@@ -60,6 +65,10 @@ protected:
   int end_scan() override;
 
 private:
+  void end_interruptible();
+
+  /** Set while the query may be interrupted by KILL / max_statement_time */
+  myduck::DuckdbThdContext *interruptible_ctx= nullptr;
   std::unique_ptr<myduck::DuckdbChunkStream> query_stream;
   std::unique_ptr<duckdb::DataChunk> current_chunk;
   size_t current_row_index;

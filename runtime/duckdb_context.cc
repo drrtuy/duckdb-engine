@@ -33,6 +33,8 @@
 
 #include <vector>
 
+extern handlerton *duckdb_hton;
+
 namespace myduck
 {
 
@@ -58,6 +60,46 @@ static std::string disabled_optimizers_to_string(ulonglong val)
     }
   }
   return result;
+}
+
+DuckdbThdContext *get_thd_context(THD *thd)
+{
+  auto *ctx=
+      static_cast<DuckdbThdContext *>(thd_get_ha_data(thd, duckdb_hton));
+  if (!ctx)
+  {
+    ctx= new DuckdbThdContext();
+    thd_set_ha_data(thd, duckdb_hton, ctx);
+  }
+  return ctx;
+}
+
+void DuckdbThdContext::begin_interruptible()
+{
+  std::lock_guard<std::mutex> guard(m_interrupt_mutex);
+  m_con->context->ClearInterrupt();
+  m_interruptible= true;
+}
+
+void DuckdbThdContext::interrupt_if_killed(THD *thd)
+{
+  std::lock_guard<std::mutex> guard(m_interrupt_mutex);
+  if (m_interruptible && thd->killed)
+    m_con->Interrupt();
+}
+
+void DuckdbThdContext::end_interruptible()
+{
+  std::lock_guard<std::mutex> guard(m_interrupt_mutex);
+  m_interruptible= false;
+  m_con->context->ClearInterrupt();
+}
+
+void DuckdbThdContext::interrupt()
+{
+  std::lock_guard<std::mutex> guard(m_interrupt_mutex);
+  if (m_interruptible)
+    m_con->Interrupt();
 }
 
 void DuckdbThdContext::config_duckdb_env(const std::string &schema)
