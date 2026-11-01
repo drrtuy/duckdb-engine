@@ -41,6 +41,8 @@ public:
   static void Cleanup();
   static inline DuckdbManager &Get();
   static std::shared_ptr<duckdb::Connection> CreateConnection();
+  /** False before the engine initialised or after it was cleaned up. */
+  static bool IsInitialized() { return m_instance != nullptr; }
 
 private:
   static DuckdbManager *m_instance;

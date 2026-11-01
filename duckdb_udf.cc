@@ -83,6 +83,14 @@ public:
 
     std::string sql(sql_arg->ptr(), sql_arg->length());
 
+    if (!myduck::DuckdbManager::IsInitialized())
+    {
+      my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_GENERIC,
+               "the DuckDB engine is not initialized", "DuckDB");
+      null_value= 1;
+      return NULL;
+    }
+
     auto conn= myduck::DuckdbManager::CreateConnection();
     if (!conn)
     {
