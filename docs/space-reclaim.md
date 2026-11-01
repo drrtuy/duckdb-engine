@@ -70,7 +70,9 @@ often remain at high block IDs, preventing any truncation.
 ### 1. FORCE CHECKPOINT (reuse space, may shrink)
 
 ```sql
-SELECT run_in_duckdb('FORCE CHECKPOINT');
+SELECT duckdb_checkpoint();   -- CHECKPOINT; fails if transactions are running
+SELECT duckdb_checkpoint(1);  -- FORCE CHECKPOINT; ABORTS running transactions
+-- both return size_before / size_after and need SUPER
 ```
 
 **Effect**: WAL flushed, free blocks marked for reuse. File **may** shrink if
