@@ -1,0 +1,26 @@
+name: Build and package DuckDB engine plugin
+
+on:
+  push:
+    branches:
+      - foundry
+    tags:
+      - "v*"
+
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: lefred/mariadb-plugin-ci/.github/workflows/build-plugin-new.yml@main
+    with:
+      # Autobake build IDs: 11.4.13, 12.3.4
+      mariadb_versions: |
+        74647
+        75263
+      package_formats: deb
+      test_suites: duckdb
+      parallel: "4"
