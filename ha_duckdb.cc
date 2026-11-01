@@ -1720,7 +1720,7 @@ maria_declare_plugin(duckdb)
     PLUGIN_LICENSE_GPL,
     duckdb_init_func,              /* Plugin Init */
     duckdb_deinit_func,            /* Plugin Deinit */
-    0x0100,                        /* version number (1.0) */
+    0x0200,                        /* version number (2.0) */
     duckdb_status_variables,       /* status variables */
     duckdb_system_variables,       /* system variables */
     "1.0",                         /* string version */
@@ -1735,7 +1735,7 @@ maria_declare_plugin(duckdb)
     PLUGIN_LICENSE_GPL,
     NULL,                          /* Plugin Init */
     NULL,                          /* Plugin Deinit */
-    0x0100,                        /* version number (1.0) */
+    0x0200,                        /* version number (2.0) */
     NULL,                          /* status variables */
     NULL,                          /* system variables */
     "1.0",                         /* string version */
