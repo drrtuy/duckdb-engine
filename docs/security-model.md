@@ -158,11 +158,80 @@ unimplemented (out of scope for this document but worth tracking):
 `allowed_directories` — and/or replacing the coarse `SUPER` check with a
 dedicated per-function privilege.
 
+## 7. Purpose-built wrapper functions (`duckdb_udf_wrappers.cc`)
+
+Common operations no longer need `run_in_duckdb()`. Each wrapper builds a
+fixed DuckDB statement from validated arguments:
+
+| Function | Requires |
+|---|---|
+| `duckdb_load_parquet/csv/json(table, path)` | `duckdb_allow_file_io=ON`, global `FILE`, table `INSERT` |
+| `duckdb_export_parquet/csv/json(table, path)` | `duckdb_allow_file_io=ON`, global `FILE`, table `SELECT` |
+| `duckdb_export_database(dir)` | `duckdb_allow_file_io=ON`, `FILE`, `SUPER` |
+| `duckdb_checkpoint([force])`, `duckdb_file_size()`, `duckdb_setting(name)`, `duckdb_loaded_extensions()`, `duckdb_analyze()` | `SUPER` |
+| `duckdb_analyze(table)` | table `SELECT` and `INSERT` |
+
+**Tables.** The target of a load, export or `duckdb_analyze(table)` must be an
+existing `ENGINE=DuckDB` table, so a broad grant cannot reach other DuckDB
+schemas. The wrappers take the metadata locks a normal statement would take
+(a load: shared-write plus the backup DML lock; an export or analyze:
+shared-read), so they wait for `LOCK TABLES`, `ALTER`/`DROP TABLE` and, for
+loads, `FLUSH TABLES WITH READ LOCK` / `BACKUP STAGE` in other sessions, up to
+`lock_wait_timeout`. They are refused under the caller's own `LOCK TABLES` and
+inside an open transaction. Loads honour `read_only`. `KILL QUERY` and
+`max_statement_time` interrupt a running call; an interrupted load adds no
+rows.
+
+**Local paths** must be absolute (a leading `~` is refused), contain no `..`
+component, and pass `secure_file_priv`. Writes never overwrite an existing
+file or directory, as with `SELECT ... INTO OUTFILE`; the check is not atomic
+with DuckDB opening the file. Because `secure_file_priv` is empty by default,
+set it on any server that enables `duckdb_allow_file_io`. Read paths are
+DuckDB glob patterns: a pattern in the file name (`/dir/*.parquet`) matches
+only inside the checked directory, but the matched files are not resolved one
+by one, so a symlink placed inside that directory would be followed.
+
+**Remote reads.** `https://`, `http://` and `s3://` URLs are accepted for
+reads only, and only when the URL starts with an entry of the
+`duckdb_remote_url_prefixes` allow-list (empty by default, which disables
+remote reads). An entry matches only on a `/` boundary, so write
+`https://host/`, not `https://host`. The allow-list stops the server being
+used to reach internal endpoints such as a cloud metadata service; HTTP
+redirects are not covered. Every other scheme is refused. Remote reads need
+the `httpfs` extension, currently fetched by DuckDB's autoinstall (section
+3); building it in statically is an open decision.
+
+**Arguments** containing control characters or backticks are rejected, all
+arguments are converted to utf8mb4, string literals and identifiers are
+quoted by the wrapper, no credentials are accepted as arguments, and DuckDB
+exceptions become normal errors. `duckdb_setting()` refuses names that look
+like credentials.
+
+There is no import counterpart: `IMPORT DATABASE` would create tables that
+exist only in DuckDB, without MariaDB table definitions.
+
+**Limitations.**
+
+- The functions must be called from a `SELECT` that reads no DuckDB table:
+  such a query is forwarded to DuckDB verbatim, and DuckDB does not know
+  these function names.
+- Loads run on a separate DuckDB connection: they are not binlogged
+  (replicas do not receive the rows) and do not update the engine's
+  AUTO_INCREMENT bookkeeping.
+- Loads do not check primary-key uniqueness. Neither does `INSERT` into a
+  DuckDB table, since DuckDB tables carry no key constraints.
+- With `duckdb_log_options` query logging enabled, statements are written to
+  the error log in full, including presigned URLs, which carry credentials.
+- `duckdb_checkpoint(1)` runs `FORCE CHECKPOINT`, which aborts every running
+  DuckDB transaction, including other users'. `duckdb_checkpoint()` runs a
+  plain `CHECKPOINT`, which fails instead.
+
 ## References
 
 - DuckDB — Securing DuckDB:
   <https://duckdb.org/docs/operations_manual/securing_duckdb/overview>
 - `duckdb_udf.cc` — `run_in_duckdb()` implementation and access checks
+- `duckdb_udf_wrappers.cc` — purpose-built wrapper functions (section 7)
 - `ha_duckdb.cc` — `duckdb_allow_run_in_duckdb` system variable
 - `runtime/duckdb_manager.cc` — shared instance configuration
 - `runtime/duckdb_query.cc` — query execution path
