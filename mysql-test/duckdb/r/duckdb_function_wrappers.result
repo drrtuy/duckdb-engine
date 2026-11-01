@@ -1,0 +1,271 @@
+#
+# Function wrappers: duckdb_load_*, duckdb_export_*, duckdb_checkpoint,
+# duckdb_analyze, duckdb_file_size, duckdb_setting,
+# duckdb_loaded_extensions
+#
+SET @saved_file_io= @@GLOBAL.duckdb_allow_file_io;
+SET @saved_prefixes= @@GLOBAL.duckdb_remote_url_prefixes;
+SET GLOBAL duckdb_allow_file_io= OFF;
+SET GLOBAL duckdb_remote_url_prefixes= '';
+CREATE TABLE src (id INT PRIMARY KEY, name VARCHAR(20)) ENGINE=DuckDB CHARSET=utf8mb4;
+CREATE TABLE dst_parquet LIKE src;
+CREATE TABLE dst_csv LIKE src;
+CREATE TABLE dst_json LIKE src;
+INSERT INTO src VALUES (1,'one'),(2,'two'),(3,'three');
+#
+# 1) File functions are blocked while duckdb_allow_file_io is OFF
+#
+SELECT duckdb_export_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: The MariaDB server is running with the --duckdb-allow-file-io=OFF option so it cannot execute this statement
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: The MariaDB server is running with the --duckdb-allow-file-io=OFF option so it cannot execute this statement
+SET GLOBAL duckdb_allow_file_io= ON;
+#
+# 2) A user without the FILE privilege is refused
+#
+CREATE USER 'wr_nofile'@'localhost';
+GRANT ALL ON test.* TO 'wr_nofile'@'localhost';
+connect con_nofile, localhost, wr_nofile,, test;
+SELECT duckdb_export_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR 42000: Access denied; you need (at least one of) the FILE privilege(s) for this operation
+SELECT duckdb_checkpoint();
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+SELECT duckdb_file_size();
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+disconnect con_nofile;
+connection default;
+#
+# 3) Export and reload: parquet, CSV, JSON
+#
+SELECT duckdb_export_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet') AS exported;
+exported
+3
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet') AS loaded;
+loaded
+3
+SELECT * FROM dst_parquet ORDER BY id;
+id	name
+1	one
+2	two
+3	three
+SELECT duckdb_export_csv('test.src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.csv') AS exported;
+exported
+3
+SELECT duckdb_load_csv('test.dst_csv', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.csv') AS loaded;
+loaded
+3
+SELECT * FROM dst_csv ORDER BY id;
+id	name
+1	one
+2	two
+3	three
+SELECT duckdb_export_json('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.json') AS exported;
+exported
+3
+SELECT duckdb_load_json('dst_json', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.json') AS loaded;
+loaded
+3
+SELECT * FROM dst_json ORDER BY id;
+id	name
+1	one
+2	two
+3	three
+#
+# 4) Path and name validation
+#
+SELECT duckdb_load_parquet('dst_parquet', 'relative/file.parquet');
+ERROR HY000: Got error 168 'path must be absolute' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/../etc/x.parquet');
+ERROR HY000: Got error 168 'path must not contain '..'' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/`x`.parquet');
+ERROR HY000: Got error 168 'invalid path' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'ftp://example.com/x.parquet');
+ERROR HY000: Got error 168 'URL scheme not allowed (https, http, s3 only)' from DuckDB
+SELECT duckdb_load_parquet('a.b.c', '/nonexistent/x.parquet');
+ERROR HY000: Got error 168 'table name must be 'table' or 'database.table'' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', '~/x.parquet');
+ERROR HY000: Got error 168 'path must be absolute' from DuckDB
+# Existing files are never overwritten
+SELECT duckdb_export_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Got error 168 'target already exists' from DuckDB
+# Targets must be ENGINE=DuckDB tables
+CREATE TABLE innodb_t (id INT PRIMARY KEY) ENGINE=InnoDB;
+SELECT duckdb_load_parquet('innodb_t', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Got error 168 'not an existing ENGINE=DuckDB table' from DuckDB
+DROP TABLE innodb_t;
+SELECT duckdb_load_parquet('dst_parquet');
+ERROR 42000: Incorrect parameter count in the call to native function 'duckdb_load_parquet'
+SELECT duckdb_export_parquet('src', 'https://example.com/x.parquet');
+ERROR HY000: Got error 168 'writing to remote locations is not supported' from DuckDB
+#
+# 5) Remote reads need a matching duckdb_remote_url_prefixes entry
+#
+SELECT duckdb_load_parquet('dst_parquet', 'https://example.com/x.parquet');
+ERROR HY000: The MariaDB server is running with the --duckdb-remote-url-prefixes='' option so it cannot execute this statement
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org/, s3://bucket/';
+SELECT duckdb_load_parquet('dst_parquet', 'https://example.com/x.parquet');
+ERROR HY000: Got error 168 'URL is not in duckdb_remote_url_prefixes' from DuckDB
+# A prefix must match on a '/' boundary
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org';
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org.evil.com/x.parquet');
+ERROR HY000: Got error 168 'URL is not in duckdb_remote_url_prefixes' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org@evil.com/x.parquet');
+ERROR HY000: Got error 168 'URL is not in duckdb_remote_url_prefixes' from DuckDB
+SET GLOBAL duckdb_remote_url_prefixes= '';
+#
+# 6) Whole-database export
+#
+SELECT duckdb_export_database('MYSQLTEST_VARDIR/tmp/duckdb_wrappers_export') AS exported;
+exported
+OK
+SELECT duckdb_export_database('MYSQLTEST_VARDIR/tmp/duckdb_wrappers_export');
+ERROR HY000: Got error 168 'target already exists' from DuckDB
+#
+# 7) Maintenance and introspection
+#
+SELECT duckdb_file_size() > 0 AS has_size;
+has_size
+1
+SELECT duckdb_checkpoint() LIKE 'size_before=% size_after=%' AS checkpoint_ok;
+checkpoint_ok
+1
+SELECT duckdb_checkpoint(0) LIKE 'size_before=% size_after=%' AS checkpoint_ok;
+checkpoint_ok
+1
+SELECT duckdb_checkpoint(1) LIKE 'size_before=% size_after=%' AS forced_ok;
+forced_ok
+1
+SELECT duckdb_checkpoint(2);
+ERROR HY000: Got error 168 'duckdb_checkpoint() argument must be 0 or 1' from DuckDB
+SELECT duckdb_analyze();
+duckdb_analyze()
+OK
+SELECT duckdb_analyze('src');
+duckdb_analyze('src')
+OK
+SELECT duckdb_setting('threads') IS NOT NULL AS has_threads;
+has_threads
+1
+SELECT duckdb_setting('no_such_setting') IS NULL AS missing_is_null;
+missing_is_null
+1
+SELECT duckdb_setting('s3_secret_access_key');
+ERROR HY000: Got error 168 'this setting cannot be read' from DuckDB
+SELECT duckdb_loaded_extensions() LIKE '%parquet%' AS has_parquet;
+has_parquet
+1
+#
+# 8) Quoting, NULLs and statement reuse
+#
+CREATE TABLE q_src (id INT PRIMARY KEY, s VARCHAR(40), n INT) ENGINE=DuckDB CHARSET=utf8mb4;
+CREATE TABLE q_dst LIKE q_src;
+INSERT INTO q_src VALUES (1,'plain',10),(2,'com,ma',NULL),(3,'qu"ote',3),
+(4,'it\'s',NULL),(5,NULL,5);
+# A quote in the file name and commas, quotes and NULLs in the data
+SELECT duckdb_export_csv('q_src', 'MYSQLTEST_VARDIR/tmp/it''s.csv') AS exported;
+exported
+5
+SELECT duckdb_load_csv('q_dst', 'MYSQLTEST_VARDIR/tmp/it''s.csv') AS loaded;
+loaded
+5
+SELECT * FROM q_dst ORDER BY id;
+id	s	n
+1	plain	10
+2	com,ma	NULL
+3	qu"ote	3
+4	it's	NULL
+5	NULL	5
+# A path that tries to end the string literal is only a missing file
+SELECT duckdb_load_csv('q_dst', 'MYSQLTEST_VARDIR/tmp/x'');DROP TABLE q_src;--');
+SELECT COUNT(*) FROM q_src;
+COUNT(*)
+5
+# Prepared statements run the function on every execution
+PREPARE p FROM 'SELECT duckdb_file_size() > 0 AS ok';
+EXECUTE p;
+ok
+1
+EXECUTE p;
+ok
+1
+DEALLOCATE PREPARE p;
+DROP TABLE q_src, q_dst;
+#
+# 9) Metadata locks and read_only
+#
+connect con_lock, localhost, root,, test;
+LOCK TABLES src WRITE;
+connection default;
+SET @saved_wait= @@SESSION.lock_wait_timeout;
+SET SESSION lock_wait_timeout= 1;
+# Another session's LOCK TABLES ... WRITE blocks loads and exports
+SELECT duckdb_export_csv('src', 'MYSQLTEST_VARDIR/tmp/locked.csv');
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SELECT duckdb_load_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+connection con_lock;
+UNLOCK TABLES;
+FLUSH TABLES WITH READ LOCK;
+connection default;
+# Another session's FLUSH TABLES WITH READ LOCK blocks loads only
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SELECT duckdb_export_csv('src', 'MYSQLTEST_VARDIR/tmp/ftwrl.csv') AS exported;
+exported
+3
+connection con_lock;
+UNLOCK TABLES;
+disconnect con_lock;
+connection default;
+SET SESSION lock_wait_timeout= @saved_wait;
+# Not allowed under this session's own LOCK TABLES
+LOCK TABLES src READ;
+SELECT duckdb_load_parquet('src', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Got error 168 'not allowed under LOCK TABLES' from DuckDB
+UNLOCK TABLES;
+# read_only stops loads from users without READ_ONLY ADMIN
+CREATE USER 'wr_file'@'localhost';
+GRANT FILE ON *.* TO 'wr_file'@'localhost';
+GRANT ALL ON test.* TO 'wr_file'@'localhost';
+SET @saved_ro= @@GLOBAL.read_only;
+SET GLOBAL read_only= ON;
+connect con_ro, localhost, wr_file,, test;
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: The MariaDB server is running with the --read-only option so it cannot execute this statement
+disconnect con_ro;
+connection default;
+SET GLOBAL read_only= @saved_ro;
+DROP USER 'wr_file'@'localhost';
+#
+# 10) KILL QUERY and max_statement_time interrupt a running load
+#
+SET @saved_run= @@GLOBAL.duckdb_allow_run_in_duckdb;
+SET GLOBAL duckdb_allow_run_in_duckdb= ON;
+CREATE TABLE big (id BIGINT PRIMARY KEY, s VARCHAR(40)) ENGINE=DuckDB CHARSET=utf8mb4;
+SELECT run_in_duckdb("COPY (SELECT i AS id, i::VARCHAR AS s FROM range(20000000) t(i)) TO 'MYSQLTEST_VARDIR/tmp/wrappers_big.parquet' (FORMAT PARQUET)") IS NOT NULL AS generated;
+generated
+1
+SET STATEMENT max_statement_time=0.1 FOR SELECT duckdb_load_parquet('big', 'MYSQLTEST_VARDIR/tmp/wrappers_big.parquet');
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SELECT COUNT(*) FROM big;
+COUNT(*)
+0
+connect con_kill, localhost, root,, test;
+SELECT duckdb_load_parquet('big', 'MYSQLTEST_VARDIR/tmp/wrappers_big.parquet');
+connection default;
+connection con_kill;
+ERROR 70100: Query execution was interrupted
+disconnect con_kill;
+connection default;
+SELECT COUNT(*) FROM big;
+COUNT(*)
+0
+DROP TABLE big;
+SET GLOBAL duckdb_allow_run_in_duckdb= @saved_run;
+#
+# 11) Cleanup
+#
+DROP USER 'wr_nofile'@'localhost';
+DROP TABLE src, dst_parquet, dst_csv, dst_json;
+SET GLOBAL duckdb_allow_file_io= @saved_file_io;
+SET GLOBAL duckdb_remote_url_prefixes= @saved_prefixes;
