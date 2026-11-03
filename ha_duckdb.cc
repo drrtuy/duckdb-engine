@@ -1509,6 +1509,23 @@ static MYSQL_SYSVAR_BOOL(allow_run_in_duckdb, allow_run_in_duckdb,
                          "(requires SUPER privilege)",
                          NULL, NULL, FALSE);
 
+my_bool allow_duckdb_file_io= FALSE;
+char *duckdb_remote_url_prefixes= NULL;
+
+static MYSQL_SYSVAR_BOOL(allow_file_io, allow_duckdb_file_io,
+                         PLUGIN_VAR_RQCMDARG,
+                         "Allow the duckdb_load_*, duckdb_export_* and "
+                         "duckdb_export_database() functions to access "
+                         "files (also requires the FILE privilege)",
+                         NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_STR(remote_url_prefixes, duckdb_remote_url_prefixes,
+                        PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_MEMALLOC,
+                        "Comma-separated list of https://, http:// or s3:// "
+                        "URL prefixes the duckdb_load_* functions may read "
+                        "from. Empty (the default) disables remote reads",
+                        NULL, NULL, "");
+
 static MYSQL_SYSVAR_BOOL(copy_ddl_in_batch, copy_ddl_in_batch,
                          PLUGIN_VAR_RQCMDARG,
                          "Use batch insert to speed up copy ddl", NULL, NULL,
@@ -1660,6 +1677,7 @@ my_bool get_thd_cross_engine_ryow(THD *thd)
 
 static struct st_mysql_sys_var *duckdb_system_variables[]= {
     MYSQL_SYSVAR(allow_run_in_duckdb),
+    MYSQL_SYSVAR(allow_file_io), MYSQL_SYSVAR(remote_url_prefixes),
     MYSQL_SYSVAR(copy_ddl_in_batch), MYSQL_SYSVAR(dml_in_batch),
     MYSQL_SYSVAR(update_modified_column_only),
     MYSQL_SYSVAR(autoinc_cache_size),
@@ -1710,6 +1728,48 @@ static struct st_mysql_storage_engine duckdb_storage_engine= {
 
 extern Plugin_function plugin_descriptor_function_run_in_duckdb;
 
+/*
+  Wrapper functions from duckdb_udf_wrappers.cc: SQL function (= plugin) name
+  and description.  The table generates both the extern declarations and the
+  plugin descriptors below.
+*/
+#define DUCKDB_WRAPPER_FUNCTIONS(X)                                           \
+  X(duckdb_load_parquet, "DUCKDB_LOAD_PARQUET",                               \
+    "Load a parquet file (local or remote) into a DuckDB table")              \
+  X(duckdb_load_csv, "DUCKDB_LOAD_CSV",                                       \
+    "Load a CSV file into a DuckDB table")                                    \
+  X(duckdb_load_json, "DUCKDB_LOAD_JSON",                                     \
+    "Load a JSON file into a DuckDB table")                                   \
+  X(duckdb_export_parquet, "DUCKDB_EXPORT_PARQUET",                           \
+    "Write a DuckDB table to a local parquet file")                           \
+  X(duckdb_export_csv, "DUCKDB_EXPORT_CSV",                                   \
+    "Write a DuckDB table to a local CSV file")                               \
+  X(duckdb_export_json, "DUCKDB_EXPORT_JSON",                                 \
+    "Write a DuckDB table to a local JSON file")                              \
+  X(duckdb_export_database, "DUCKDB_EXPORT_DATABASE",                         \
+    "Export the whole DuckDB database to a local directory")                  \
+  X(duckdb_checkpoint, "DUCKDB_CHECKPOINT",                                   \
+    "Run CHECKPOINT (FORCE CHECKPOINT with argument 1) and report the "       \
+    "database file size before and after")                                    \
+  X(duckdb_analyze, "DUCKDB_ANALYZE",                                         \
+    "Run ANALYZE on all DuckDB tables or on one table")                       \
+  X(duckdb_file_size, "DUCKDB_FILE_SIZE",                                     \
+    "Return the size in bytes of the DuckDB database file")                   \
+  X(duckdb_setting, "DUCKDB_SETTING",                                         \
+    "Return the value of a DuckDB setting")                                   \
+  X(duckdb_loaded_extensions, "DUCKDB_LOADED_EXTENSIONS",                     \
+    "List the loaded DuckDB extensions")
+
+#define DUCKDB_DECLARE_FN(SYM, NAME, DESC)                                    \
+  extern Plugin_function plugin_descriptor_function_##SYM;
+
+#define DUCKDB_FN_ENTRY(SYM, NAME, DESC)                                      \
+  , {MariaDB_FUNCTION_PLUGIN, &plugin_descriptor_function_##SYM, NAME,        \
+     "MariaDB Foundation", DESC, PLUGIN_LICENSE_GPL, NULL, NULL, 0x0200,      \
+     NULL, NULL, "1.0", MariaDB_PLUGIN_MATURITY_GAMMA}
+
+DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_DECLARE_FN)
+
 maria_declare_plugin(duckdb)
 {
     MYSQL_STORAGE_ENGINE_PLUGIN,
@@ -1741,4 +1801,5 @@ maria_declare_plugin(duckdb)
     "1.0",                         /* string version */
     MariaDB_PLUGIN_MATURITY_GAMMA  /* maturity */
 }
+DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_FN_ENTRY)
 maria_declare_plugin_end;

@@ -40,6 +40,7 @@ SET(DUCKDB_PLUGIN_SOURCES
   ha_duckdb.cc
   ha_duckdb_pushdown.cc
   duckdb_udf.cc
+  duckdb_udf_wrappers.cc
 )
 
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY

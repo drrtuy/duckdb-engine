@@ -1,0 +1,278 @@
+--source ../include/have_duckdb.inc
+--source include/not_msan.inc
+
+--echo #
+--echo # Function wrappers: duckdb_load_*, duckdb_export_*, duckdb_checkpoint,
+--echo # duckdb_analyze, duckdb_file_size, duckdb_setting,
+--echo # duckdb_loaded_extensions
+--echo #
+
+SET @saved_file_io= @@GLOBAL.duckdb_allow_file_io;
+SET @saved_prefixes= @@GLOBAL.duckdb_remote_url_prefixes;
+SET GLOBAL duckdb_allow_file_io= OFF;
+SET GLOBAL duckdb_remote_url_prefixes= '';
+
+CREATE TABLE src (id INT PRIMARY KEY, name VARCHAR(20)) ENGINE=DuckDB CHARSET=utf8mb4;
+CREATE TABLE dst_parquet LIKE src;
+CREATE TABLE dst_csv LIKE src;
+CREATE TABLE dst_json LIKE src;
+INSERT INTO src VALUES (1,'one'),(2,'two'),(3,'three');
+
+--let $dir= $MYSQLTEST_VARDIR/tmp
+--let $pq= $dir/duckdb_wrappers.parquet
+--let $csv= $dir/duckdb_wrappers.csv
+--let $json= $dir/duckdb_wrappers.json
+--let $exp= $dir/duckdb_wrappers_export
+
+--echo #
+--echo # 1) File functions are blocked while duckdb_allow_file_io is OFF
+--echo #
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_OPTION_PREVENTS_STATEMENT
+--eval SELECT duckdb_export_parquet('src', '$pq')
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_OPTION_PREVENTS_STATEMENT
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq')
+
+SET GLOBAL duckdb_allow_file_io= ON;
+
+--echo #
+--echo # 2) A user without the FILE privilege is refused
+--echo #
+CREATE USER 'wr_nofile'@'localhost';
+GRANT ALL ON test.* TO 'wr_nofile'@'localhost';
+--connect(con_nofile, localhost, wr_nofile,, test)
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+--eval SELECT duckdb_export_parquet('src', '$pq')
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SELECT duckdb_checkpoint();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SELECT duckdb_file_size();
+--disconnect con_nofile
+--connection default
+
+--echo #
+--echo # 3) Export and reload: parquet, CSV, JSON
+--echo #
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_parquet('src', '$pq') AS exported
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq') AS loaded
+SELECT * FROM dst_parquet ORDER BY id;
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_csv('test.src', '$csv') AS exported
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_load_csv('test.dst_csv', '$csv') AS loaded
+SELECT * FROM dst_csv ORDER BY id;
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_json('src', '$json') AS exported
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_load_json('dst_json', '$json') AS loaded
+SELECT * FROM dst_json ORDER BY id;
+
+--echo #
+--echo # 4) Path and name validation
+--echo #
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'relative/file.parquet');
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_parquet('dst_parquet', '$dir/../etc/x.parquet')
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_parquet('dst_parquet', '$dir/`x`.parquet')
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'ftp://example.com/x.parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('a.b.c', '/nonexistent/x.parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', '~/x.parquet');
+
+--echo # Existing files are never overwritten
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_export_parquet('src', '$pq')
+
+--echo # Targets must be ENGINE=DuckDB tables
+CREATE TABLE innodb_t (id INT PRIMARY KEY) ENGINE=InnoDB;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_parquet('innodb_t', '$pq')
+DROP TABLE innodb_t;
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT duckdb_load_parquet('dst_parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_export_parquet('src', 'https://example.com/x.parquet');
+
+--echo #
+--echo # 5) Remote reads need a matching duckdb_remote_url_prefixes entry
+--echo #
+--error ER_OPTION_PREVENTS_STATEMENT
+SELECT duckdb_load_parquet('dst_parquet', 'https://example.com/x.parquet');
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org/, s3://bucket/';
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://example.com/x.parquet');
+--echo # A prefix must match on a '/' boundary
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org';
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org.evil.com/x.parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org@evil.com/x.parquet');
+SET GLOBAL duckdb_remote_url_prefixes= '';
+
+--echo #
+--echo # 6) Whole-database export
+--echo #
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_database('$exp') AS exported
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_export_database('$exp')
+
+--echo #
+--echo # 7) Maintenance and introspection
+--echo #
+SELECT duckdb_file_size() > 0 AS has_size;
+SELECT duckdb_checkpoint() LIKE 'size_before=% size_after=%' AS checkpoint_ok;
+SELECT duckdb_checkpoint(0) LIKE 'size_before=% size_after=%' AS checkpoint_ok;
+SELECT duckdb_checkpoint(1) LIKE 'size_before=% size_after=%' AS forced_ok;
+--error ER_GET_ERRMSG
+SELECT duckdb_checkpoint(2);
+SELECT duckdb_analyze();
+SELECT duckdb_analyze('src');
+SELECT duckdb_setting('threads') IS NOT NULL AS has_threads;
+SELECT duckdb_setting('no_such_setting') IS NULL AS missing_is_null;
+--error ER_GET_ERRMSG
+SELECT duckdb_setting('s3_secret_access_key');
+SELECT duckdb_loaded_extensions() LIKE '%parquet%' AS has_parquet;
+
+--echo #
+--echo # 8) Quoting, NULLs and statement reuse
+--echo #
+CREATE TABLE q_src (id INT PRIMARY KEY, s VARCHAR(40), n INT) ENGINE=DuckDB CHARSET=utf8mb4;
+CREATE TABLE q_dst LIKE q_src;
+INSERT INTO q_src VALUES (1,'plain',10),(2,'com,ma',NULL),(3,'qu"ote',3),
+                         (4,'it\'s',NULL),(5,NULL,5);
+--echo # A quote in the file name and commas, quotes and NULLs in the data
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_csv('q_src', '$dir/it''s.csv') AS exported
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_load_csv('q_dst', '$dir/it''s.csv') AS loaded
+SELECT * FROM q_dst ORDER BY id;
+--remove_files_wildcard $dir it*.csv
+--echo # A path that tries to end the string literal is only a missing file
+--disable_result_log
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_csv('q_dst', '$dir/x'');DROP TABLE q_src;--')
+--enable_result_log
+SELECT COUNT(*) FROM q_src;
+--echo # Prepared statements run the function on every execution
+PREPARE p FROM 'SELECT duckdb_file_size() > 0 AS ok';
+EXECUTE p;
+EXECUTE p;
+DEALLOCATE PREPARE p;
+DROP TABLE q_src, q_dst;
+
+--echo #
+--echo # 9) Metadata locks and read_only
+--echo #
+--connect(con_lock, localhost, root,, test)
+LOCK TABLES src WRITE;
+--connection default
+SET @saved_wait= @@SESSION.lock_wait_timeout;
+SET SESSION lock_wait_timeout= 1;
+--echo # Another session's LOCK TABLES ... WRITE blocks loads and exports
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_LOCK_WAIT_TIMEOUT
+--eval SELECT duckdb_export_csv('src', '$dir/locked.csv')
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_LOCK_WAIT_TIMEOUT
+--eval SELECT duckdb_load_parquet('src', '$pq')
+--connection con_lock
+UNLOCK TABLES;
+FLUSH TABLES WITH READ LOCK;
+--connection default
+--echo # Another session's FLUSH TABLES WITH READ LOCK blocks loads only
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_LOCK_WAIT_TIMEOUT
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq')
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT duckdb_export_csv('src', '$dir/ftwrl.csv') AS exported
+--remove_file $dir/ftwrl.csv
+--connection con_lock
+UNLOCK TABLES;
+--disconnect con_lock
+--connection default
+SET SESSION lock_wait_timeout= @saved_wait;
+--echo # Not allowed under this session's own LOCK TABLES
+LOCK TABLES src READ;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_parquet('src', '$pq')
+UNLOCK TABLES;
+--echo # read_only stops loads from users without READ_ONLY ADMIN
+CREATE USER 'wr_file'@'localhost';
+GRANT FILE ON *.* TO 'wr_file'@'localhost';
+GRANT ALL ON test.* TO 'wr_file'@'localhost';
+SET @saved_ro= @@GLOBAL.read_only;
+SET GLOBAL read_only= ON;
+--connect(con_ro, localhost, wr_file,, test)
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_OPTION_PREVENTS_STATEMENT
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq')
+--disconnect con_ro
+--connection default
+SET GLOBAL read_only= @saved_ro;
+DROP USER 'wr_file'@'localhost';
+
+--echo #
+--echo # 10) KILL QUERY and max_statement_time interrupt a running load
+--echo #
+SET @saved_run= @@GLOBAL.duckdb_allow_run_in_duckdb;
+SET GLOBAL duckdb_allow_run_in_duckdb= ON;
+CREATE TABLE big (id BIGINT PRIMARY KEY, s VARCHAR(40)) ENGINE=DuckDB CHARSET=utf8mb4;
+--let $big= $MYSQLTEST_VARDIR/tmp/wrappers_big.parquet
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval SELECT run_in_duckdb("COPY (SELECT i AS id, i::VARCHAR AS s FROM range(20000000) t(i)) TO '$big' (FORMAT PARQUET)") IS NOT NULL AS generated
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_STATEMENT_TIMEOUT
+--eval SET STATEMENT max_statement_time=0.1 FOR SELECT duckdb_load_parquet('big', '$big')
+SELECT COUNT(*) FROM big;
+
+--connect(con_kill, localhost, root,, test)
+--let $kill_id= `SELECT CONNECTION_ID()`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--send_eval SELECT duckdb_load_parquet('big', '$big')
+--connection default
+--let $wait_condition= SELECT COUNT(*) = 1 FROM information_schema.processlist WHERE id = $kill_id AND info LIKE 'SELECT duckdb_load_parquet%'
+--source include/wait_condition.inc
+--disable_query_log
+--eval KILL QUERY $kill_id
+--enable_query_log
+--connection con_kill
+--error ER_QUERY_INTERRUPTED
+--reap
+--disconnect con_kill
+--connection default
+SELECT COUNT(*) FROM big;
+DROP TABLE big;
+--remove_file $big
+SET GLOBAL duckdb_allow_run_in_duckdb= @saved_run;
+
+--echo #
+--echo # 11) Cleanup
+--echo #
+--remove_file $pq
+--remove_file $csv
+--remove_file $json
+--remove_files_wildcard $exp *
+--rmdir $exp
+DROP USER 'wr_nofile'@'localhost';
+DROP TABLE src, dst_parquet, dst_csv, dst_json;
+SET GLOBAL duckdb_allow_file_io= @saved_file_io;
+SET GLOBAL duckdb_remote_url_prefixes= @saved_prefixes;
