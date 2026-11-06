@@ -1,3 +1,4 @@
 [submodule "third_parties/duckdb"]
 	path = third_parties/duckdb
-	url = https://github.com/duckdb/duckdb.git
+	url = https://github.com/mariadb-AlekseiBukhalov/duckdb.git
+	branch = clickbench-perf-main
