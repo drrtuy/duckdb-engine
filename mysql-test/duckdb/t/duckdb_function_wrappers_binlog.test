@@ -1,0 +1,21 @@
+--source ../include/have_duckdb.inc
+--source include/have_log_bin.inc
+
+--echo #
+--echo # The wrappers and run_in_duckdb() have side effects: statements calling
+--echo # them are unsafe for statement-based binlogging, so they are never
+--echo # replayed as text.
+--echo #
+call mtr.add_suppression("Unsafe statement written to the binary log");
+CREATE TABLE t (n BIGINT) ENGINE=InnoDB;
+
+SET SESSION binlog_format= STATEMENT;
+INSERT INTO t SELECT duckdb_file_size();
+INSERT INTO t SELECT LENGTH(run_in_duckdb('SELECT 1'));
+
+SET SESSION binlog_format= MIXED;
+--let $binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+INSERT INTO t SELECT duckdb_file_size();
+--source include/show_binlog_events.inc
+
+DROP TABLE t;

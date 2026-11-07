@@ -80,4 +80,12 @@ duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
 duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(const std::string &query);
 
+/*
+  Runs SQL the engine built itself (already quoted for DuckDB, so it is not
+  rewritten) to completion on a fresh connection. KILL QUERY and
+  max_statement_time interrupt it, through the THD's interruptible window.
+*/
+duckdb::unique_ptr<duckdb::QueryResult>
+duckdb_query_interruptible(THD *thd, const std::string &sql);
+
 } // namespace myduck

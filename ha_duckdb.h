@@ -41,6 +41,16 @@
 
 extern handlerton *duckdb_hton;
 
+/*
+  For function plugins with side effects, as the server does for
+  LOAD_FILE(): the statement is unsafe for statement-based binlogging and is
+  never served from the query cache.
+*/
+void duckdb_mark_side_effect_call(THD *thd);
+
+/* Raises a DuckDB error, or the kill message if the THD was killed. */
+void report_duckdb_error(THD *thd, const std::string &error);
+
 /** @brief
   Duckdb_share is a class that will be shared among all open handlers.
 */

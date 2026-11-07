@@ -121,6 +121,14 @@ SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org';
 SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org.evil.com/x.parquet');
 --error ER_GET_ERRMSG
 SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org@evil.com/x.parquet');
+--echo # Dot segments could escape the prefix's path, also percent-encoded
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org/pub/';
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/../private/x.parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/%2E%2e/private/x.parquet');
+--error ER_GET_ERRMSG
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/..%2fprivate/x.parquet');
 SET GLOBAL duckdb_remote_url_prefixes= '';
 
 --echo #
@@ -143,6 +151,15 @@ SELECT duckdb_checkpoint(1) LIKE 'size_before=% size_after=%' AS forced_ok;
 SELECT duckdb_checkpoint(2);
 SELECT duckdb_analyze();
 SELECT duckdb_analyze('src');
+START TRANSACTION;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_GET_ERRMSG
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq')
+--error ER_GET_ERRMSG
+SELECT duckdb_checkpoint();
+--error ER_GET_ERRMSG
+SELECT duckdb_analyze('src');
+COMMIT;
 SELECT duckdb_setting('threads') IS NOT NULL AS has_threads;
 SELECT duckdb_setting('no_such_setting') IS NULL AS missing_is_null;
 --error ER_GET_ERRMSG
@@ -228,6 +245,11 @@ SET GLOBAL read_only= ON;
 --connection default
 SET GLOBAL read_only= @saved_ro;
 DROP USER 'wr_file'@'localhost';
+SET SESSION TRANSACTION READ ONLY;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
+--eval SELECT duckdb_load_parquet('dst_parquet', '$pq')
+SET SESSION TRANSACTION READ WRITE;
 
 --echo #
 --echo # 10) KILL QUERY and max_statement_time interrupt a running load
@@ -239,9 +261,12 @@ CREATE TABLE big (id BIGINT PRIMARY KEY, s VARCHAR(40)) ENGINE=DuckDB CHARSET=ut
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --eval SELECT run_in_duckdb("COPY (SELECT i AS id, i::VARCHAR AS s FROM range(20000000) t(i)) TO '$big' (FORMAT PARQUET)") IS NOT NULL AS generated
 
+--echo # max_statement_time (its message differs between server versions)
+--disable_result_log
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --error ER_STATEMENT_TIMEOUT
 --eval SET STATEMENT max_statement_time=0.1 FOR SELECT duckdb_load_parquet('big', '$big')
+--enable_result_log
 SELECT COUNT(*) FROM big;
 
 --connect(con_kill, localhost, root,, test)

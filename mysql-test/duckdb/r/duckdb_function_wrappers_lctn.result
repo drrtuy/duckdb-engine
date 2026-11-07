@@ -1,0 +1,19 @@
+#
+# With lower_case_table_names=1 table arguments are lowercased like
+# names in SQL, so they find the table and take the same metadata lock.
+#
+CREATE TABLE T1 (id INT PRIMARY KEY) ENGINE=DuckDB;
+SELECT duckdb_analyze('T1'), duckdb_analyze('TEST.T1');
+duckdb_analyze('T1')	duckdb_analyze('TEST.T1')
+OK	OK
+connect con_lock, localhost, root,, test;
+LOCK TABLES t1 WRITE;
+connection default;
+SET SESSION lock_wait_timeout= 1;
+SELECT duckdb_analyze('T1');
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+connection con_lock;
+UNLOCK TABLES;
+disconnect con_lock;
+connection default;
+DROP TABLE t1;

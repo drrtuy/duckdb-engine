@@ -466,8 +466,7 @@ void ha_duckdb_select_handler::end_interruptible()
   }
 }
 
-/* A DuckDB error caused by KILL / max_statement_time is reported as such. */
-static void report_duckdb_error(THD *thd, const std::string &error)
+void report_duckdb_error(THD *thd, const std::string &error)
 {
   if (thd->killed)
     thd->send_kill_message();

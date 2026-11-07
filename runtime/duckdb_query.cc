@@ -210,23 +210,29 @@ static std::string backticks_to_double_quotes(const std::string &sql)
   return out;
 }
 
+static void log_query(const std::string &q)
+{
+  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
+    sql_print_information("DuckDB query: %s", q.c_str());
+}
+
+static void log_error(const std::string &error)
+{
+  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT)
+    sql_print_information("DuckDB error: %s", error.c_str());
+}
+
 duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(duckdb::Connection &connection, const std::string &query)
 {
   const std::string q= backticks_to_double_quotes(query);
-
-  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", q.c_str());
+  log_query(q);
 
   try
   {
     auto res= connection.Query(q);
-
-    if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT)
-    {
-      if (res->HasError())
-        sql_print_information("DuckDB error: %s", res->GetError().c_str());
-    }
+    if (res->HasError())
+      log_error(res->GetError());
     return res;
   }
   catch (duckdb::Exception &e)
@@ -244,9 +250,7 @@ duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
                     std::string &error)
 {
   const std::string q= backticks_to_double_quotes(query);
-
-  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", q.c_str());
+  log_query(q);
 
   try
   {
@@ -266,8 +270,7 @@ duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
     error= duckdb::ErrorData(e).Message();
   }
 
-  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY_RESULT)
-    sql_print_information("DuckDB error: %s", error.c_str());
+  log_error(error);
   return nullptr;
 }
 
@@ -320,6 +323,35 @@ duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
   auto stream= duckdb_stream_query(connection, query, error);
   ctx->interrupt_if_killed(thd);
   return stream;
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
+duckdb_query_interruptible(THD *thd, const std::string &sql)
+{
+  if (!DuckdbManager::IsInitialized())
+    return duckdb::make_uniq<duckdb::QueryResult>(
+        duckdb::ErrorData("the DuckDB engine is not initialized"));
+  auto connection= DuckdbManager::CreateConnection();
+  auto *ctx= get_thd_context(thd);
+  log_query(sql);
+
+  duckdb::unique_ptr<duckdb::QueryResult> res;
+  ctx->begin_interruptible(connection.get());
+  try
+  {
+    /* Submit() does not run the query, so a pending kill is not lost. */
+    res= connection->Submit(sql);
+    ctx->interrupt_if_killed(thd);
+    res->Complete();
+  }
+  catch (std::exception &e)
+  {
+    res= duckdb::make_uniq<duckdb::QueryResult>(duckdb::ErrorData(e));
+  }
+  ctx->end_interruptible();
+  if (res->HasError())
+    log_error(res->GetError());
+  return res;
 }
 
 duckdb::unique_ptr<duckdb::QueryResult>

@@ -164,9 +164,11 @@ public:
   /*
     KILL QUERY / max_statement_time reach DuckDB only between
     begin_interruptible() and end_interruptible(), i.e. while a pushed-down
-    SELECT runs. COMMIT and appender flushes never see an interrupt.
+    SELECT or a function wrapper's statement runs. COMMIT and appender
+    flushes never see an interrupt. `con` is the connection running the
+    statement, by default the THD's own.
   */
-  void begin_interruptible();
+  void begin_interruptible(duckdb::Connection *con= nullptr);
   void end_interruptible();
   /*
     DuckDB drops a pending interrupt when a query starts, so a kill that
@@ -179,7 +181,8 @@ public:
 private:
   std::shared_ptr<duckdb::Connection> m_con;
   std::mutex m_interrupt_mutex;
-  bool m_interruptible= false;
+  /** The connection a kill interrupts; null outside the window */
+  duckdb::Connection *m_interruptible= nullptr;
   bool in_copy_ddl= false;
   BatchState batch_state;
   std::unique_ptr<DeltaAppenders> m_appenders;
