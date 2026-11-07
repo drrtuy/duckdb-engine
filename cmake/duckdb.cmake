@@ -43,6 +43,21 @@ SET(_DUCKDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/duckdb-build")
 SET(_DUCKDB_LINKED_EXTENSIONS
   httplib loadable_extensions core_functions icu json parquet)
 
+# Remote file access (https, http, s3) in DuckDB. Needs OpenSSL and libcurl,
+# linked from the system as mysqld links OpenSSL. Without them the engine is
+# built without it, and remote reads are refused with an error saying so.
+OPTION(WITH_DUCKDB_HTTPFS "Link DuckDB's httpfs extension" ON)
+IF(WITH_DUCKDB_HTTPFS)
+  FIND_PACKAGE(OpenSSL)
+  FIND_PACKAGE(CURL)
+  IF(OPENSSL_FOUND AND CURL_FOUND)
+    LIST(APPEND _DUCKDB_LINKED_EXTENSIONS httpfs)
+  ELSE()
+    MESSAGE(WARNING "OpenSSL or libcurl not found: building without httpfs")
+    SET(WITH_DUCKDB_HTTPFS OFF)
+  ENDIF()
+ENDIF()
+
 SET(_DUCKDB_STATIC_LIBS
   "${_DUCKDB_BUILD_DIR}/src/main/http/libduckdb_httplib.a"
   "${_DUCKDB_BUILD_DIR}/src/main/extension/libduckdb_loadable_extensions.a"
@@ -52,6 +67,10 @@ SET(_DUCKDB_STATIC_LIBS
   "${_DUCKDB_BUILD_DIR}/extension/parquet/libparquet_extension.a"
   "${_DUCKDB_BUILD_DIR}/src/libduckdb_static.a"
 )
+IF(WITH_DUCKDB_HTTPFS)
+  LIST(INSERT _DUCKDB_STATIC_LIBS 0
+    "${_DUCKDB_BUILD_DIR}/extension/httpfs/libhttpfs_extension.a")
+ENDIF()
 
 MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===")
 IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
@@ -128,6 +147,7 @@ ExternalProject_Add(duckdb_build
     -DENABLE_SANITIZER=${ADDRESS_SANITIZER}
     -DENABLE_UBSAN=${UB_SANITIZER}
     -DOVERRIDE_GIT_DESCRIBE=${_DUCKDB_GIT_DESCRIBE}
+    -DWITH_DUCKDB_HTTPFS=${WITH_DUCKDB_HTTPFS}
   INSTALL_COMMAND  ""
   BUILD_BYPRODUCTS ${_DUCKDB_STATIC_LIBS}
   USES_TERMINAL_BUILD ON
@@ -137,6 +157,9 @@ ExternalProject_Add(duckdb_build
 # cmake tree links against "libduckdb" unchanged.
 ADD_LIBRARY(libduckdb INTERFACE)
 TARGET_LINK_LIBRARIES(libduckdb INTERFACE -Wl,--start-group ${_DUCKDB_STATIC_LIBS} -Wl,--end-group)
+IF(WITH_DUCKDB_HTTPFS)
+  TARGET_LINK_LIBRARIES(libduckdb INTERFACE CURL::libcurl OpenSSL::SSL OpenSSL::Crypto)
+ENDIF()
 ADD_DEPENDENCIES(libduckdb duckdb_build)
 
 MESSAGE(STATUS "DuckDB include: ${DUCKDB_INCLUDE_DIR}")

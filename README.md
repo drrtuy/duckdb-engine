@@ -73,6 +73,8 @@ A MariaDB installation that provides both the server and the Development compone
 
 The plugin is ABI-bound to the server it was built against: `build.sh` refuses to install it into a server whose version differs from the SDK's.
 
+Remote file access (`https://`, `http://`, `s3://`) comes from DuckDB's `httpfs` extension, which is fetched at build time and linked statically. It needs the OpenSSL and libcurl development packages (`openssl-devel libcurl-devel` / `libssl-dev libcurl4-openssl-dev`, installed by `build.sh -D`); without them, or with `-DWITH_DUCKDB_HTTPFS=OFF`, the engine is built without it.
+
 ### Build and install
 
 ```bash

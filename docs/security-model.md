@@ -80,7 +80,8 @@ checkpoint threshold). Relevant to security:
 - `enable_external_access` is **left at its default (enabled)** — filesystem
   access is permitted.
 - `autoinstall_known_extensions=false` and `allow_community_extensions=false`:
-  all required extensions are linked statically, and no extension binary is
+  all required extensions are linked statically (including `httpfs`, unless
+  built with `-DWITH_DUCKDB_HTTPFS=OFF`), and no extension binary is
   downloaded at query time. `autoload_known_extensions=true` remains, so an
   extension already installed in the server user's extension directory can
   still be loaded.
@@ -109,9 +110,9 @@ user, on the shared instance, a caller can:
 - **Write arbitrary local files** as the server user
   (e.g. `COPY (...) TO '/path/file'`), which can corrupt data, fill disks, or
   serve as a step toward code execution.
-- **Reach the network** via extensions such as `httpfs` if they are already
-  installed (auto-install is disabled), enabling SSRF and exfiltration to
-  remote endpoints.
+- **Reach the network** through `httpfs`, which is linked into the engine
+  (`https://`, `http://`, `s3://` paths in any reader or `COPY`), enabling
+  SSRF and exfiltration to remote endpoints.
 - **Attach external databases** (`ATTACH`) and read/modify their contents.
 - **Change global DuckDB settings** listed in `allowed_configs` on the shared
   instance (e.g. `SET GLOBAL memory_limit`/`threads`), enabling
@@ -208,8 +209,8 @@ percent-encoded, are refused (even in the query string), so a prefix with a
 path cannot be escaped by a server that normalizes it. The allow-list stops
 the server being used to reach internal endpoints such as a cloud metadata
 service; HTTP redirects are not covered. Every other scheme is refused. Remote
-reads need the `httpfs` extension, currently fetched by DuckDB's autoinstall
-(section 3); building it in statically is an open decision.
+reads use the statically linked `httpfs` extension (section 3); in a build
+without it they are refused with an error saying so.
 
 **Arguments** containing control characters or backticks are rejected, all
 arguments are converted to utf8mb4, string literals and identifiers are
