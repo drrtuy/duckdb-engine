@@ -31,8 +31,9 @@
   tables that exist only in DuckDB, without MariaDB table definitions) and
   no VACUUM wrapper (it never shrinks the file; see docs/space-reclaim.md).
 
-  The wrappers run on their own DuckDB connection, which is why they are
-  refused inside an open transaction and why loads are not binlogged.
+  The wrappers run on their own DuckDB connection, which is why all but the
+  read-only introspection functions are refused inside an open transaction
+  and why loaded rows are not binlogged.
 */
 
 #define MYSQL_SERVER
@@ -54,9 +55,9 @@
 #include <string>
 #include <vector>
 
-#include "log.h"
-#include "duckdb_log.h"
+#include "duckdb_query.h"
 #include "duckdb_manager.h"
+#include "duckdb_types.h"
 
 extern my_bool allow_duckdb_file_io;
 extern char *duckdb_remote_url_prefixes;
@@ -97,22 +98,22 @@ bool has_bad_chars(const std::string &s)
   return false;
 }
 
-/* Quote with `q`, doubling embedded `q` characters. */
-std::string quote(const std::string &s, char q)
+/* A DuckDB string literal; identifiers use quote_duckdb_identifier(). */
+std::string literal(const std::string &s)
 {
-  std::string r(1, q);
+  std::string r(1, '\'');
   for (char c : s)
   {
-    if (c == q)
-      r+= q;
+    if (c == '\'')
+      r+= c;
     r+= c;
   }
-  return r + q;
+  return r + '\'';
 }
 
 std::string qualified(const std::string &db, const std::string &tbl)
 {
-  return quote(db, '"') + "." + quote(tbl, '"');
+  return quote_duckdb_identifier(db) + "." + quote_duckdb_identifier(tbl);
 }
 
 /*
@@ -123,6 +124,13 @@ bool check_no_open_trx(THD *thd)
 {
   return thd->in_active_multi_stmt_transaction() &&
          fail("not allowed inside an open transaction");
+}
+
+std::string casedn_name(const std::string &s)
+{
+  std::string r(s.size() * files_charset_info->casedn_multiply(), '\0');
+  r.resize(files_charset_info->casedn(s.data(), s.size(), &r[0], r.size()));
+  return r;
 }
 
 /* Split "db.tbl" or "tbl" (current database) into db and table. */
@@ -149,15 +157,27 @@ bool parse_table_name(THD *thd, const std::string &arg, std::string &db,
   }
   if (db.empty() || tbl.empty() || tbl.find('.') != std::string::npos)
     return fail("table name must be 'table' or 'database.table'");
+  /* As the parser does, so that MDL keys match other statements' locks. */
+  if (lower_case_table_names)
+  {
+    db= casedn_name(db);
+    tbl= casedn_name(tbl);
+  }
   return false;
 }
 
 /*
-  Loads are writes: honour read_only like any other data change, and refuse
-  while this connection holds FLUSH TABLES WITH READ LOCK or a backup lock.
+  Loads are writes: honour read_only and a read-only transaction like any
+  other data change, and refuse while this connection holds FLUSH TABLES
+  WITH READ LOCK or a backup lock.
 */
 bool check_writable(THD *thd)
 {
+  if (thd->tx_read_only)
+  {
+    my_error(ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION, MYF(0));
+    return true;
+  }
   bool admin=
       (thd->security_ctx->master_access & PRIV_IGNORE_READ_ONLY) != NO_ACL;
 #if MYSQL_VERSION_ID >= 120000
@@ -297,6 +317,32 @@ bool has_dotdot_component(const std::string &path)
   return false;
 }
 
+/*
+  A remote server may normalize "/a/../b" (also percent-encoded) to "/b",
+  which would escape the path of a duckdb_remote_url_prefixes entry.
+*/
+bool url_has_dotdot(const std::string &url)
+{
+  std::string s;
+  for (size_t i= 0; i < url.size(); i++)
+  {
+    if (url[i] == '%' && i + 2 < url.size())
+    {
+      std::string hex= url.substr(i + 1, 2);
+      for (char &c : hex)
+        c= (char) tolower((unsigned char) c);
+      if (hex == "2e" || hex == "2f" || hex == "5c")
+      {
+        s+= hex == "2e" ? '.' : '/';
+        i+= 2;
+        continue;
+      }
+    }
+    s+= url[i];
+  }
+  return has_dotdot_component(s);
+}
+
 /* Validate a source or destination path (local file or allowed URL). */
 bool check_io_path(const std::string &path, bool for_write)
 {
@@ -313,6 +359,8 @@ bool check_io_path(const std::string &path, bool for_write)
       return fail("URL scheme not allowed (https, http, s3 only)");
     if (for_write)
       return fail("writing to remote locations is not supported");
+    if (url_has_dotdot(path))
+      return fail("URL must not contain '..'");
     return !url_allowed(path);
   }
 
@@ -342,48 +390,16 @@ bool check_io_path(const std::string &path, bool for_write)
 /* ----- running SQL in DuckDB ----- */
 
 /*
-  Run SQL on a fresh connection and store its first cell in *first (NULL
-  when there are no rows).  On failure raises an error and returns true.
-
-  The query is driven task by task on this thread, the way
-  QueryResult::Complete() does it, so that KILL and max_statement_time can
-  interrupt it between tasks: the connection is not the THD's own, so
-  duckdb_kill_query() does not reach it.
+  Run SQL in DuckDB and store its first cell in *first (NULL when there are
+  no rows).  On failure raises an error and returns true.
 */
 bool run_sql(THD *thd, const std::string &sql, duckdb::Value *first= nullptr)
 {
-  using duckdb::QueryResultState;
-  if (!myduck::DuckdbManager::IsInitialized())
-    return fail("the DuckDB engine is not initialized");
-  auto conn= myduck::DuckdbManager::CreateConnection();
-  if (!conn)
-    return fail("cannot create a DuckDB connection");
-
-  if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", sql.c_str());
-  auto res= conn->Submit(sql);
-  if (!res->HasError())
-  {
-    res->Materialize();
-    QueryResultState state;
-    while (!duckdb::IsTerminal(state= res->ExecuteTask()))
-    {
-      /* Not thd_killed(): it ignores max_statement_time's soft abort. */
-      if (thd->check_killed(true))
-        conn->Interrupt();
-      if (state == QueryResultState::BLOCKED ||
-          state == QueryResultState::READY)
-        res->WaitForTask();
-    }
-  }
+  auto res= myduck::duckdb_query_interruptible(thd, sql);
   if (res->HasError())
   {
-    if (thd->killed)
-    {
-      thd->send_kill_message();
-      return true;
-    }
-    return fail(res->GetError().c_str());
+    report_duckdb_error(thd, res->GetError());
+    return true;
   }
   if (first)
   {
@@ -420,7 +436,7 @@ bool fn_transfer(THD *thd, const Args &a, FnResult &out)
       prepare_table(thd, WRITE ? SELECT_ACL : INSERT_ACL, !WRITE, db, tbl))
     return true;
 
-  std::string table= qualified(db, tbl), path= quote(a[1], '\'');
+  std::string table= qualified(db, tbl), path= literal(a[1]);
   std::string sql;
   if (WRITE)
     sql= "COPY " + table + " TO " + path + " (" + SQL + ")";
@@ -445,7 +461,7 @@ bool fn_export_database(THD *thd, const Args &a, FnResult &out)
   if (check_no_open_trx(thd) || check_global_access(thd, SUPER_ACL) ||
       check_file_io_allowed(thd) || check_io_path(a[0], true))
     return true;
-  if (run_sql(thd, "EXPORT DATABASE " + quote(a[0], '\'') +
+  if (run_sql(thd, "EXPORT DATABASE " + literal(a[0]) +
                        " (FORMAT PARQUET)"))
     return true;
   out.str= "OK";
@@ -480,6 +496,8 @@ bool fn_checkpoint(THD *thd, const Args &a, FnResult &out)
 bool fn_analyze(THD *thd, const Args &a, FnResult &out)
 {
   std::string sql= "ANALYZE";
+  if (check_no_open_trx(thd))
+    return true;
   if (a.empty() || a[0].empty())
   {
     if (check_global_access(thd, SUPER_ACL))
@@ -521,7 +539,7 @@ bool fn_setting(THD *thd, const Args &a, FnResult &out)
 
   duckdb::Value v;
   if (run_sql(thd, "SELECT CAST(value AS VARCHAR) FROM duckdb_settings() "
-                   "WHERE name = " + quote(a[0], '\''), &v))
+                   "WHERE name = " + literal(a[0]), &v))
     return true;
   if (v.IsNull())
     out.is_null= true;
@@ -703,6 +721,7 @@ public:
       my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), name->str);
       return NULL;
     }
+    duckdb_mark_side_effect_call(thd);
     List<Item> empty;
     return new (thd->mem_root) ITEM(thd, item_list ? *item_list : empty,
                                     m_name);

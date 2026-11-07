@@ -35,6 +35,7 @@
 #include "sql_acl.h"
 #include "privilege.h"
 
+#include "ha_duckdb.h"
 #include "duckdb_query.h"
 #include "duckdb_manager.h"
 
@@ -117,11 +118,20 @@ public:
 };
 
 
+void duckdb_mark_side_effect_call(THD *thd)
+{
+  thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
+  thd->lex->uncacheable(UNCACHEABLE_SIDEEFFECT);
+}
+
 class Create_func_run_in_duckdb : public Create_func_arg1
 {
 public:
   Item *create_1_arg(THD *thd, Item *arg1) override
-  { return new (thd->mem_root) Item_func_run_in_duckdb(thd, arg1); }
+  {
+    duckdb_mark_side_effect_call(thd);
+    return new (thd->mem_root) Item_func_run_in_duckdb(thd, arg1);
+  }
 
   static Create_func_run_in_duckdb s_singleton;
 };

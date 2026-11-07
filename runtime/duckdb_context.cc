@@ -74,32 +74,33 @@ DuckdbThdContext *get_thd_context(THD *thd)
   return ctx;
 }
 
-void DuckdbThdContext::begin_interruptible()
+void DuckdbThdContext::begin_interruptible(duckdb::Connection *con)
 {
   std::lock_guard<std::mutex> guard(m_interrupt_mutex);
-  m_con->context->ClearInterrupt();
-  m_interruptible= true;
+  m_interruptible= con ? con : m_con.get();
+  m_interruptible->context->ClearInterrupt();
 }
 
 void DuckdbThdContext::interrupt_if_killed(THD *thd)
 {
   std::lock_guard<std::mutex> guard(m_interrupt_mutex);
   if (m_interruptible && thd->killed)
-    m_con->Interrupt();
+    m_interruptible->Interrupt();
 }
 
 void DuckdbThdContext::end_interruptible()
 {
   std::lock_guard<std::mutex> guard(m_interrupt_mutex);
-  m_interruptible= false;
-  m_con->context->ClearInterrupt();
+  if (m_interruptible)
+    m_interruptible->context->ClearInterrupt();
+  m_interruptible= nullptr;
 }
 
 void DuckdbThdContext::interrupt()
 {
   std::lock_guard<std::mutex> guard(m_interrupt_mutex);
   if (m_interruptible)
-    m_con->Interrupt();
+    m_interruptible->Interrupt();
 }
 
 void DuckdbThdContext::config_duckdb_env(const std::string &schema)

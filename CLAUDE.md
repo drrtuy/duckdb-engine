@@ -66,16 +66,20 @@ All engine code is in the `myduck` namespace (except `ha_duckdb` which is in glo
 
 - **Type mapping** (`duckdb_types.cc/h`) — Converts between MariaDB field types and DuckDB types. `store_duckdb_field_in_mysql_format()` reads DuckDB values back into MariaDB row format.
 
+- **Function wrappers** (`duckdb_udf_wrappers.cc`) — Function plugins (`duckdb_load_*`, `duckdb_export_*`, `duckdb_checkpoint`, ...) that build one fixed DuckDB statement from validated arguments, so operators do not need `run_in_duckdb()` (`duckdb_udf.cc`). Access rules are in `docs/security-model.md`, section 7.
+
 ### SQL generation conventions
 
 DuckDB follows the SQL standard and delimits identifiers with **double quotes**, not backticks.
 
-SQL reaches DuckDB by two routes:
+SQL reaches DuckDB by three routes:
 
 - **Whole queries are forwarded verbatim.** SELECT and INSERT … SELECT are pushed down as the raw `thd->query()` text — see `extract_source_query()` in `ha_duckdb_pushdown.cc`. The engine does **not** re-print the whole query via `SELECT_LEX::print()`.
 - **Only fragments are printed.** `Item`/`COND::print()` is used for per-table WHERE conditions in cross-engine scan (`ha_duckdb_pushdown.cc`) and for DDL default / `nextval` expressions (`ddl_convertor.cc`). DDL/DML convertors also build identifier strings directly from `Field`/`TABLE` metadata.
 
-Both routes then pass through `backticks_to_double_quotes()` (`runtime/duckdb_query.cc`), which is where identifier requoting actually happens: backtick-delimited identifiers are rewritten to double-quoted ones and any embedded double quote is escaped (MDEV-40653). Raw forwarding additionally goes through `mariadb_query_has_lexical_mismatch()`, which refuses to forward SQL whose backslash-escape semantics differ between MariaDB and DuckDB.
+- **Statements built in place.** The function wrappers build complete DuckDB statements, quoting identifiers with `quote_duckdb_identifier()` and string literals themselves, and run them through `duckdb_query_interruptible()` (`runtime/duckdb_query.cc`, called from `run_sql()` in `duckdb_udf_wrappers.cc`) on a fresh connection, so they are not rewritten.
+
+The first two routes pass through `backticks_to_double_quotes()` (`runtime/duckdb_query.cc`), which is where identifier requoting actually happens: backtick-delimited identifiers are rewritten to double-quoted ones and any embedded double quote is escaped (MDEV-40653). Raw forwarding additionally goes through `mariadb_query_has_lexical_mismatch()`, which refuses to forward SQL whose backslash-escape semantics differ between MariaDB and DuckDB.
 
 See `docs/mariadb-duckdb-incompatibilities.md` for known function name rewrites and type mapping issues.
 

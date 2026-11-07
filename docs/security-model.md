@@ -173,14 +173,22 @@ fixed DuckDB statement from validated arguments:
 
 **Tables.** The target of a load, export or `duckdb_analyze(table)` must be an
 existing `ENGINE=DuckDB` table, so a broad grant cannot reach other DuckDB
-schemas. The wrappers take the metadata locks a normal statement would take
+schemas. Table names are lowercased under `lower_case_table_names`, as in
+SQL. The wrappers take the metadata locks a normal statement would take
 (a load: shared-write plus the backup DML lock; an export or analyze:
 shared-read), so they wait for `LOCK TABLES`, `ALTER`/`DROP TABLE` and, for
 loads, `FLUSH TABLES WITH READ LOCK` / `BACKUP STAGE` in other sessions, up to
-`lock_wait_timeout`. They are refused under the caller's own `LOCK TABLES` and
-inside an open transaction. Loads honour `read_only`. `KILL QUERY` and
-`max_statement_time` interrupt a running call; an interrupted load adds no
-rows.
+`lock_wait_timeout`. They are refused under the caller's own `LOCK TABLES`.
+Loads honour `read_only` and read-only transactions.
+
+**Statements.** Every wrapper except the read-only `duckdb_setting()`,
+`duckdb_file_size()` and `duckdb_loaded_extensions()` is refused inside an
+open transaction, since it runs on its own DuckDB connection. Statements
+calling a wrapper (or `run_in_duckdb()`) are unsafe for statement-based
+binlogging and never served from the query cache, as with `LOAD_FILE()`.
+`KILL QUERY` and `max_statement_time` interrupt a running call, through the
+same mechanism as a pushed-down `SELECT`. An interrupted load adds no rows
+unless it had already finished.
 
 **Local paths** must be absolute (a leading `~` is refused), contain no `..`
 component, and pass `secure_file_priv`. Writes never overwrite an existing
@@ -195,11 +203,13 @@ by one, so a symlink placed inside that directory would be followed.
 reads only, and only when the URL starts with an entry of the
 `duckdb_remote_url_prefixes` allow-list (empty by default, which disables
 remote reads). An entry matches only on a `/` boundary, so write
-`https://host/`, not `https://host`. The allow-list stops the server being
-used to reach internal endpoints such as a cloud metadata service; HTTP
-redirects are not covered. Every other scheme is refused. Remote reads need
-the `httpfs` extension, currently fetched by DuckDB's autoinstall (section
-3); building it in statically is an open decision.
+`https://host/`, not `https://host`. URLs containing a `..` segment, also
+percent-encoded, are refused (even in the query string), so a prefix with a
+path cannot be escaped by a server that normalizes it. The allow-list stops
+the server being used to reach internal endpoints such as a cloud metadata
+service; HTTP redirects are not covered. Every other scheme is refused. Remote
+reads need the `httpfs` extension, currently fetched by DuckDB's autoinstall
+(section 3); building it in statically is an open decision.
 
 **Arguments** containing control characters or backticks are rejected, all
 arguments are converted to utf8mb4, string literals and identifiers are

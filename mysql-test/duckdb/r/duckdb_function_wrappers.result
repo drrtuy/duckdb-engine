@@ -111,6 +111,14 @@ SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org.evil.com/x.p
 ERROR HY000: Got error 168 'URL is not in duckdb_remote_url_prefixes' from DuckDB
 SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org@evil.com/x.parquet');
 ERROR HY000: Got error 168 'URL is not in duckdb_remote_url_prefixes' from DuckDB
+# Dot segments could escape the prefix's path, also percent-encoded
+SET GLOBAL duckdb_remote_url_prefixes= 'https://data.example.org/pub/';
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/../private/x.parquet');
+ERROR HY000: Got error 168 'URL must not contain '..'' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/%2E%2e/private/x.parquet');
+ERROR HY000: Got error 168 'URL must not contain '..'' from DuckDB
+SELECT duckdb_load_parquet('dst_parquet', 'https://data.example.org/pub/..%2fprivate/x.parquet');
+ERROR HY000: Got error 168 'URL must not contain '..'' from DuckDB
 SET GLOBAL duckdb_remote_url_prefixes= '';
 #
 # 6) Whole-database export
@@ -143,6 +151,14 @@ OK
 SELECT duckdb_analyze('src');
 duckdb_analyze('src')
 OK
+START TRANSACTION;
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR HY000: Got error 168 'not allowed inside an open transaction' from DuckDB
+SELECT duckdb_checkpoint();
+ERROR HY000: Got error 168 'not allowed inside an open transaction' from DuckDB
+SELECT duckdb_analyze('src');
+ERROR HY000: Got error 168 'not allowed inside an open transaction' from DuckDB
+COMMIT;
 SELECT duckdb_setting('threads') IS NOT NULL AS has_threads;
 has_threads
 1
@@ -236,6 +252,10 @@ disconnect con_ro;
 connection default;
 SET GLOBAL read_only= @saved_ro;
 DROP USER 'wr_file'@'localhost';
+SET SESSION TRANSACTION READ ONLY;
+SELECT duckdb_load_parquet('dst_parquet', 'MYSQLTEST_VARDIR/tmp/duckdb_wrappers.parquet');
+ERROR 25006: Cannot execute statement in a READ ONLY transaction
+SET SESSION TRANSACTION READ WRITE;
 #
 # 10) KILL QUERY and max_statement_time interrupt a running load
 #
@@ -245,8 +265,8 @@ CREATE TABLE big (id BIGINT PRIMARY KEY, s VARCHAR(40)) ENGINE=DuckDB CHARSET=ut
 SELECT run_in_duckdb("COPY (SELECT i AS id, i::VARCHAR AS s FROM range(20000000) t(i)) TO 'MYSQLTEST_VARDIR/tmp/wrappers_big.parquet' (FORMAT PARQUET)") IS NOT NULL AS generated;
 generated
 1
+# max_statement_time (its message differs between server versions)
 SET STATEMENT max_statement_time=0.1 FOR SELECT duckdb_load_parquet('big', 'MYSQLTEST_VARDIR/tmp/wrappers_big.parquet');
-ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
 SELECT COUNT(*) FROM big;
 COUNT(*)
 0
