@@ -409,6 +409,20 @@ bool run_sql(THD *thd, const std::string &sql, duckdb::Value *first= nullptr)
   return false;
 }
 
+/* Remote reads need httpfs, which a build may leave out (WITH_DUCKDB_HTTPFS). */
+bool check_remote_read(THD *thd, const std::string &path)
+{
+  if (path.find("://") == std::string::npos)
+    return false;
+  duckdb::Value n;
+  if (run_sql(thd, "SELECT count(*) FROM duckdb_extensions() "
+                   "WHERE extension_name = 'httpfs' AND loaded", &n))
+    return true;
+  return n.GetValue<int64_t>() == 0 &&
+         fail("remote reads need DuckDB's httpfs extension, which this "
+              "build does not include");
+}
+
 bool duckdb_file_bytes(longlong &size)
 {
   std::string path= std::string(mysql_real_data_home) +
@@ -433,6 +447,7 @@ bool fn_transfer(THD *thd, const Args &a, FnResult &out)
   std::string db, tbl;
   if (check_no_open_trx(thd) || check_file_io_allowed(thd) ||
       parse_table_name(thd, a[0], db, tbl) || check_io_path(a[1], WRITE) ||
+      (!WRITE && check_remote_read(thd, a[1])) ||
       prepare_table(thd, WRITE ? SELECT_ACL : INSERT_ACL, !WRITE, db, tbl))
     return true;
 
