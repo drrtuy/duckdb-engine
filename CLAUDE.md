@@ -42,6 +42,16 @@ Tests use MariaDB's MTR (MySQL Test Runner) framework. Test files live in `mysql
 ./run_mtr.sh -a -e
 ```
 
+The standalone PEG dialect Phase 0 test is excluded from the default build. Build and run it without installing the plugin or starting MariaDB:
+
+```bash
+cmake -S . -B build
+cmake --build build --target mariadb_dialect_test -j 4
+./build/runtime/mariadb_dialect_test
+```
+
+The test wraps the pinned DuckDB PEG transformer entry with the linker to count actual parses, including a positive control using debug reparse verification. Its mangled symbol in `runtime/CMakeLists.txt` must be rechecked on DuckDB API bumps. Production code has no parser counters. The `mariadb` dialect is registered and warmed in `DuckdbManager::Initialize()` (`runtime/duckdb_manager.cc`), but production pushdown is not switched to it in Phase 0.
+
 ## Architecture
 
 All engine code is in the `myduck` namespace (except `ha_duckdb` which is in global scope per MariaDB handler convention).

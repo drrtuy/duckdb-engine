@@ -4,6 +4,7 @@ SET(DUCKDB_RUNTIME_SOURCES
   duckdb_config.cc
   duckdb_manager.cc
   duckdb_query.cc
+  mariadb_dialect.cc
   duckdb_context.cc
   delta_appender.cc
   cross_engine_scan.cc
@@ -17,6 +18,13 @@ duckdb_setup_target(duckdb_runtime)
 
 TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC duckdb_convertor duckdb_common)
+
+ADD_EXECUTABLE(mariadb_dialect_test EXCLUDE_FROM_ALL
+  mariadb_dialect_test.cc ${DUCKDB_STATIC_EXTENSION_LOADER})
+duckdb_setup_target(mariadb_dialect_test)
+TARGET_LINK_LIBRARIES(mariadb_dialect_test PRIVATE duckdb_runtime ${DUCKDB_LIBRARY}
+  pthread dl
+  -Wl,--wrap=_ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarERNS_12optional_idxE)
 
 IF(DUCKDB_UNIT_TESTS)
   ADD_EXECUTABLE(fiber_context_test fiber_context_test.cc fiber_context.c)
