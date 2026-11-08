@@ -31,6 +31,8 @@
 
 #include "cross_engine_scan.h"
 #include "duckdb_mysql_compat.h"
+#include "mariadb_dialect.h"
+#include "duckdb/parser/sql_statement.hpp"
 
 /* Defined by the generated duckdb_static_extension_loader.c */
 extern "C" int32_t duckdb_register_static_extensions(void);
@@ -191,6 +193,7 @@ bool DuckdbManager::Initialize()
 
   try
   {
+    register_mariadb_dialect(config);
     m_database= new duckdb::DuckDB(path, &config);
   }
   catch (const std::exception &e)
@@ -213,6 +216,7 @@ bool DuckdbManager::Initialize()
   {
     /* Enable autoloading of statically-linked extensions (core_functions etc.) */
     auto con= std::make_shared<duckdb::Connection>(*m_database);
+    parse_mariadb_statement(*con, "SELECT 1");
     auto init_query= [&con](const std::string &sql) {
       auto result= con->Query(sql);
       if (!result)
