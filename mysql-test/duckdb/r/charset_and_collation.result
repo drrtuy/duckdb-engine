@@ -153,7 +153,7 @@ ai	ci	ai_ci
 SET NAMES 'latin1' COLLATE 'latin1_general_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
-0	0	0
+0	1	0
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	1	0

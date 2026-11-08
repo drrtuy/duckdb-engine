@@ -1065,11 +1065,11 @@ int ha_duckdb::direct_delete_rows(ha_rows *delete_rows)
   int ret= 0;
   THD *thd= ha_thd();
   LEX_STRING *source_query= thd_query_string(thd);
-  if (myduck::mariadb_query_has_unsafe_quote_escape(
+  if (myduck::mariadb_query_has_lexical_mismatch(
           thd, source_query->str, source_query->length))
   {
     my_error(ER_GET_ERRMSG, MYF(0), HA_DUCKDB_DML_ERROR,
-             "Unsafe MariaDB backslash quote escape in forwarded SQL",
+             "Unsafe MariaDB lexical mismatch in forwarded SQL",
              "DuckDB");
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
@@ -1123,11 +1123,11 @@ int ha_duckdb::direct_update_rows(ha_rows *update_rows, ha_rows *found_rows)
   int ret= 0;
   THD *thd= ha_thd();
   LEX_STRING *source_query= thd_query_string(thd);
-  if (myduck::mariadb_query_has_unsafe_quote_escape(
+  if (myduck::mariadb_query_has_lexical_mismatch(
           thd, source_query->str, source_query->length))
   {
     my_error(ER_GET_ERRMSG, MYF(0), HA_DUCKDB_DML_ERROR,
-             "Unsafe MariaDB backslash quote escape in forwarded SQL",
+             "Unsafe MariaDB lexical mismatch in forwarded SQL",
              "DuckDB");
     DBUG_RETURN(HA_DUCKDB_DML_ERROR);
   }
