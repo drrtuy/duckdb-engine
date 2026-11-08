@@ -244,10 +244,87 @@ static void test_registration()
   require_base(connection);
 }
 
+static void test_lexical_preflight()
+{
+  struct Case
+  {
+    const char *sql;
+    bool unsafe;
+  };
+  const Case cases[]= {
+      {"SELECT 1 # hidden SQL", true},
+      {"SELECT REPEAT('a',5) AS $$ FROM t # $$ WHERE 0 UNION ALL SELECT 'hidden'", true},
+      {"SELECT $$text$$", true},
+      {"SELECT $tag$text$tag$", true},
+      {"SELECT $unterminated$", true},
+      {"SELECT $name", true},
+      {"SELECT $1", true},
+      {"SELECT 1$$text$$", true},
+      {"SELECT 10--1", true},
+      {"SELECT 1 /* outer /* nested */ + 1", true},
+      {"SELECT 1 /*! + 1 */", true},
+      {"SELECT 1 /*M! + 1 */", true},
+      {"SELECT 1 /*m!100100 + 1 */", true},
+      {"SELECT 1 /* unterminated", true},
+      {"SELECT 1 */", true},
+      {"SELECT 'unterminated", true},
+      {"SELECT \"unterminated", true},
+      {"SELECT `unterminated", true},
+      {"SELECT E'escaped'", true},
+      {"SELECT e'escaped'", true},
+      {"SELECT _utf8mb4'test'", true},
+      {"SELECT 1 -- comment\r+ 1", true},
+      {"SELECT 1 -- comment\r", true},
+      {"SELECT café FROM t", true},
+      {"SELECT name\xc2\xa0$$tag$$ FROM t", true},
+      {"", false},
+      {"SELECT 1", false},
+      {"SELECT 10 - -1", false},
+      {"SELECT col$tag$, name$ FROM t", false},
+      {"SELECT 'literal # $$ $tag$ /* /*! -- E'", false},
+      {"SELECT 'doubled '' # $$ -- quote'", false},
+      {"SELECT `quoted``#$$/*name` FROM t", false},
+      {"SELECT \"quoted\"\"#$$/*name\" FROM t", false},
+      {"SELECT 'Привет', `café`, \"текст\"", false},
+      {"SELECT 1 /* ordinary '# $$ E\\' comment */", false},
+      {"SELECT 1 -- comment '# $$ /* E\\'\n + 1", false},
+      {"SELECT 1 -- comment\r\n + 1", false},
+      {"SELECT 1 -- comment at EOF", false},
+      {"SELECT 1 --\x01 ignored SELECT 99\n + 1", false},
+      {"SELECT 1 --\x7f ignored", true},
+      {"SELECT N'abc', X'61', B'01'", false},
+      {"SELECT enum_value, e FROM t", false}};
+  auto before= parser_entries.load();
+  for (bool escapes : {false, true})
+    for (bool ansi : {false, true})
+    {
+      for (const auto &entry : cases)
+      {
+        bool unsafe= myduck::mariadb_query_has_lexical_mismatch(entry.sql, escapes, ansi);
+        if (unsafe != entry.unsafe)
+          throw std::runtime_error(std::string("Lexical preflight mismatch: ") + entry.sql);
+      }
+      require(myduck::mariadb_query_has_lexical_mismatch(
+                  "SELECT 'a\\' OR true -- '", escapes, ansi) == escapes,
+              "Single-quoted escape mode was not respected");
+      require(myduck::mariadb_query_has_lexical_mismatch(
+                  "SELECT \"a\\\" OR true -- \"", escapes, ansi) == (escapes && !ansi),
+              "ANSI_QUOTES escape mode was not respected");
+      require(!myduck::mariadb_query_has_lexical_mismatch(
+                  "SELECT `a\\` FROM t", escapes, ansi),
+              "Backslash in an identifier was treated as a string escape");
+      require(myduck::mariadb_query_has_lexical_mismatch(
+                  std::string_view("SELECT '\0'", 10), escapes, ansi),
+              "Embedded NUL was accepted");
+    }
+  require(parser_entries == before, "Lexical preflight invoked the PEG parser");
+}
+
 int main()
 {
   try
   {
+    test_lexical_preflight();
     require(duckdb_register_static_extensions() == 0,
             "Could not register statically linked extensions");
     test_registration();
@@ -275,7 +352,7 @@ int main()
     test_shared_grammar(database, connection);
     require(grammar_compilations == compilations + 1,
             "Statements caused per-query grammar compilation");
-    std::puts("PASS: MariaDB dialect Phase 0");
+    std::puts("PASS: MariaDB dialect phases 0 and 1");
     return 0;
   }
   catch (const std::exception &error)

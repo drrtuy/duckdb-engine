@@ -42,7 +42,7 @@ Tests use MariaDB's MTR (MySQL Test Runner) framework. Test files live in `mysql
 ./run_mtr.sh -a -e
 ```
 
-The standalone PEG dialect Phase 0 test is excluded from the default build. Build and run it without installing the plugin or starting MariaDB:
+The standalone PEG dialect test covers Phases 0 and 1 and is excluded from the default build. Build and run it without installing the plugin or starting MariaDB:
 
 ```bash
 cmake -S . -B build
@@ -50,7 +50,9 @@ cmake --build build --target mariadb_dialect_test -j 4
 ./build/runtime/mariadb_dialect_test
 ```
 
-The test wraps the pinned DuckDB PEG transformer entry with the linker to count actual parses, including a positive control using debug reparse verification. Its mangled symbol in `runtime/CMakeLists.txt` must be rechecked on DuckDB API bumps. Production code has no parser counters. The `mariadb` dialect is registered and warmed in `DuckdbManager::Initialize()` (`runtime/duckdb_manager.cc`), but production pushdown is not switched to it in Phase 0.
+The test wraps the pinned DuckDB PEG transformer entry with the linker to count actual parses, including a positive control using debug reparse verification. Its mangled symbol in `runtime/CMakeLists.txt` must be rechecked on DuckDB API bumps. Production code has no parser counters. Phase 1 adds a table-driven lexical corpus and asserts that preflight itself never invokes the PEG parser. The integration regression is `mysql-test/duckdb/t/duckdb_lexical_guard.test`. The `mariadb` dialect is registered and warmed in `DuckdbManager::Initialize()` (`runtime/duckdb_manager.cc`), but production pushdown is not switched to it in Phases 0/1.
+
+Installed MTR can test a source suite and the freshly built plugin without installation: use an absolute `--suite` path, a fresh `--vardir` under `build/`, and `--mysqld=--plugin-dir=<source>/build`. The installed runner splits suite names at `-`, so source paths containing dashes need a dash-free symlink for `--suite`. Preserve the suite's utf8mb4 server charset/collation settings when running this way.
 
 ## Architecture
 
@@ -85,7 +87,7 @@ SQL reaches DuckDB by two routes:
 - **Whole queries are forwarded verbatim.** SELECT and INSERT … SELECT are pushed down as the raw `thd->query()` text — see `extract_source_query()` in `ha_duckdb_pushdown.cc`. The engine does **not** re-print the whole query via `SELECT_LEX::print()`.
 - **Only fragments are printed.** `Item`/`COND::print()` is used for per-table WHERE conditions in cross-engine scan (`ha_duckdb_pushdown.cc`) and for DDL default / `nextval` expressions (`ddl_convertor.cc`). DDL/DML convertors also build identifier strings directly from `Field`/`TABLE` metadata.
 
-Both routes then pass through `backticks_to_double_quotes()` (`runtime/duckdb_query.cc`), which is where identifier requoting actually happens: backtick-delimited identifiers are rewritten to double-quoted ones and any embedded double quote is escaped (MDEV-40653). Raw forwarding additionally goes through `mariadb_query_has_lexical_mismatch()`, which refuses to forward SQL whose backslash-escape semantics differ between MariaDB and DuckDB.
+Both routes then pass through `backticks_to_double_quotes()` (`runtime/duckdb_query.cc`), which is where identifier requoting actually happens: backtick-delimited identifiers are rewritten to double-quoted ones and any embedded double quote is escaped (MDEV-40653). Raw forwarding additionally goes through `mariadb_query_has_lexical_mismatch()` (THD/charset wrapper in `runtime/duckdb_query.cc`, allocation-free lexical preflight in `runtime/mariadb_dialect.cc`). It refuses unsupported comment/dollar-quote forms, unsafe quote boundaries, literal prefixes, malformed regions, and unsupported encoding cases. It runs even with `NO_BACKSLASH_ESCAPES`. SELECT factories decline pushdown; direct UPDATE/DELETE report an error before transaction registration or appender flush. Non-boundary backslash value differences remain the existing parity behavior.
 
 See `docs/mariadb-duckdb-incompatibilities.md` for known function name rewrites and type mapping issues.
 
