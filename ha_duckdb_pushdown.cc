@@ -241,9 +241,10 @@ static bool is_query_token(const std::string &sql, size_t start, size_t length)
 
 static bool extract_source_query(THD *thd, std::string &source)
 {
-  const std::string sql(thd->query(), thd->query_length());
-  if (myduck::mariadb_query_has_unsafe_quote_escape(thd, sql.data(), sql.size()))
+  if (myduck::mariadb_query_has_lexical_mismatch(
+          thd, thd->query(), thd->query_length()))
     return false;
+  const std::string sql(thd->query(), thd->query_length());
   const bool strip_prefix= thd->lex->sql_command == SQLCOM_INSERT_SELECT;
   const bool backslash_escapes= thd->backslash_escapes();
   size_t i= 0;
@@ -258,8 +259,11 @@ static bool extract_source_query(THD *thd, std::string &source)
       continue;
     }
     size_t end;
-    myduck::SqlRegionType region=
-        myduck::scan_sql_region(sql, i, backslash_escapes, end);
+    myduck::SqlRegionType region= myduck::scan_sql_region(
+        sql, i, backslash_escapes &&
+                    (c == '\'' ||
+                     (c == '"' && !(thd->variables.sql_mode & MODE_ANSI_QUOTES))),
+        end);
     if (region == myduck::SqlRegionType::UNTERMINATED)
       return false;
     if (region == myduck::SqlRegionType::COMMENT)

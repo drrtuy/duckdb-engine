@@ -73,24 +73,24 @@ WHERE v = 'missing\' OR true -- ';
 COUNT(*)
 0
 UPDATE lexical_guard SET v = 'changed\' WHERE true -- ' WHERE id = 999;
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe
 DELETE FROM lexical_guard WHERE v = 'missing\' OR true -- ';
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT COUNT(*) FROM lexical_guard;
 COUNT(*)
 1
 UPDATE lexical_guard SET v = 'safe\'';
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe
 UPDATE /* user's \' comment */ lexical_guard SET v = 'unchanged' WHERE id = 999;
 UPDATE lexical_guard SET v = 'unchanged\n' WHERE id = 999;
 UPDATE lexical_guard SET v = "changed\" WHERE true -- " WHERE id = 999;
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe
