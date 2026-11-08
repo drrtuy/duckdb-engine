@@ -1,0 +1,46 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # max_statement_time and KILL QUERY interrupt a pushed-down SELECT
+--echo # while it still runs inside DuckDB
+--echo #
+
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=DuckDB;
+SELECT run_in_duckdb("INSERT INTO test.t1 FROM range(100000)");
+
+let $heavy= SELECT COUNT(*) FROM t1 a, t1 b, t1 c WHERE (a.a * 7 + b.a * 13 + c.a) % 1000003 = 5;
+
+--echo # max_statement_time
+SET max_statement_time= 0.5;
+--error ER_STATEMENT_TIMEOUT
+eval $heavy;
+SET max_statement_time= 0;
+SELECT COUNT(*) FROM t1;
+
+--echo # KILL QUERY
+connect (con1, localhost, root,,);
+let $con1_id= `SELECT CONNECTION_ID()`;
+--send_eval $heavy
+
+connection default;
+let $wait_condition= SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE id = $con1_id AND command = 'Query' AND info LIKE 'SELECT COUNT(*) FROM t1 a,%';
+--source include/wait_condition.inc
+--replace_result $con1_id CON1_ID
+eval KILL QUERY $con1_id;
+
+connection con1;
+--error ER_QUERY_INTERRUPTED
+--reap
+SELECT COUNT(*) FROM t1;
+
+--echo # KILL QUERY of an idle session does not leak into its next query
+connection default;
+--replace_result $con1_id CON1_ID
+eval KILL QUERY $con1_id;
+connection con1;
+SELECT COUNT(*) FROM t1;
+
+disconnect con1;
+connection default;
+DROP TABLE t1;

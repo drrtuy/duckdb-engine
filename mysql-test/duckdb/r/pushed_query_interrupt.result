@@ -1,0 +1,41 @@
+#
+# max_statement_time and KILL QUERY interrupt a pushed-down SELECT
+# while it still runs inside DuckDB
+#
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=DuckDB;
+SELECT run_in_duckdb("INSERT INTO test.t1 FROM range(100000)");
+run_in_duckdb("INSERT INTO test.t1 FROM range(100000)")
+Count	
+BIGINT	
+[ Rows: 1]
+100000
+
+
+# max_statement_time
+SET max_statement_time= 0.5;
+SELECT COUNT(*) FROM t1 a, t1 b, t1 c WHERE (a.a * 7 + b.a * 13 + c.a) % 1000003 = 5;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SET max_statement_time= 0;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+100000
+# KILL QUERY
+connect  con1, localhost, root,,;
+SELECT COUNT(*) FROM t1 a, t1 b, t1 c WHERE (a.a * 7 + b.a * 13 + c.a) % 1000003 = 5;
+connection default;
+KILL QUERY CON1_ID;
+connection con1;
+ERROR 70100: Query execution was interrupted
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+100000
+# KILL QUERY of an idle session does not leak into its next query
+connection default;
+KILL QUERY CON1_ID;
+connection con1;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+100000
+disconnect con1;
+connection default;
+DROP TABLE t1;
