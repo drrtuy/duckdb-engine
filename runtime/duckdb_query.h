@@ -46,8 +46,7 @@ enum class SqlRegionType
 SqlRegionType scan_sql_region(const std::string &sql, size_t start,
                               bool backslash_escapes, size_t &end);
 
-bool mariadb_query_has_unsafe_quote_escape(THD *thd, const char *query,
-                                            size_t length);
+bool mariadb_query_has_lexical_mismatch(THD *thd, const char *query, size_t length);
 
 /*
   Blocking: runs the query to completion and returns the retained
