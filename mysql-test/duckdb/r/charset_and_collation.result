@@ -433,8 +433,8 @@ SELECT d FROM t_innodb where d = 'á';
 d
 DROP TABLE t_duckdb, t_innodb;
 # 3.2 define collation for table with utf8mb3
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8_general_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
-CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8_general_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8_general_ci;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8mb3_general_ci) engine=duckdb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32) COLLATE utf8mb3_general_ci) engine=innodb CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 INSERT INTO t_duckdb VALUES (1, 'a');
 INSERT INTO t_innodb VALUES (1, 'a');
 SELECT a FROM t_duckdb where a = 'a';
