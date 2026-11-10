@@ -85,7 +85,8 @@ MTR="$MTR_PATH/mtr"
 # Installed by 'cmake --install' (MARIADB_ADD_PLUGIN installs mysql-test/
 # into <mariadb-test>/plugin/<target>); installed MTR discovers suites there
 # and uses the installed ha_duckdb.so.
-INSTALLED_SUITE_DIR="$MTR_PATH/plugin/duckdb/$SUITE"
+SUITE_PATH="plugin/duckdb/$SUITE"
+INSTALLED_SUITE_DIR="$MTR_PATH/$SUITE_PATH"
 
 if [[ ! -x "$MTR" ]]; then
     fail "MTR not found at $MTR. Install the MariaDB test package or pass --mtr-dir"
@@ -125,8 +126,9 @@ fi
 
 # ─── Build MTR command ──────────────────────────────────────────────────────────
 
+# By path: a bare suite name may resolve to another plugin/*/duckdb copy.
 MTR_CMD=("perl" "$MTR"
-    --suite="$SUITE"
+    --suite="$SUITE_PATH"
     --parallel="$PARALLEL"
     --force
     --max-test-fail=0
@@ -150,7 +152,8 @@ MTR_CMD+=("${EXTRA_MTR_ARGS[@]}")
 if [[ "$RUN_ALL" == false && -n "$TEST_NAME" ]]; then
     # Strip .test extension if provided
     TEST_NAME="${TEST_NAME%.test}"
-    MTR_CMD+=("$SUITE.$TEST_NAME")
+    TEST_NAME="${TEST_NAME#"$SUITE".}"
+    MTR_CMD+=("$TEST_NAME")
 fi
 
 # ─── Print summary ──────────────────────────────────────────────────────────────
