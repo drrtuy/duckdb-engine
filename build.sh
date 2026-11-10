@@ -121,6 +121,17 @@ detect_distro() {
 
 SDK_CONFIG="$MARIADB_PREFIX/share/cmake/mariadb-plugin/mariadb-plugin-config.cmake"
 
+# Build as the invoking user (their cmake); only system steps go through sudo.
+if [[ $EUID -eq 0 ]]; then
+    ROOT=()
+elif command -v sudo > /dev/null; then
+    ROOT=(sudo)
+else
+    ROOT=()
+    warn "Not root and no sudo: install/server steps run as $(id -un) and may fail"
+fi
+as_root() { "${ROOT[@]}" "$@"; }
+
 header "DuckDB Storage Engine Build"
 info "Source:     ${_CLR_YELLOW}$DUCKDB_SOURCE_PATH"
 info "MariaDB:    ${_CLR_YELLOW}$MARIADB_PREFIX"
@@ -139,12 +150,12 @@ check_user_and_group() {
     local user=$1
     if [ -z "$(grep "$user" /etc/passwd)" ]; then
         info "Adding user $user"
-        useradd -r -U "$user" -d "$DEFAULT_MDB_DATADIR"
+        as_root useradd -r -U "$user" -d "$DEFAULT_MDB_DATADIR"
     fi
     if [ -z "$(grep "$user" /etc/group)" ]; then
         local gid=$(awk -F: '{uid[$3]=1}END{for(x=100; x<=999; x++) {if(uid[x] != ""){}else{print x; exit;}}}' /etc/group)
         info "Adding group $user with id $gid"
-        groupadd -g "$gid" "$user"
+        as_root groupadd -g "$gid" "$user"
     fi
 }
 
@@ -152,13 +163,13 @@ clean_old_installation() {
     if [[ $NO_CLEAN = true ]]; then
         return
     fi
-    rm -rf "${DEFAULT_MDB_DATADIR}"
-    rm -rf /var/run/mysqld
+    as_root rm -rf "${DEFAULT_MDB_DATADIR}"
+    as_root rm -rf /var/run/mysqld
 }
 
 bootstrap_mdb() {
     info "Bootstrap MariaDB"
-    ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" "$MARIADB_PREFIX/bin/mariadb-install-db" \
+    as_root env ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" "$MARIADB_PREFIX/bin/mariadb-install-db" \
         --datadir="$DEFAULT_MDB_DATADIR" \
         --user="$USER" --group="$GROUP" > /dev/null
 }
@@ -166,25 +177,29 @@ bootstrap_mdb() {
 stop_mdb() {
     if "$MARIADB_PREFIX/bin/mariadb-admin" ping --silent 2>/dev/null; then
         warn "Stopping MariaDB"
-        "$MARIADB_PREFIX/bin/mariadb-admin" shutdown || true
+        as_root "$MARIADB_PREFIX/bin/mariadb-admin" shutdown || true
     fi
 }
 
 start_mdb() {
     info "Starting MariaDB"
-    mkdir -p /run/mysqld
-    chown "$USER:$GROUP" /run/mysqld
-    "$MARIADB_PREFIX/bin/mariadbd-safe" --datadir="$DEFAULT_MDB_DATADIR" &
+    as_root mkdir -p /run/mysqld
+    as_root chown "$USER:$GROUP" /run/mysqld
+    local safe_log="$BUILD_PATH/mariadbd-safe.log"
+    as_root "$MARIADB_PREFIX/bin/mariadbd-safe" --datadir="$DEFAULT_MDB_DATADIR" > "$safe_log" 2>&1 &
 
     local max_attempts=30
     local attempt=0
     while ! "$MARIADB_PREFIX/bin/mariadb-admin" ping --silent 2>/dev/null; do
         attempt=$((attempt + 1))
         if [[ $attempt -ge $max_attempts ]]; then
+            error "mariadbd-safe output ($safe_log):"
+            tail -20 "$safe_log"
             local err_log="${DEFAULT_MDB_DATADIR}/$(hostname).err"
-            if [[ -f "$err_log" ]]; then
+            # The datadir is usually readable by mysql/root only.
+            if as_root test -f "$err_log"; then
                 error "Last 50 lines of $err_log:"
-                tail -50 "$err_log"
+                as_root tail -50 "$err_log"
             fi
             fail "MariaDB failed to start within ${max_attempts} seconds"
         fi
@@ -194,10 +209,10 @@ start_mdb() {
 }
 
 setup_dev_user() {
-    local current_user=$(logname 2>/dev/null || echo "$SUDO_USER")
+    local current_user=${SUDO_USER:-$(logname 2>/dev/null || id -un)}
     if [[ -n "$current_user" && "$current_user" != "root" ]]; then
         info "Creating dev user '${_CLR_YELLOW}$current_user${_CLR_CYAN}'"
-        "$MARIADB_PREFIX/bin/mariadb" -e \
+        as_root "$MARIADB_PREFIX/bin/mariadb" -e \
             "CREATE USER IF NOT EXISTS '$current_user'@'localhost' IDENTIFIED VIA unix_socket;
              GRANT ALL PRIVILEGES ON *.* TO '$current_user'@'localhost';"
     fi
@@ -310,9 +325,44 @@ install_deps() {
     success "Prerequisites installed"
 }
 
+# Under sudo, give the build tree back so non-root rebuilds keep working.
+if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    trap '[[ -d "$BUILD_PATH" ]] && chown -R "$SUDO_USER": "$BUILD_PATH"' EXIT
+fi
+
 construct_cmake_flags
 install_deps
 check_sdk
+
+# A source-built server reads /etc/my.cnf.d, not the layout's cnf dir.
+ensure_cnf_loaded() {
+    local installed
+    installed=$(grep -m1 '/duckdb\.cnf$' "$BUILD_PATH/install_manifest.txt" 2>/dev/null || true)
+    [[ -n "$installed" ]] || { warn "duckdb.cnf was not installed; load with INSTALL SONAME 'ha_duckdb'"; return; }
+
+    local dirs=() f d
+    for f in /etc/my.cnf /etc/mysql/my.cnf; do
+        [[ -f "$f" ]] || continue
+        while read -r d; do dirs+=("$d"); done < <(sed -n 's/^[[:space:]]*!includedir[[:space:]]\+//p' "$f")
+    done
+    for d in "${dirs[@]}"; do
+        [[ "$(realpath -m "$d")" == "$(dirname "$(realpath -m "$installed")")" ]] && return
+    done
+    local target=""
+    for d in "${dirs[@]}"; do
+        [[ -d "$d" ]] && { target="$d"; break; }
+    done
+    [[ -n "$target" ]] || { warn "No existing !includedir dir in /etc/my.cnf; load with INSTALL SONAME 'ha_duckdb'"; return; }
+
+    local dest="$target/duckdb.cnf"
+    # Never clobber a real file there: it may carry local edits.
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+        warn "$dest exists and is not a symlink; leaving it as is"
+        return
+    fi
+    info "Linking ${_CLR_YELLOW}$installed${_CLR_CYAN} into ${_CLR_YELLOW}$target"
+    as_root ln -sfn "$installed" "$dest" || warn "Could not link $dest; load with INSTALL SONAME 'ha_duckdb'"
+}
 
 build_binary() {
     separator
@@ -355,6 +405,12 @@ if [[ -n "$PKG_FORMAT" ]]; then
     exit 0
 fi
 
+if [[ $CI_MODE = false || $START_MDB = true ]]; then
+    # Ask for the sudo password once, not at each privileged step.
+    [[ ${#ROOT[@]} -eq 0 ]] || sudo -n true 2> /dev/null || sudo -v \
+        || fail "sudo is required to install and (re)start the server"
+fi
+
 if [[ $CI_MODE = false ]]; then
     check_server_version
     check_user_and_group "$USER"
@@ -364,10 +420,11 @@ if [[ $CI_MODE = false ]]; then
     separator
     info "Installing"
     set +e
-    cmake --install "$BUILD_PATH" | one_liner
+    as_root "$(command -v cmake)" --install "$BUILD_PATH" | one_liner
     rc=${PIPESTATUS[0]}
     set -e
     [[ $rc -ne 0 ]] && fail "INSTALL FAILED (exit code $rc)"
+    ensure_cnf_loaded
 
     if [[ $NO_CLEAN = false ]]; then
         bootstrap_mdb
