@@ -11,6 +11,8 @@ ADD_LIBRARY(quack_guard STATIC
   src/login.cpp
   src/session_registry.cpp
   src/transport.cpp
+  src/allowlist.cpp
+  src/statement_gate.cpp
 )
 duckdb_setup_target(quack_guard)
 
@@ -22,6 +24,7 @@ TARGET_INCLUDE_DIRECTORIES(quack_guard SYSTEM PRIVATE
   ${QUACK_SOURCE_DIR}/src/include
   ${DUCKDB_SUBMODULE_DIR}/third_party/httplib
   ${DUCKDB_SUBMODULE_DIR}/third_party/mbedtls/include
+  ${DUCKDB_SUBMODULE_DIR}/third_party/fmt/include
   ${OPENSSL_INCLUDE_DIR})
 TARGET_COMPILE_DEFINITIONS(quack_guard PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
@@ -36,6 +39,7 @@ IF(DUCKDB_UNIT_TESTS)
     ${QUACK_SOURCE_DIR}/src/include
     ${DUCKDB_SUBMODULE_DIR}/third_party/httplib
     ${DUCKDB_SUBMODULE_DIR}/third_party/mbedtls/include
+    ${DUCKDB_SUBMODULE_DIR}/third_party/fmt/include
     ${OPENSSL_INCLUDE_DIR})
   TARGET_COMPILE_DEFINITIONS(quack_guard_test PRIVATE
     CPPHTTPLIB_OPENSSL_SUPPORT

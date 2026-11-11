@@ -30,7 +30,12 @@
     any_column == false denies.
   - filterVisible() returns a new list; on any error it returns an empty one.
   - Names cross the bridge byte for byte as DuckDB stores them; the MariaDB
-    side normalizes them (lower_case_table_names etc.).
+    side normalizes them (lower_case_table_names etc.). DuckDB's catalog is
+    case-insensitive, so the MariaDB side also denies when the name is
+    ambiguous in MariaDB (e.g. `Sales` and `sales` with
+    lower_case_table_names=0).
+  - check() allows a table only if it exists in MariaDB as an ENGINE=DuckDB
+    table; a DuckDB-only object in a db-named schema is not readable.
   - Bridge calls never call back into DuckDB and may block (bounded by the
     implementation's own timeout).
 */
@@ -112,11 +117,18 @@ enum class Access
 
 struct AccessRequest
 {
+  /* Always the engine's own DuckDB database */
   std::string catalog;
+  /* The MariaDB database */
   std::string schema;
   std::string table;
+  /* Every column the statement reads anywhere (select list, WHERE, JOIN,
+     ORDER BY, ...); each needs the privilege */
   std::vector<std::string> columns;
-  bool any_column= false;  /* e.g. count(*): any privilege on the table */
+  /* Also read without naming a column (count(*), rowid, SELECT 1 FROM t):
+     needs the privilege on the table or on at least one of its columns,
+     as in MariaDB; in addition to `columns` */
+  bool any_column= false;
   Access want= Access::Select;
 };
 

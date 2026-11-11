@@ -55,6 +55,11 @@ protected:
   AuthenticateConnection(duckdb::DatabaseInstance &db,
                          duckdb::ConnectionRequestMessage &request,
                          const std::string &connection_id) override;
+  duckdb::unique_ptr<duckdb::QuackMessage>
+  AuthorizeStatement(duckdb::DatabaseInstance &db,
+                     duckdb::QuackConnection &connection,
+                     const std::string &sql,
+                     std::string &effective_sql) override;
   void OnConnectionCreated(duckdb::QuackConnection &connection) override;
   void OnConnectionClosed(duckdb::QuackConnection &connection) override;
 

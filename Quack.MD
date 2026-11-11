@@ -55,7 +55,7 @@ Each patch is security-relevant and a candidate for upstream.
 | Patch | What and why |
 |---|---|
 | `0001-random-token-from-openssl.patch` | Session ids, the HMAC key and generated tokens come from OpenSSL's CSPRNG (`RAND_bytes`). Stock Quack takes them from DuckDB's writable crypto module, which exists only when the `httpfs` extension is loaded; the plugin deliberately does not link `httpfs` (network access from SQL, see `docs/security-model.md`). |
-| `0002-disable-quack-serve.patch` | `quack_serve()` always fails. The stock server would listen inside `mariadbd` and parse unauthenticated requests; the plugin runs its own authenticated listener (*planned*). |
+| `0002-disable-quack-serve.patch` | `quack_serve()` always fails. The stock server would listen inside `mariadbd` and parse unauthenticated requests; the plugin runs its own authenticated listener. |
 | `0003-client-loopback-only.patch` | The Quack client (`quack_query`, `ATTACH 'quack:...'`) only reaches `localhost`, `127.0.0.1` or `::1`. With a pinned certificate fingerprint it needs no `httpfs`, so without this patch `run_in_duckdb` would gain network egress. Loopback stays open for the in-server test client. |
 | `0004-connection-hooks.patch` | Virtual hooks in `QuackServer` so the plugin's listener overrides Quack's login and statement decisions instead of copying Quack's code (a Quack update that changes them then breaks the patch, not silently the listener): `AuthenticateConnection()` (a connection request, after Quack's version and heartbeat checks), `AuthorizeStatement()` (the SQL of a `PREPARE_REQUEST`), `OnConnectionCreated()` (a new session before it becomes visible), `OnConnectionClosed()` (every session removed by disconnect or lease expiry); `CleanupExpiredConnection()` made reachable for subclasses; `ConnectionRequestMessage::WipeAuthString()`. Each default keeps Quack's behaviour. |
 
@@ -82,8 +82,8 @@ the plugin locks DuckDB's configuration, `DuckdbManager::Initialize()` calls
 After `lock_configuration` neither setting can be changed in any scope, and
 internal system functions cannot be replaced or dropped. If any step fails,
 DuckDB initialization fails and the engine does not load (fail closed). The
-plugin's own listener (*planned*) authenticates against MariaDB and does not
-use these callbacks.
+plugin's own listener authenticates through the `QuackAuthorizer` and decides
+statements itself (hooks of patch 0004); it does not use these callbacks.
 
 Known gaps for SUPER users with `run_in_duckdb`: `CREATE SECRET (TYPE quack)`
 can hold a client token in memory, and `quack_identify()` writes the cosmetic
@@ -146,7 +146,7 @@ the plugin marks it). That breaks DuckDB's own internal connections, which
 bind SQL during WAL replay and checkpoints, and would change behaviour for
 regular users. Contexts a Quack session might open indirectly (for example
 `json_execute_serialized_sql`) must instead be prevented before binding, by
-the statement gate (*planned*), because bind-time code runs before the plan
+the statement gate, because bind-time code runs before the plan
 gate (see below).
 
 ### Listener
@@ -168,7 +168,7 @@ per guard.
   fails while starting, everything already bound is closed again. Client
   connections over all addresses are capped by `max_connections`; beyond the
   cap a connection is closed at once, not queued. Idle client connections
-  are kept 5 s. Request bodies are capped by `max_request_bytes`; an
+  are kept 30 s. Request bodies are capped by `max_request_bytes`; an
   incomplete body is answered 400 and never parsed. A listener thread that
   stops on its own is reported in `ListenerStatus::failure` (and its socket
   is not closed a second time).
@@ -195,8 +195,8 @@ per guard.
   not created and the identity is released.
 - **Messages.** Every other message must name a registered session and come
   from its peer address; otherwise "Invalid connection id". Quack then
-  handles it, including its own statement callback, which is still the
-  deny-all function (*planned*: the statement gate).
+  handles it; its SQL goes through the statement gate (the
+  `AuthorizeStatement` hook) and the plan gate (below).
 - **Session end** (`OnConnectionClosed`): disconnect, an expired lease
   noticed by Quack, or the listener's reaper, which every `reap_interval_ms`
   interrupts and removes sessions whose heartbeat lease ran out (Quack itself
@@ -213,20 +213,72 @@ per guard.
   join the listener threads. Idempotent; also runs when the handle is
   destroyed. Must not run on a listener thread.
 
-### Plan gate
+### What a Quack session may run (milestone 1)
 
-`plan_gate.cpp` registers a DuckDB `PlannerExtension` whose `post_bind`
-function runs for every bound statement (every path that plans goes through
-`Planner::CreatePlan`, including `Prepare` and rebinds). For other contexts it
-returns immediately. For Quack sessions it currently rejects every statement
-(*planned*: allowlist and grant checks). `PrincipalState` forces a rebind on
-every `EXECUTE`, so prepared statements are re-authorized each time.
+Read-only, autocommit queries over base tables, decided twice, from
+allowlists (anything not listed is refused, so a new DuckDB statement,
+operator or function is refused until reviewed):
 
-`post_bind` runs after binding, and binding has effects: table-function
-binds open files (`read_csv`), constant arguments are evaluated, pragmas are
-expanded, binder errors name existing objects. These are closed by the
-statement gate on the parsed statement (*planned*, required before any
-listener is enabled), not by the plan gate.
+- **Statement gate** (`src/statement_gate.cpp`, the listener's
+  `AuthorizeStatement` hook, before anything is bound; binding has effects:
+  table-function binds open files, unknown names reach file replacement
+  scans and extension autoloading, constant arguments are evaluated, binder
+  errors name objects).
+  - Exactly one statement: `SELECT` (plain, set operations, non-recursive
+    CTEs, `FROM`-first) or `EXPLAIN` of one (not `ANALYZE`). No transaction
+    statements: a long-open snapshot would outlive grant changes and hold
+    back checkpoints.
+  - Table references: base tables, joins (not `NEAREST BY`), subqueries,
+    `VALUES`; no table functions, `PIVOT`, `SHOW`/`DESCRIBE`, `SAMPLE`,
+    `AT`, no nested schema paths. Once the whole form has been checked (so
+    a form refusal always wins and reveals nothing about objects), every
+    base table name except CTE names in scope is looked up, all in one
+    transaction of a separate connection: it must be a table (not a view)
+    in the engine's own database, outside the schemas `main`, `pg_catalog`,
+    `information_schema`, `temp` (any case) and not a MariaDB `#sql...`
+    name. A CTE is in scope for the CTEs after it and the body only, as
+    DuckDB binds it, so self and forward references are looked up too.
+  - Expressions: columns, constants, comparisons, `AND`/`OR`, `CASE`,
+    `BETWEEN`, `NOT`, `IS [NOT] NULL`, `[NOT] IN`, `NULLIF`, `COALESCE`,
+    plain `*` and `t.*` (no `COLUMNS()`, `EXCLUDE`, `REPLACE`, `RENAME`,
+    which reveal column names through what they match), casts to built-in
+    types with constant parameters, subqueries, and functions and window
+    functions only by unqualified name from the function list
+    (`src/allowlist.cpp`: deterministic, no I/O, no settings, no nested
+    SQL). No `COLLATE`, array or struct access, parameters, lambdas,
+    `UNNEST`.
+- **Plan gate** (`src/plan_gate.cpp`, DuckDB `post_bind` hook, every
+  statement any path plans): the bound operators (projection, filter,
+  aggregate, window, order/limit, distinct, joins, set operations, CTEs,
+  dummy/expression scans, explain), the bound expressions (again the
+  function list, also inside macro bodies, so a macro shadowing an allowed
+  name is caught, and inside subquery plans), and table scans only of base
+  tables of the engine's own database outside the reserved schemas and
+  names. The prepared-statement API is refused (Quack runs every request as
+  a new query); a prepared statement would also be re-bound on every
+  `EXECUTE`.
+- **Authorization.** The plan gate collects every base table read with the
+  exact columns read anywhere (`count(*)`, `rowid` and the like add "any
+  column": the privilege on the table or on one of its columns), and asks
+  `QuackAuthorizer::check()` once per statement with all of them; a
+  statement that reads no table is not checked. Deny, an authorizer error
+  or no authorizer refuses. `EXPLAIN` needs the same access as the query.
+- **Errors.** A refused statement form answers "Statement not allowed over
+  Quack". Everything about objects answers "Access denied, or the object
+  does not exist": denied access, missing, reserved or non-table objects,
+  plan-gate refusals (the plan exists only if every name resolved), and
+  every other error, except execution errors (conversion, out of range,
+  division by zero, invalid input, interrupt, out of memory) of a statement
+  the plan gate has granted: some of those types are also thrown while
+  binding, so `PrincipalState` carries an "authorized" flag, reset when a
+  query begins and set by the plan gate. A client learns nothing about
+  objects it cannot read.
+- Each session has `use_replacement_scans` off (`HardenSession`), the
+  second line behind the table lookup.
+- Unreachable by design in milestone 1: DuckDB views (a SUPER user could
+  create one with `run_in_duckdb`; MariaDB views are not DuckDB objects),
+  and MariaDB databases named `main`, `pg_catalog`, `information_schema` or
+  `temp`.
 
 ### MariaDB tables are out of reach
 
@@ -238,7 +290,7 @@ addition to its thread-local table registry being empty on Quack threads.
 
 Quack's client needs `httpfs` for plain HTTP(S), except when the server
 certificate is pinned by fingerprint (`ssl_fingerprint`): then it uses its own
-TLS client. The plugin's listener (*planned*) is TLS-only and publishes its
+TLS client. The plugin's listener is TLS-only and publishes its
 fingerprint, which is how the in-server loopback client used by MTR tests
 connects.
 
@@ -247,12 +299,17 @@ connects.
 - `quack_guard/test/guard_test.cpp` (Layer A, plain DuckDB, mock authorizer;
   build with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`):
   contract defaults deny; regular connections unaffected; stock callbacks
-  pinned; a Quack session is denied every planned statement kind (queries,
-  DML, DDL, SET, EXPLAIN, CALL, transactions, ATTACH, LOAD, PREPARE,
-  multi-statement strings, the `Prepare` API) without side effects; a
-  session Quack created without a principal is denied too; a principal
+  pinned; a session Quack created without a principal is denied; a principal
   cannot be replaced or be null; the guard's authorizer can be set and
-  removed; `ParseAuthString` (escapes, roles, limits, anonymous) and
+  removed; the statement gate on a corpus of forbidden and allowed
+  statements; the plan gate: every allowed statement passes, the exact
+  access requests per query shape (columns, `count(*)`, `rowid`, joins,
+  subqueries, CTEs), reserved schemas, refusals without side effects,
+  denied/throwing authorizer, prepared-statement API refused, other
+  connections untouched; end to end through the listener: data returned
+  when allowed, denied tables, missing objects indistinguishable from
+  denied ones, file reads and writes refused before binding;
+  `ParseAuthString` (escapes, roles, limits, anonymous) and
   `CanonicalPeer`. Listener, driven by Quack's own client and by a raw
   client: refuses to start without TLS or with an unreadable certificate;
   one listener per guard; a failed second address leaves nothing bound; a
