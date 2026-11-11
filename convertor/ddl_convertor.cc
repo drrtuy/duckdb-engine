@@ -23,6 +23,7 @@
 #include <cassert>
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 #include <unordered_set>
 
 #include <my_global.h>
@@ -32,6 +33,17 @@
 #include "sql_class.h"
 #include "sql_alter.h"
 #include "sql_table.h" /* primary_key_name */
+
+/*
+  Defined in runtime/mariadb_dialect.cc. Forward-declared here to avoid a
+  convertor->runtime include-path dependency (runtime already links the
+  convertor); the symbol resolves at the plugin's final link.
+*/
+namespace myduck
+{
+bool mariadb_query_has_lexical_mismatch(std::string_view query,
+                                        bool backslash_escapes, bool ansi_quotes);
+}
 
 /* ----- Helpers ----- */
 
@@ -212,6 +224,32 @@ static void note_sequence_default_omitted(const char *column)
   push_warning_printf(current_thd, Sql_condition::WARN_LEVEL_NOTE,
                       ER_UNKNOWN_ERROR,
                       "DuckDB: sequence default of column '%s' is not "
+                      "forwarded to DuckDB; MariaDB supplies the value",
+                      column);
+}
+
+/**
+  An expression default is forwarded as text and parsed by DuckDB's base
+  dialect. MariaDB's Item::print() backslash-escapes quotes in string literals,
+  which the DuckDB tokenizer does not honor, so a crafted expression default can
+  close the generated literal early and inject DuckDB SQL (companion to
+  MDEV-40610, which covers literal defaults). Refuse any expression text whose
+  MariaDB lexing would differ from DuckDB's; such a default is omitted from
+  DuckDB (MariaDB still supplies the value on normal writes), mirroring the
+  sequence-default handling. The fixed flags reflect Item::print() output, which
+  backslash-escapes unconditionally and quotes identifiers with backticks.
+*/
+static bool expr_default_is_unsafe(const std::string &expr)
+{
+  return myduck::mariadb_query_has_lexical_mismatch(expr, /*backslash*/ true,
+                                                    /*ansi_quotes*/ false);
+}
+
+static void note_expr_default_omitted(const char *column)
+{
+  push_warning_printf(current_thd, Sql_condition::WARN_LEVEL_NOTE,
+                      ER_UNKNOWN_ERROR,
+                      "DuckDB: unsafe expression default of column '%s' is not "
                       "forwarded to DuckDB; MariaDB supplies the value",
                       column);
 }
@@ -560,6 +598,8 @@ std::string FieldConvertor::translate()
           get_default_expr_from_vcol_defs(field->table->s, field->field_index);
       if (has_mariadb_sequence_func(expr_str))
         note_sequence_default_omitted(field->field_name.str);
+      else if (!expr_str.empty() && expr_default_is_unsafe(expr_str))
+        note_expr_default_omitted(field->field_name.str);
       else if (!expr_str.empty())
         result << " DEFAULT (" << expr_str << ")";
     }
@@ -1189,8 +1229,17 @@ std::string ChangeColumnDefaultConvertor::translate()
   {
     Field *field= pair.second;
 
-    std::string default_value;
     std::string expr= get_expr_default_text(field);
+    if (!expr.empty() && expr_default_is_unsafe(expr))
+    {
+      /* Unsafe expression text: omit it and clear any prior DuckDB default. */
+      note_expr_default_omitted(field->field_name.str);
+      append_stmt_column_drop_default(result, m_schema_name, m_table_name,
+                                      field->field_name.str);
+      continue;
+    }
+
+    std::string default_value;
     if (!expr.empty())
     {
       /*
@@ -1328,6 +1377,15 @@ std::string ChangeColumnConvertor::translate()
         append_stmt_column_drop_default(result, m_schema_name, m_table_name,
                                         new_field->field_name.str);
       }
+      continue;
+    }
+
+    if (!new_expr.empty() && expr_default_is_unsafe(new_expr))
+    {
+      /* Unsafe expression text: omit it and clear any prior DuckDB default. */
+      note_expr_default_omitted(new_field->field_name.str);
+      append_stmt_column_drop_default(result, m_schema_name, m_table_name,
+                                      new_field->field_name.str);
       continue;
     }
 
