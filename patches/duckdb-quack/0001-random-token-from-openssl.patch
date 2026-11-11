@@ -1,0 +1,36 @@
+diff --git a/src/quack_random.cpp b/src/quack_random.cpp
+index d770168..e4b7350 100644
+--- a/src/quack_random.cpp
++++ b/src/quack_random.cpp
+@@ -1,8 +1,9 @@
+ #include "quack_random.hpp"
+ 
+-#include "duckdb/common/encryption_state.hpp"
++#include "duckdb/common/exception.hpp"
+ #include "duckdb/common/types/blob.hpp"
+-#include "duckdb/main/database.hpp"
++
++#include <openssl/rand.h>
+ 
+ namespace duckdb {
+ 
+@@ -15,14 +16,12 @@ string QuackHexEncode(const_data_ptr_t bytes, idx_t n) {
+ 	return result;
+ }
+ 
+-string QuackRandomToken(DatabaseInstance &db) {
+-	auto encryption_util = db.GetEncryptionUtil(false);
+-	auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, QUACK_TOKEN_BYTES,
+-	                                                   EncryptionTypes::EncryptionVersion::NONE);
+-	auto rng = encryption_util->CreateEncryptionState(std::move(metadata));
+-
++string QuackRandomToken(DatabaseInstance &) {
++	// OpenSSL's CSPRNG directly: DuckDB's writable crypto module exists only when httpfs is loaded.
+ 	data_t bytes[QUACK_TOKEN_BYTES];
+-	rng->GenerateRandomData(bytes, QUACK_TOKEN_BYTES);
++	if (RAND_bytes(bytes, QUACK_TOKEN_BYTES) != 1) {
++		throw IOException("Quack: failed to generate secure random bytes");
++	}
+ 	return QuackHexEncode(bytes, QUACK_TOKEN_BYTES);
+ }
+ 

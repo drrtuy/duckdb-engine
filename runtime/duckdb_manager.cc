@@ -34,6 +34,7 @@
 #include "duckdb_mariadb_tz.h"
 #include "mariadb_dialect.h"
 #include "duckdb/parser/sql_statement.hpp"
+#include "quack_lockdown.h"
 
 /* Defined by the generated duckdb_static_extension_loader.c */
 extern "C" int32_t duckdb_register_static_extensions(void);
@@ -304,6 +305,9 @@ bool DuckdbManager::Initialize()
 
     /* Register cross-engine scan support (_mdb_scan + replacement scan) */
     register_cross_engine_scan(*m_database->instance);
+
+    /* Quack is linked in; keep its stock login closed (MDEV-41383) */
+    quack_lockdown(*m_database->instance, *con);
 
     /*
       Lock the DuckDB configuration so SQL reaching DuckDB (pushdown,
