@@ -37,10 +37,10 @@ TARGET_LINK_LIBRARIES(mariadb_dialect_test PRIVATE duckdb_runtime ${DUCKDB_LIBRA
   -Wl,--wrap=_ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarE)
 
 IF(DUCKDB_UNIT_TESTS)
-  ADD_EXECUTABLE(fiber_context_test fiber_context_test.cc fiber_context.c)
+  ADD_EXECUTABLE(fiber_context_test fiber_context_test.cc fiber_context.cpp)
   SET_TARGET_PROPERTIES(fiber_context_test PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON)
   TARGET_INCLUDE_DIRECTORIES(fiber_context_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-  TARGET_COMPILE_OPTIONS(fiber_context_test PRIVATE -Wno-frame-larger-than=)
+  TARGET_COMPILE_OPTIONS(fiber_context_test PRIVATE -Wno-frame-larger-than)
 ENDIF()
