@@ -127,6 +127,31 @@ denies, a request without columns denies unless it is explicitly
 `Identity` is opaque to `quack_guard`; its `audit()` text ("user@host/role") is
 for logs and errors only.
 
+### Counters and the audit log
+
+`Guard::Counters()` returns counts since the guard was installed: client
+connections closed at once by the connection cap; sessions opened and
+logins refused; statements the plan gate authorized (the client's catalog
+queries and transaction control included) and refused ones (by either
+gate, or failing before authorization, e.g. in the binder: answered
+"access denied" like a refusal); refusals caused by an authorizer timeout
+(`acl_timeouts`) or by a limit (`limit_refusals`: the authorizer's queue,
+the account's connection limit, `duckdb_quack_max_sessions`); and
+sessions the reaper evicted (transaction too long, lease expired; a
+session Quack itself drops on a late heartbeat is not counted).
+
+`Guard::SetAuditLog()` installs a callback that gets an `AuditEvent` for
+every session opened, login refused, statement refused and session
+closed: principal (`audit()`, or the claimed user name of a refused
+login), peer address, what was refused (statement form, function, table
+reference, "access to db.t, ...", "failed before authorization", or the
+login's reason) and the `Reason`. It never carries the proof or the
+statement text; client-chosen names in it are cut to 200 bytes and
+stripped of control characters, so they cannot forge log lines. The
+callback runs on listener and DuckDB threads; a throwing one is ignored.
+Connection-cap closes are counted, not logged (nothing is known about
+the client yet). The bridge logs nothing itself.
+
 ### Which contexts are guarded
 
 A Quack session is a DuckDB `ClientContext` that carries a principal
@@ -416,9 +441,7 @@ bridge/
      server), counted over the account's open Quack sessions (MariaDB
      connections are not counted together).
   Every refusal reaches the client as the same "Authentication failed".
-  With `log_warnings > 1` the server log gets `DuckDB: Quack login refused
-  for '<user>' from <address>: <reason>`, as for refused MariaDB logins
-  (the account is `user@host` once matched).
+  The plugin logs refusals (see "In the server").
 - **Worker transactions.** The worker THD runs with autocommit forced;
   after each request it commits and releases its transactional locks, so
   a login's read of `mysql.global_priv` holds nothing afterwards.
@@ -432,7 +455,8 @@ nothing new; its defaults name the table's own autoincrement sequence.
 
 ## In the server
 
-`ha_duckdb.cc` wires it up; `DuckdbManager` owns the database's `Guard` and
+`ha_duckdb_quack.cc` wires it up (the `duckdb_quack_*` variables are
+defined with the others in `ha_duckdb.cc`); `DuckdbManager` owns the database's `Guard` and
 the running `Listener`, and stops the listener before the database is
 destroyed.
 
@@ -453,7 +477,21 @@ destroyed.
 All listener settings are read-only (startup only). Status:
 `Duckdb_quack_running`, `Duckdb_quack_endpoints` (`host:port`, comma
 separated), `Duckdb_quack_ssl_fingerprint` (what clients pin with
-`ssl_fingerprint`), `Duckdb_quack_sessions`.
+`ssl_fingerprint`), `Duckdb_quack_sessions`, and the guard's counters
+since server start: `Duckdb_quack_connections_refused`,
+`Duckdb_quack_logins`, `Duckdb_quack_logins_refused`,
+`Duckdb_quack_statements`, `Duckdb_quack_statements_refused`,
+`Duckdb_quack_acl_timeouts`, `Duckdb_quack_limit_refusals`,
+`Duckdb_quack_sessions_evicted`.
+
+The audit log goes to the server's error log. Refused logins with
+`log_warnings > 1`, as the server logs refused logins: `DuckDB: Quack
+login refused for '<user>' from <address>: <reason>`. With
+`duckdb_log_options=DUCKDB_QUACK`, also refused logins at any
+`log_warnings`, `Quack session opened` / `Quack session closed` (with
+`: evicted` when the reaper closed it), and `DuckDB: Quack statement
+refused for '<user>@<host>' from <address>: <what>`. This stands in for
+audit-plugin connect events, which a storage engine cannot raise.
 
 - **Start.** At plugin init the ACL worker starts; the listener starts only
   once the server is fully up (`mysqld_server_started`: grant tables
@@ -493,7 +531,10 @@ connects.
   throttle, its reset by a success and by `ALTER USER`; logins refused with
   `duckdb_quack_acl_timeout_ms=0`; a column-only grantee lists nothing;
   `MAX_USER_CONNECTIONS` counted over open sessions; `ATTACH` lists only
-  visible tables and reads through them; every session closed at the end.
+  visible tables and reads through them; malformed credentials logged;
+  nothing logged by default, sessions and refused statements (also a
+  binder failure) with `DUCKDB_QUACK`; the counters as deltas; every
+  session closed at the end.
   `quack_server_off.test`: off by default, settings read-only, status
   empty. `quack_server_noacl.test`: not started with
   `--skip-grant-tables`. `quack_server_nocert.test`: not started without
@@ -516,7 +557,9 @@ connects.
 
 - `quack_guard/test/guard_test.cpp` (Layer A, plain DuckDB, mock authorizer;
   build with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`):
-  contract defaults deny; regular connections unaffected; stock callbacks
+  contract defaults deny; counters and the audit log (exact details,
+  no proof, sanitized names, a throwing authorizer); regular
+  connections unaffected; stock callbacks
   pinned; a session Quack created without a principal is denied; a principal
   cannot be replaced or be null; the guard's authorizer can be set and
   removed; the statement gate on a corpus of forbidden and allowed
