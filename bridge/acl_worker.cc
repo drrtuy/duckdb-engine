@@ -23,6 +23,7 @@
 #include <my_global.h>
 #include "sql_class.h"
 #include "sql_lex.h"
+#include "transaction.h"
 
 #include <chrono>
 
@@ -161,6 +162,10 @@ void AclWorker::Loop()
     {
       saved_mysys_var= thd_attach_thd(thd);
       thd->thread_stack= &stack_top;
+      /* Whatever the server's default, the worker never keeps a transaction
+         (the login query reads mysql.global_priv) */
+      thd->variables.option_bits|= OPTION_AUTOCOMMIT;
+      thd->variables.option_bits&= ~OPTION_NOT_AUTOCOMMIT;
     }
   }
   {
@@ -199,7 +204,10 @@ void AclWorker::Loop()
         verdict= Verdict::Deny(Reason::Internal);
       }
       lex_end(thd->lex);
-      /* Leave nothing behind for the next request */
+      /* Leave nothing behind for the next request: no transaction, no
+         metadata locks, ... */
+      trans_commit(thd);
+      thd->release_transactional_locks();
       thd->security_ctx= &thd->main_security_ctx;
       thd->clear_error();
       free_root(thd->mem_root, MYF(MY_KEEP_PREALLOC));
