@@ -243,8 +243,10 @@ ExternalProject_Add_StepDependencies(duckdb_build build ${_QUACK_STAGED_FILES})
 ADD_LIBRARY(libduckdb INTERFACE)
 TARGET_LINK_LIBRARIES(libduckdb INTERFACE -Wl,--start-group ${_DUCKDB_STATIC_LIBS} -Wl,--end-group)
 IF(WITH_DUCKDB_HTTPFS)
-  TARGET_LINK_LIBRARIES(libduckdb INTERFACE CURL::libcurl OpenSSL::SSL OpenSSL::Crypto)
+  TARGET_LINK_LIBRARIES(libduckdb INTERFACE CURL::libcurl)
 ENDIF()
+# OpenSSL after the archives: libquack_extension.a (and httpfs) use it.
+TARGET_LINK_LIBRARIES(libduckdb INTERFACE OpenSSL::SSL OpenSSL::Crypto)
 ADD_DEPENDENCIES(libduckdb duckdb_build)
 
 MESSAGE(STATUS "DuckDB include: ${DUCKDB_INCLUDE_DIR}")
