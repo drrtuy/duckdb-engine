@@ -1,4 +1,5 @@
 #include "mariadb_dialect.h"
+#include "mariadb_dialect_test_helpers.h"
 
 #include "duckdb.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -6,13 +7,18 @@
 #include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 extern "C" int32_t duckdb_register_static_extensions(void);
 
@@ -65,6 +71,86 @@ static void require_query(duckdb::Connection &connection, const std::string &sql
   auto result= connection.Query(sql);
   if (result->HasError())
     throw std::runtime_error(result->GetError());
+}
+
+void require_mariadb_query_parity(duckdb::Connection &connection,
+                                  const char *source, const char *normalized)
+{
+  require_base(connection);
+  require(!myduck::mariadb_query_has_lexical_mismatch(source, true, true),
+          "Grammar test is outside the lexical eligibility corpus");
+  connection.BeginTransaction();
+  auto before= parser_entries.load();
+  auto candidate= myduck::parse_mariadb_statement(connection, source);
+  require(parser_entries == before + 1, "Dialect grammar parsed a query repeatedly");
+  require_base(connection);
+  auto baseline= connection.ExtractStatements(normalized);
+  require(baseline.size() == 1 &&
+              baseline[0]->type == duckdb::StatementType::SELECT_STATEMENT,
+          "Invalid normalized baseline in grammar test");
+  if (!candidate->Cast<duckdb::SelectStatement>().node->Equals(
+          baseline[0]->Cast<duckdb::SelectStatement>().node.get()))
+    throw std::runtime_error(std::string("AST parity mismatch: ") + source +
+                             "\nCandidate: " + candidate->ToString() +
+                             "\nBaseline: " + baseline[0]->ToString());
+
+  before= parser_entries.load();
+  auto actual= connection.Submit(std::move(candidate));
+  actual->Complete();
+  if (actual->HasError())
+    throw std::runtime_error(std::string(source) + ": " + actual->GetError());
+  auto expected= connection.Submit(std::move(baseline[0]));
+  expected->Complete();
+  if (expected->HasError())
+    throw std::runtime_error(std::string(normalized) + ": " + expected->GetError());
+  require(parser_entries == before, "AST parity execution reparsed SQL");
+  require(actual->ColumnCount() == expected->ColumnCount(), "Result column counts differ");
+  for (duckdb::idx_t i= 0; i < actual->ColumnCount(); i++)
+    if (actual->GetNames()[i].GetIdentifierName() !=
+        expected->GetNames()[i].GetIdentifierName())
+      throw std::runtime_error(std::string("Column-name parity mismatch: ") + source +
+          "\nCandidate: " + actual->GetNames()[i].GetIdentifierName() +
+          "\nBaseline: " + expected->GetNames()[i].GetIdentifierName());
+  if (!actual->Equals(*expected))
+    throw std::runtime_error(std::string("Result/metadata parity mismatch: ") + source);
+  connection.Rollback();
+  require_base(connection);
+}
+
+void require_mariadb_query_error_parity(duckdb::Connection &connection,
+                                        const char *source, const char *normalized)
+{
+  auto candidate= myduck::parse_mariadb_statement(connection, source);
+  auto baseline= connection.ExtractStatements(normalized);
+  require(baseline.size() == 1, "Invalid error-parity baseline");
+  require(candidate->Cast<duckdb::SelectStatement>().node->Equals(
+              baseline[0]->Cast<duckdb::SelectStatement>().node.get()),
+          "Error-parity ASTs differ");
+  auto before= parser_entries.load();
+  auto expected= connection.Submit(std::move(baseline[0]));
+  expected->Complete();
+  auto actual= connection.Submit(std::move(candidate));
+  actual->Complete();
+  require(actual->HasError() && expected->HasError(), "Expected both AST executions to fail");
+  require(actual->GetErrorType() == expected->GetErrorType(), "Dialect changed error category");
+  require(parser_entries == before, "Error-parity execution reparsed SQL");
+  require_base(connection);
+}
+
+void require_mariadb_parse_error(duckdb::Connection &connection, const char *source)
+{
+  bool refused= false;
+  try
+  {
+    myduck::parse_mariadb_statement(connection, source);
+  }
+  catch (const duckdb::Exception &)
+  {
+    refused= true;
+  }
+  if (!refused)
+    throw std::runtime_error(std::string("Invalid dialect syntax was accepted: ") + source);
+  require_base(connection);
 }
 
 static void test_single_parse(duckdb::Connection &connection)
@@ -190,7 +276,8 @@ static void test_interrupt(duckdb::Connection &connection)
   require_query(connection, "SELECT 1");
 }
 
-static void test_shared_grammar(duckdb::DuckDB &database, duckdb::Connection &connection)
+static void test_shared_grammar(duckdb::DuckDB &database, duckdb::Connection &connection,
+                                const char *query= "SELECT 1")
 {
   auto dialect= duckdb::ExtensionCallbackManager::Get(*connection.context)
                     .GetDialectExtension("mariadb");
@@ -205,7 +292,7 @@ static void test_shared_grammar(duckdb::DuckDB &database, duckdb::Connection &co
       duckdb::Connection other(database);
       for (int i= 0; i < 4; i++)
       {
-        myduck::parse_mariadb_statement(other, "SELECT 1");
+        myduck::parse_mariadb_statement(other, query);
         require_base(other);
         require(dialect->GetCompiledGrammar(*other.context) == grammar,
                 "Dialect grammar was not shared between connections");
@@ -225,7 +312,62 @@ static void test_shared_grammar(duckdb::DuckDB &database, duckdb::Connection &co
   require(grammar_compilations == compilations, "Warmed grammar was compiled again");
 }
 
-static void test_registration()
+static void benchmark_mariadb_parser(duckdb::Connection &connection)
+{
+  duckdb::DBConfig probe_config;
+  probe_config.options.maximum_threads= 1;
+  probe_config.options.async_threads= 1;
+  duckdb::DialectExtension::Register(probe_config,
+      duckdb::make_uniq<duckdb::DialectExtension>("mariadb"));
+  duckdb::DuckDB probe_database(nullptr, &probe_config);
+  duckdb::Connection probe(probe_database);
+  std::vector<double> base, empty_dialect, dialect_normalized, dialect;
+  const char *normalized= "SELECT CAST(42 AS CHAR) AS v LIMIT 1 OFFSET 0";
+  myduck::parse_mariadb_statement(probe, normalized);
+  auto measure= [&](int mode) {
+    auto start= std::chrono::steady_clock::now();
+    if (mode == 1)
+      myduck::parse_mariadb_statement(probe, normalized);
+    else if (mode)
+      myduck::parse_mariadb_statement(connection, mode == 2 ? normalized :
+          "SELECT CONVERT(42, CHAR) AS v LIMIT 0,1");
+    else
+      connection.ExtractStatements(normalized);
+    return std::chrono::duration<double, std::micro>(
+        std::chrono::steady_clock::now() - start).count();
+  };
+  for (int i= 0; i < 1000; i++)
+  {
+    if (i % 2)
+    {
+      dialect.push_back(measure(3));
+      dialect_normalized.push_back(measure(2));
+      empty_dialect.push_back(measure(1));
+      base.push_back(measure(0));
+    }
+    else
+    {
+      base.push_back(measure(0));
+      empty_dialect.push_back(measure(1));
+      dialect_normalized.push_back(measure(2));
+      dialect.push_back(measure(3));
+    }
+  }
+  std::sort(base.begin(), base.end());
+  std::sort(empty_dialect.begin(), empty_dialect.end());
+  std::sort(dialect_normalized.begin(), dialect_normalized.end());
+  std::sort(dialect.begin(), dialect.end());
+  std::printf("Normalized base PEG parse (us): p50=%.2f p95=%.2f p99=%.2f\n",
+              base[500], base[950], base[990]);
+  std::printf("Normalized SQL under empty dialect + scope (us): p50=%.2f p95=%.2f p99=%.2f\n",
+              empty_dialect[500], empty_dialect[950], empty_dialect[990]);
+  std::printf("Normalized SQL under MariaDB dialect + scope (us): p50=%.2f p95=%.2f p99=%.2f\n",
+              dialect_normalized[500], dialect_normalized[950], dialect_normalized[990]);
+  std::printf("MariaDB source under dialect + scope (us): p50=%.2f p95=%.2f p99=%.2f\n",
+              dialect[500], dialect[950], dialect[990]);
+}
+
+static void test_registration(bool benchmark)
 {
   duckdb::DBConfig config;
   config.options.maximum_threads= 1;
@@ -238,10 +380,20 @@ static void test_registration()
   require(static_cast<bool>(dialect), "Production registration did not install the dialect");
   myduck::parse_mariadb_statement(connection, "SELECT 1");
   auto grammar= dialect->GetCompiledGrammar(*connection.context);
+  require(grammar->ProgramMatcher().first_set.computed &&
+              grammar->TopLevelStatementMatcher().first_set.computed,
+          "Dialect matcher graph was published without FIRST-set finalization");
   myduck::parse_mariadb_statement(connection, "SELECT 2");
   require(dialect->GetCompiledGrammar(*connection.context) == grammar,
           "Production dialect did not reuse its warmed grammar");
   require_base(connection);
+  test_mariadb_select_grammar(connection);
+  test_mariadb_expression_grammar(connection);
+  require_mariadb_query_parity(connection, "SELECT CONVERT(42, CHAR) AS v",
+                              "SELECT CAST(42 AS CHAR) AS v");
+  test_shared_grammar(database, connection, "SELECT CONVERT(42, CHAR) AS v LIMIT 0,1");
+  if (benchmark)
+    benchmark_mariadb_parser(connection);
 }
 
 static void test_lexical_preflight()
@@ -250,6 +402,7 @@ static void test_lexical_preflight()
   {
     const char *sql;
     bool unsafe;
+    bool needs_ansi= false;
   };
   const Case cases[]= {
       {"SELECT 1 # hidden SQL", true},
@@ -277,6 +430,11 @@ static void test_lexical_preflight()
       {"SELECT 1 -- comment\r", true},
       {"SELECT café FROM t", true},
       {"SELECT name\xc2\xa0$$tag$$ FROM t", true},
+      {"SELECT `a\u00a0b` FROM t", true},
+      {"SELECT `a'b`, 'x\u00a0y' FROM t", true},
+      {"SELECT '\xc3'", true},
+      {"SELECT 'a\u00a0b'", false},
+      {"SELECT \"a\u00a0b\" FROM t", false, true},
       {"", false},
       {"SELECT 1", false},
       {"SELECT 10 - -1", false},
@@ -284,8 +442,8 @@ static void test_lexical_preflight()
       {"SELECT 'literal # $$ $tag$ /* /*! -- E'", false},
       {"SELECT 'doubled '' # $$ -- quote'", false},
       {"SELECT `quoted``#$$/*name` FROM t", false},
-      {"SELECT \"quoted\"\"#$$/*name\" FROM t", false},
-      {"SELECT 'Привет', `café`, \"текст\"", false},
+      {"SELECT \"quoted\"\"#$$/*name\" FROM t", false, true},
+      {"SELECT 'Привет', `café`, \"текст\"", false, true},
       {"SELECT 1 /* ordinary '# $$ E\\' comment */", false},
       {"SELECT 1 -- comment '# $$ /* E\\'\n + 1", false},
       {"SELECT 1 -- comment\r\n + 1", false},
@@ -301,14 +459,14 @@ static void test_lexical_preflight()
       for (const auto &entry : cases)
       {
         bool unsafe= myduck::mariadb_query_has_lexical_mismatch(entry.sql, escapes, ansi);
-        if (unsafe != entry.unsafe)
+        if (unsafe != (entry.unsafe || (entry.needs_ansi && !ansi)))
           throw std::runtime_error(std::string("Lexical preflight mismatch: ") + entry.sql);
       }
       require(myduck::mariadb_query_has_lexical_mismatch(
                   "SELECT 'a\\' OR true -- '", escapes, ansi) == escapes,
               "Single-quoted escape mode was not respected");
       require(myduck::mariadb_query_has_lexical_mismatch(
-                  "SELECT \"a\\\" OR true -- \"", escapes, ansi) == (escapes && !ansi),
+                  "SELECT \"a\\\" OR true -- \"", escapes, ansi) == !ansi,
               "ANSI_QUOTES escape mode was not respected");
       require(!myduck::mariadb_query_has_lexical_mismatch(
                   "SELECT `a\\` FROM t", escapes, ansi),
@@ -320,14 +478,16 @@ static void test_lexical_preflight()
   require(parser_entries == before, "Lexical preflight invoked the PEG parser");
 }
 
-int main()
+int main(int argc, char **argv)
 {
   try
   {
+    bool benchmark= argc == 2 && std::string(argv[1]) == "--benchmark";
+    require(argc == 1 || benchmark, "Usage: mariadb_dialect_test [--benchmark]");
     test_lexical_preflight();
     require(duckdb_register_static_extensions() == 0,
             "Could not register statically linked extensions");
-    test_registration();
+    test_registration(benchmark);
     duckdb::DBConfig config;
     config.options.maximum_threads= 1;
     config.options.async_threads= 1;
@@ -352,7 +512,7 @@ int main()
     test_shared_grammar(database, connection);
     require(grammar_compilations == compilations + 1,
             "Statements caused per-query grammar compilation");
-    std::puts("PASS: MariaDB dialect phases 0 and 1");
+    std::puts("PASS: MariaDB dialect phases 0 through 3");
     return 0;
   }
   catch (const std::exception &error)

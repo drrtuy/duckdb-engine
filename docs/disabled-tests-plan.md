@@ -1,6 +1,8 @@
 # Disabled Tests Analysis & Work Plan
 
-Status as of 2026-04-14. **Enabled: 24/47 tests. Disabled: 23. DuckDB: v1.5.2.**
+Historical work log as of 2026-04-14. **Then: enabled 24/47 tests, disabled 23, DuckDB v1.5.2.** The recommendations below are not the current execution design.
+
+Current verification (2026-11-10, RelWithDebInfo): **57 MTR runs pass, 1 requires a debug build, 24 tests are disabled** in `mysql-test/duckdb/disabled.def`. The count of runs includes replication combinations. SELECT/source pushdown now uses the `mariadb` PEG dialect and AST submission; the old top-level SQL rewrites are deleted. Do not implement the historical `SELECT_LEX::print()`/text-rewrite proposals below. See [architecture.md](architecture.md), [mariadb-duckdb-incompatibilities.md](mariadb-duckdb-incompatibilities.md), and [mariadb-peg-dialect-migration-design.md](mariadb-peg-dialect-migration-design.md) for the current behavior and remaining gates.
 
 ### Done this session (12 → 24)
 

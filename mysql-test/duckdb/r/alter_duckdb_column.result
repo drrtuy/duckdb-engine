@@ -569,11 +569,11 @@ VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR
 [ Rows: 7]
 db_alter_col	t	id	NULL	NO	INTEGER	NULL
 db_alter_col	t	a	(3 + 3)	YES	INTEGER	NULL
-db_alter_col	t	b	'3+3'	YES	VARCHAR	NULL
-db_alter_col	t	c	(3 + 3)	YES	VARCHAR	NULL
+db_alter_col	t	b	'3+3'	YES	VARCHAR('NOCASE.NOACCENT')	NULL
+db_alter_col	t	c	(3 + 3)	YES	VARCHAR('NOCASE.NOACCENT')	NULL
 db_alter_col	t	d	(2 + 2)	YES	INTEGER	NULL
-db_alter_col	t	e	'2+2'	YES	VARCHAR	NULL
-db_alter_col	t	f	(2 + 2)	YES	VARCHAR	NULL
+db_alter_col	t	e	'2+2'	YES	VARCHAR('NOCASE.NOACCENT')	NULL
+db_alter_col	t	f	(2 + 2)	YES	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
@@ -1447,11 +1447,11 @@ VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR
 [ Rows: 7]
 db_alter_col	t	id	NULL	NO	INTEGER	NULL
 db_alter_col	t	a	(3 + 3)	YES	INTEGER	NULL
-db_alter_col	t	b	'3+3'	YES	VARCHAR	NULL
-db_alter_col	t	c	(3 + 3)	YES	VARCHAR	NULL
+db_alter_col	t	b	'3+3'	YES	VARCHAR('NOCASE.NOACCENT')	NULL
+db_alter_col	t	c	(3 + 3)	YES	VARCHAR('NOCASE.NOACCENT')	NULL
 db_alter_col	t	d	(2 + 2)	YES	INTEGER	NULL
-db_alter_col	t	e	'2+2'	YES	VARCHAR	NULL
-db_alter_col	t	f	(2 + 2)	YES	VARCHAR	NULL
+db_alter_col	t	e	'2+2'	YES	VARCHAR('NOCASE.NOACCENT')	NULL
+db_alter_col	t	f	(2 + 2)	YES	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
