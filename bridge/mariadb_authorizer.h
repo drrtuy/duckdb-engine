@@ -30,6 +30,8 @@
 #include "quack_guard/authorizer.hpp"
 
 #include <atomic>
+#include <map>
+#include <mutex>
 #include <string>
 
 struct handlerton;
@@ -96,6 +98,13 @@ public:
 
 private:
   quack_guard::Verdict run(AclWorker::Job job);
+  quack_guard::Verdict deny_login(const std::string &account,
+                                  const quack_guard::TransportFacts &transport,
+                                  quack_guard::Reason reason);
+  quack_guard::Verdict
+  authenticate_unsafe(const quack_guard::ClientClaims &claims,
+                      const quack_guard::TransportFacts &transport,
+                      std::shared_ptr<const quack_guard::Identity> &out);
   /* The public calls wrap these and turn any exception into a denial */
   quack_guard::Verdict resolve_unsafe(const std::string &user,
                                       const std::string &ip,
@@ -111,6 +120,16 @@ private:
   handlerton *engine;
   BridgeSettings settings;
   AclWorker worker;
+  /* Per account ("priv_user@priv_host"): wrong passwords in a row, and
+     open Quack sessions */
+  std::mutex state_lock;
+  struct Failures
+  {
+    std::string row_version;  /* the account as it was when counted */
+    int count= 0;
+  };
+  std::map<std::string, Failures> failures;
+  std::map<std::string, int64_t> sessions;
 };
 
 /* The account host for a peer address, as MariaDB derives it at login:
