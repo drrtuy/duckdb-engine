@@ -30,6 +30,8 @@
 #include "quack_server.hpp"
 
 #include <atomic>
+#include <chrono>
+#include <map>
 #include <condition_variable>
 #include <thread>
 
@@ -92,6 +94,9 @@ private:
   std::thread reaper;
   std::mutex reaper_lock;
   std::condition_variable reaper_wake;
+  /* Sessions seen in an open transaction: id -> when first seen open */
+  std::mutex transactions_lock;
+  std::map<std::string, std::chrono::steady_clock::time_point> transactions;
   mutable std::mutex failure_lock;
   std::string failure;
 };

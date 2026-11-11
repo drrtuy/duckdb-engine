@@ -28,6 +28,8 @@
 #include "duckdb/main/database_manager.hpp"
 #include "login.hpp"
 #include "quack_message.hpp"
+#include "storage/quack_schema.hpp"
+#include "storage/quack_table.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -244,10 +246,6 @@ static const char *const FORBIDDEN[]= {
     "WITH x AS (SELECT * FROM later), later AS (SELECT 1) SELECT * FROM x",
     "SELECT * FROM memory.junk.shop.items",
     "SELECT * FROM MAIN.hidden",
-    /* transactions (milestone 1 runs autocommit only) */
-    "BEGIN TRANSACTION",
-    "COMMIT",
-    "ROLLBACK",
 };
 
 static const char *const ALLOWED[]= {
@@ -286,6 +284,10 @@ static const char *const ALLOWED[]= {
     "SELECT CAST(price AS DECIMAL(10, 2)), CAST(name AS VARCHAR(20)) FROM shop.items",
     "WITH a AS (SELECT id FROM shop.items), b AS (SELECT * FROM a) SELECT * FROM b",
     "WITH items AS (SELECT 1 AS x) SELECT * FROM items",
+    "BEGIN TRANSACTION",
+    "ROLLBACK",
+    "BEGIN TRANSACTION",
+    "COMMIT",
 };
 
 /* The statement gate: the corpus above, before anything is bound. */
@@ -329,7 +331,9 @@ static void test_statement_gate(duckdb::DuckDB &db)
   EXPECT(!quack_guard::FunctionAllowed("current_setting") && !quack_guard::FunctionAllowed(""));
   EXPECT(quack_guard::SchemaReserved("") && quack_guard::SchemaReserved("main") &&
          !quack_guard::SchemaReserved("shop"));
+  EXPECT(quack_guard::SchemaReserved("TEMP") && quack_guard::SchemaReserved("Information_Schema"));
   EXPECT(quack_guard::TableReserved("") && quack_guard::TableReserved("#sql-x") &&
+         quack_guard::TableReserved("#SQL-x") &&
          !quack_guard::TableReserved("items"));
 }
 
@@ -460,8 +464,7 @@ static void test_plan_gate(duckdb::DuckDB &db,
                           "SELECT reservoir_quantile(price, 0.5) FROM shop.items",
                           "SELECT reservoir_quantile(price, 0.5) OVER () FROM shop.items",
                           "SELECT (SELECT current_setting('threads'))",
-                          "SELECT current_timestamp", "SELECT current_schema",
-                          "BEGIN TRANSACTION"})
+                          "SELECT current_timestamp", "SELECT current_schema"})
   {
     if (query_ok(con, sql, &error) || !has(error, quack_guard::ACCESS_DENIED))
     {
@@ -492,6 +495,10 @@ static void test_plan_gate(duckdb::DuckDB &db,
   auto prepared= con.Prepare("SELECT name FROM shop.items");
   EXPECT(prepared->HasError() &&
          has(prepared->GetError(), quack_guard::ACCESS_DENIED));
+
+  /* The catalog function does not lift the check of other tables */
+  EXPECT(!query_ok(con, "SELECT * FROM mariadb_quack_catalog('tables'), shop.orders", &error));
+  EXPECT(has(error, quack_guard::ACCESS_DENIED));
 
   /* An authorizer that throws denies */
   struct ThrowingCheck : MockAuthorizer
@@ -609,6 +616,17 @@ public:
     return "";
   }
 
+  /* "" if the server accepted the statement, else its error */
+  std::string Prepare(const std::string &id, const std::string &sql)
+  {
+    auto response= Send(duckdb::PrepareRequestMessage(id, sql, duckdb::hugeint_t(42)));
+    if (!response)
+      return "no response";
+    if (response->Type() == duckdb::MessageType::ERROR_RESPONSE)
+      return response->Cast<duckdb::ErrorResponse>().ErrorMessage();
+    return "";
+  }
+
   void Disconnect(const std::string &id)
   {
     Send(duckdb::DisconnectMessage(id));
@@ -640,6 +658,15 @@ template <class F> static bool throws(F f)
     return true;
   }
   return false;
+}
+
+static std::string QuackSchemaSet_GetLoadQuery()
+{
+  return duckdb::QuackSchemaSet::GetLoadQuery();
+}
+static std::string QuackTableSet_GetLoadQuery()
+{
+  return duckdb::QuackTableSet::GetLoadQuery();
 }
 
 static std::shared_ptr<MockAuthorizer> password_mock(const std::string &user,
@@ -910,6 +937,41 @@ static void test_listener_lazy_expiry(const std::shared_ptr<quack_guard::Guard> 
   EXPECT(guard->SessionCount() == 0);
   listener->Stop();
   EXPECT(closed(*mock) == 1);
+  guard->SetAuthorizer(nullptr);
+}
+
+/* A transaction left open is bounded: its session is closed. */
+static void test_listener_transaction_cap(const std::shared_ptr<quack_guard::Guard> &guard)
+{
+  auto options= listener_options();
+  for (uint64_t bad : {(uint64_t) 0, (uint64_t) -1})
+  {
+    auto invalid= options;
+    invalid.max_transaction_seconds= bad;
+    EXPECT(throws([&] { guard->StartListener(invalid); }));
+  }
+  options.max_transaction_seconds= 1;
+  auto listener= guard->StartListener(options);
+  auto mock= password_mock("alice", "pw");
+  guard->SetAuthorizer(mock);
+  RawClient raw(listener->Status().endpoints[0]);
+  auto quick= raw.Login("alice:pw", 60);
+  EXPECT(raw.Prepare(quick, "BEGIN TRANSACTION").empty());
+  EXPECT(raw.Prepare(quick, "COMMIT").empty());
+  auto undone= raw.Login("alice:pw", 60);
+  EXPECT(raw.Prepare(undone, "BEGIN TRANSACTION").empty());
+  EXPECT(raw.Prepare(undone, "ROLLBACK").empty());
+  auto slow= raw.Login("alice:pw", 60);
+  EXPECT(raw.Prepare(slow, "BEGIN TRANSACTION").empty());
+  /* A failing second BEGIN does not restart the clock */
+  std::this_thread::sleep_for(std::chrono::milliseconds(600));
+  raw.Prepare(slow, "BEGIN TRANSACTION");
+  EXPECT(wait_for([&] { return closed(*mock) == 1; }, 2500));
+  EXPECT(has(raw.Heartbeat(slow), "Invalid connection id"));
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+  EXPECT(closed(*mock) == 1);  /* the finished ones are kept */
+  EXPECT(raw.Heartbeat(quick).empty() && raw.Heartbeat(undone).empty());
+  listener->Stop();
   guard->SetAuthorizer(nullptr);
 }
 
@@ -1210,7 +1272,7 @@ static void test_listener_queries(duckdb::DuckDB &db,
   EXPECT(has(q("SELECT * FROM ''/etc/passwd''"), quack_guard::ACCESS_DENIED));
   EXPECT(has(q("SET threads= 1"), quack_guard::STATEMENT_DENIED));
   EXPECT(scalar(client, "SELECT current_setting('threads')") == threads);
-  EXPECT(has(q("BEGIN TRANSACTION"), quack_guard::STATEMENT_DENIED));
+
   EXPECT(has(q("INSERT INTO shop.items VALUES (3, ''x'', 1)"),
              quack_guard::STATEMENT_DENIED));
   EXPECT(scalar(client, "SELECT count(*) FROM shop.items") == "2");
@@ -1220,6 +1282,162 @@ static void test_listener_queries(duckdb::DuckDB &db,
   /* A shadowing macro is refused like a denied object */
   EXPECT(has(q("SELECT upper(''x'')"), quack_guard::ACCESS_DENIED));
   listener->Stop();
+  guard->SetAuthorizer(nullptr);
+}
+
+/* Catalog discovery: ATTACH lists only what the principal may see, and
+   queries through the attached database go through both gates. */
+static void test_listener_attach(duckdb::DuckDB &db,
+                                 const std::shared_ptr<quack_guard::Guard> &guard)
+{
+  duckdb::Connection setup(db);
+  EXPECT(query_ok(setup, "CREATE SCHEMA secret"));
+  EXPECT(query_ok(setup, "CREATE TABLE secret.payroll(a INT)"));
+  EXPECT(query_ok(setup, "ATTACH ':memory:' AS other"));
+  EXPECT(query_ok(setup, "CREATE SCHEMA other.shop"));
+  EXPECT(query_ok(setup, "CREATE TABLE other.shop.items(x INT)"));
+
+  auto listener= guard->StartListener(listener_options());
+  auto endpoint= listener->Status().endpoints[0];
+  auto fp= listener->Status().fingerprint;
+  auto mock= password_mock("alice", "pw");
+  mock->on_check= [](const quack_guard::Identity &,
+                     const std::vector<quack_guard::AccessRequest> &r) {
+    for (auto &req : r)
+      if (req.table != "items")
+        return quack_guard::Verdict::Deny(quack_guard::Reason::Denied);
+    return quack_guard::Verdict::Allow();
+  };
+  std::vector<quack_guard::ObjectName> asked;
+  std::mutex asked_lock;
+  /* Sees shop and all of its tables; also returns objects never asked */
+  mock->on_filter= [&](const quack_guard::Identity &,
+                       const std::vector<quack_guard::ObjectName> &objects) {
+    std::lock_guard<std::mutex> lock(asked_lock);
+    std::vector<quack_guard::ObjectName> seen;
+    for (auto &o : objects)
+    {
+      asked.push_back(o);
+      if (o.schema == "shop")
+        seen.push_back(o);
+    }
+    seen.push_back({quack_guard::ObjectKind::Table, "x", "secret", "payroll", ""});
+    return seen;
+  };
+  guard->SetAuthorizer(mock);
+  auto attach= [&](const std::string &as) {
+    return "ATTACH 'quack:" + endpoint + "' AS " + as +
+           " (TOKEN 'alice:pw', SSL_FINGERPRINT '" + fp + "')";
+  };
+
+  duckdb::Connection client(db);
+  std::string error;
+  EXPECT(query_ok(client, attach("remote"), &error));
+  /* Visible schema and its tables only; no other catalog, no reserved names */
+  EXPECT(scalar(client, "SELECT string_agg(schema_name, ',' ORDER BY schema_name) FROM duckdb_schemas() WHERE database_name = 'remote'") == "main,shop");
+  EXPECT(scalar(client, "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM duckdb_tables() WHERE database_name = 'remote'") == "items,orders");
+  EXPECT(scalar(client, "SELECT count(*) FROM duckdb_views() WHERE database_name = 'remote'") == "0");
+  {
+    std::lock_guard<std::mutex> lock(asked_lock);
+    for (auto &o : asked)
+    {
+      EXPECT(o.catalog == duckdb::DatabaseManager::GetDefaultDatabase(*client.context).GetIdentifierName());
+      EXPECT(o.schema != "main" && o.schema != "other" &&
+             o.table.rfind("#sql", 0) != 0);
+      EXPECT(!(o.kind == quack_guard::ObjectKind::Table && o.schema == "secret"));
+    }
+  }
+  /* Through the attached database: listed but denied is still denied */
+  EXPECT(scalar(client, "SELECT name FROM remote.shop.items WHERE id = 1") == "apple");
+  EXPECT(scalar(client, "SELECT count(*) FROM remote.shop.items") == "2");
+  int checks= counter(*mock, &MockAuthorizer::check_calls);
+  EXPECT(!query_ok(client, "SELECT qty FROM remote.shop.orders", &error));
+  EXPECT(has(error, quack_guard::ACCESS_DENIED));
+  EXPECT(counter(*mock, &MockAuthorizer::check_calls) > checks);
+  EXPECT(query_ok(client, "DETACH remote"));
+
+  /* A visible table in a hidden schema is not listed */
+  mock->on_filter= [](const quack_guard::Identity &,
+                      const std::vector<quack_guard::ObjectName> &objects) {
+    std::vector<quack_guard::ObjectName> seen;
+    for (auto &o : objects)
+      if (o.kind == quack_guard::ObjectKind::Table)
+        seen.push_back(o);
+    return seen;
+  };
+  EXPECT(query_ok(client, attach("remote2")));
+  EXPECT(scalar(client, "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'remote2'") == "0");
+  EXPECT(query_ok(client, "DETACH remote2"));
+
+  /* A failing or empty filter lists main only */
+  for (int failing= 0; failing < 2; failing++)
+  {
+    mock->on_filter= [failing](const quack_guard::Identity &,
+                               const std::vector<quack_guard::ObjectName> &)
+        -> std::vector<quack_guard::ObjectName> {
+      if (failing)
+        throw std::runtime_error("broken");
+      return {};
+    };
+    EXPECT(query_ok(client, attach("remote3")));
+    EXPECT(scalar(client, "SELECT string_agg(schema_name, ',') FROM duckdb_schemas() WHERE database_name = 'remote3'") == "main");
+    EXPECT(scalar(client, "SELECT count(*) FROM duckdb_tables() WHERE database_name = 'remote3'") == "0");
+    EXPECT(query_ok(client, "DETACH remote3"));
+  }
+
+  /* Only the exact catalog queries are rewritten; the function is not
+     reachable directly */
+  auto q= [&](const std::string &sql) {
+    return quack_query(client, endpoint, fp, "alice:pw", sql);
+  };
+  EXPECT(has(q("FROM mariadb_quack_catalog(''tables'')"), quack_guard::STATEMENT_DENIED));
+  EXPECT(has(q("FROM duckdb_tables()"), quack_guard::STATEMENT_DENIED));
+  /* Outside a Quack session it lists main and no table */
+  EXPECT(scalar(client, "SELECT count(*) FROM mariadb_quack_catalog('tables')") == "0");
+  EXPECT(scalar(client, "SELECT count(*) FROM mariadb_quack_catalog('schemas')") == "1");
+  EXPECT(!query_ok(client, "FROM mariadb_quack_catalog('views')"));
+  /* Same columns and types as Quack's own queries */
+  for (auto &pair : {std::make_pair(std::string("schemas"), QuackSchemaSet_GetLoadQuery()),
+                     std::make_pair(std::string("tables"), QuackTableSet_GetLoadQuery())})
+  {
+    auto ours= client.Query("FROM mariadb_quack_catalog('" + pair.first + "')");
+    auto theirs= client.Query(pair.second);
+    EXPECT(!ours->HasError() && !theirs->HasError());
+    EXPECT(ours->GetTypes() == theirs->GetTypes());
+  }
+  listener->Stop();
+  guard->SetAuthorizer(nullptr);
+}
+
+/* Many tables: the catalog function emits more than one chunk. */
+static void test_catalog_many_tables(duckdb::DuckDB &db,
+                                     const std::shared_ptr<quack_guard::Guard> &guard)
+{
+  duckdb::Connection setup(db);
+  EXPECT(query_ok(setup, "CREATE SCHEMA bulk"));
+  for (int i= 0; i < 2049; i++)
+    EXPECT(query_ok(setup, "CREATE TABLE bulk.t" + std::to_string(i) + "(a INT)"));
+  auto mock= password_mock("alice", "pw");
+  mock->on_filter= [](const quack_guard::Identity &,
+                      const std::vector<quack_guard::ObjectName> &objects) {
+    std::vector<quack_guard::ObjectName> seen;
+    for (auto &o : objects)
+      if (o.schema == "bulk")
+        seen.push_back(o);
+    return seen;
+  };
+  guard->SetAuthorizer(mock);
+  duckdb::Connection con(db);
+  quack_guard::AttachPrincipal(*con.context, std::make_shared<MockIdentity>("alice"));
+  auto result= con.Query("FROM mariadb_quack_catalog('tables')");
+  idx_t rows= 0;
+  while (auto chunk= result->Fetch())
+  {
+    if (chunk->size() == 0)
+      break;
+    rows+= chunk->size();
+  }
+  EXPECT(rows == 2049);
   guard->SetAuthorizer(nullptr);
 }
 
@@ -1306,10 +1524,13 @@ int main()
   test_listener_sessions(guard);
   test_listener_lazy_expiry(guard);
   test_listener_handle_destroyed(guard);
+  test_listener_transaction_cap(guard);
   test_listener_authorizer_failures(guard);
   test_listener_limits(guard);
   test_listener_concurrency(guard);
   test_listener_queries(db, guard);
+  test_listener_attach(db, guard);
+  test_catalog_many_tables(db, guard);
   if (failures)
   {
     std::fprintf(stderr, "%d failure(s)\n", failures);

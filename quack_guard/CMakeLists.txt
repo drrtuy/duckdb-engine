@@ -13,6 +13,7 @@ ADD_LIBRARY(quack_guard STATIC
   src/transport.cpp
   src/allowlist.cpp
   src/statement_gate.cpp
+  src/catalog_filter.cpp
 )
 duckdb_setup_target(quack_guard)
 

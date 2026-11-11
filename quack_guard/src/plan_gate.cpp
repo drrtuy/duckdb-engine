@@ -151,8 +151,11 @@ thread_local Identifier default_database;
 
 void check_get(const LogicalGet &get, Reads &reads)
 {
+  auto &function= get.function.GetName().GetIdentifierName();
+  if (function == CATALOG_FUNCTION)
+    return;  /* filters itself; only the listener's rewrite produces it */
   auto table= get.GetTable();
-  if (!table || get.function.GetName().GetIdentifierName() != "seq_scan")
+  if (!table || function != "seq_scan")
     refuse("table function");
   auto &catalog= table->ParentCatalog();
   if (catalog.IsSystemCatalog() || catalog.IsTemporaryCatalog() ||
@@ -209,6 +212,7 @@ void check_plan(const LogicalOperator &op, Reads &reads)
   case LogicalOperatorType::LOGICAL_INTERSECT:
   case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
   case LogicalOperatorType::LOGICAL_EXPLAIN:
+  case LogicalOperatorType::LOGICAL_TRANSACTION:
     break;
   case LogicalOperatorType::LOGICAL_GET:
     check_get(op.Cast<LogicalGet>(), reads);

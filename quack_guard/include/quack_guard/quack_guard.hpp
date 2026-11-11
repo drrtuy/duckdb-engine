@@ -56,6 +56,8 @@ struct ListenerOptions
   size_t max_connections= 64;
   /* Authenticated sessions at once; more logins are refused */
   size_t max_sessions= 256;
+  /* A session whose transaction stays open longer is closed, in seconds */
+  uint64_t max_transaction_seconds= 300;
   /* Largest heartbeat lease a client may ask for, in seconds */
   uint64_t max_heartbeat_seconds= 300;
   /* Largest request body accepted */
