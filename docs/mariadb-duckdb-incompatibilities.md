@@ -1,7 +1,7 @@
 # MariaDB - DuckDB Incompatibilities
 
 Discovered during porting the DuckDB storage engine plugin to MariaDB 12.
-DuckDB upstream version: **v2.0.0** (submodule at `third_parties/duckdb/`).
+Current DuckDB pin: **`5406f514e6aa23a43ec4413cc89ebe3e73dd4cd4`** (`v2.0.0-3524-g5406f514e6a`, post-tag 2.0 development revision) in `third_parties/duckdb/`. SELECT/source execution uses the fixed-profile `mariadb` PEG dialect; this is not full MariaDB syntax or `sql_mode` compatibility.
 
 ---
 
@@ -13,9 +13,11 @@ DuckDB upstream version: **v2.0.0** (submodule at `third_parties/duckdb/`).
 
 MariaDB uses backticks by default for quoting identifiers. DuckDB follows the SQL standard and uses double quotes.
 
-**Fix applied**: `backticks_to_double_quotes()` in `duckdb_query.cc` converts every backtick to a double quote in all SQL sent to DuckDB via `duckdb_query()`. DDL/DML codegen in `ddl_convertor.cc`, `dml_convertor.cc`, `ha_duckdb.cc`, `delta_appender.cc` uses double quotes directly.
+**Forwarded SELECT/source:** `ha_duckdb_select_handler::init_scan()` (`ha_duckdb_pushdown.cc`) passes the original source to `duckdb_stream_mariadb_query()` (`runtime/duckdb_query.cc`). `parse_mariadb_statement()` (`runtime/mariadb_dialect.cc`) extracts one SELECT AST under the `mariadb` dialect, whose base tokenizer accepts backticks and double quotes as identifier delimiters. The base dialect is restored before AST submission. No top-level identifier requoting occurs.
 
-SELECT pushdown (`ha_duckdb_pushdown.cc`) uses the original SQL text from `THD::query()` (which contains backticks), so the conversion happens inside `duckdb_query()`.
+**Generated SQL and direct DML:** `backticks_to_double_quotes()` in `runtime/duckdb_query.cc` remains in generic text wrappers. It respects quoted/comment regions and doubles embedded double quotes in converted identifiers; it is not an unconditional character replacement. DDL/DML builders in `convertor/ddl_convertor.cc`, `convertor/dml_convertor.cc`, `ha_duckdb.cc`, and `runtime/delta_appender.cc` also construct quoted identifiers directly.
+
+Without `ANSI_QUOTES`, a double-quoted code token is a MariaDB string, not a DuckDB identifier. SELECT/source factories therefore decline pushdown for such text; direct UPDATE/DELETE report a lexical-mismatch error. The guard ignores inert double-quote characters inside validated single-quoted strings or backtick identifiers.
 
 ---
 
@@ -78,43 +80,38 @@ MariaDB function semantics differ from DuckDB in several areas. These are handle
 
 ---
 
-## 3. SQL Syntax Rewriting (SELECT pushdown)
+## 3. MariaDB PEG Syntax (SELECT/source pushdown)
 
-SELECT pushdown uses the original SQL text from `THD::query()`. MariaDB-specific syntax is rewritten in `ha_duckdb_pushdown.cc` (`init_scan()`) before sending to DuckDB:
+`extract_source_query()` in `ha_duckdb_pushdown.cc` retains the eligible original source. The grammar deltas in `runtime/mariadb_dialect_expression.cc` and `runtime/mariadb_dialect_select.cc` construct standard DuckDB AST nodes. There is no SQL rendering between parsing and submission, and the former `init_scan()` text-rewrite block is deleted.
 
-| MariaDB syntax | DuckDB equivalent | Status |
-|---|---|---|
-| `GROUP BY ... WITH ROLLUP` | `GROUP BY ROLLUP(...)` | Rewritten |
-| `CONVERT(expr, TYPE)` | `CAST(expr AS TYPE)` | Rewritten |
-| `CURRENT_TIME()` / `CURRENT_DATE()` / `CURRENT_TIMESTAMP()` | `current_time` / `current_date` / `current_timestamp` (keywords) | Rewritten (parens removed) |
-| `STRAIGHT_JOIN` | `CROSS JOIN` | Rewritten |
-| Conditionless `JOIN` (no ON/USING) | `CROSS JOIN` | Rewritten |
-| `REGEXP` / `NOT REGEXP` / `RLIKE` / `NOT RLIKE` | `~` / `!~` | Rewritten |
-| `LIMIT offset, count` | `LIMIT count OFFSET offset` | Rewritten |
-| `HIGH_PRIORITY`, `SQL_NO_CACHE`, `SQL_CACHE`, `SQL_BUFFER_RESULT`, `SQL_SMALL_RESULT`, `SQL_BIG_RESULT`, `SQL_CALC_FOUND_ROWS` | -- | Stripped |
-| `FORCE INDEX(...)`, `USE INDEX(...)`, `IGNORE INDEX(...)` | -- | Stripped |
+| MariaDB syntax | AST / execution policy |
+|---|---|
+| `GROUP BY ... WITH ROLLUP` | Native grouping-set expansion, matching `GROUP BY ROLLUP(...)` |
+| `CONVERT(expr, TYPE)` | Native `CastExpression`; SIGNED remains INTEGER, unsupported UNSIGNED retains the baseline error; no added CONVERT USING support |
+| `CURRENT_TIME()` / `CURRENT_DATE()` / `CURRENT_TIMESTAMP()` | Bare keyword-equivalent column-reference AST with canonical lowercase metadata names; TIME/TIMESTAMP precision 0–6 accepted but ignored |
+| `STRAIGHT_JOIN` | Regular qualified join or conditionless CROSS JOIN; SELECT modifier ignored, join ordering not enforced |
+| Conditionless plain `JOIN` (no ON/USING) | Native CROSS JOIN; not a general extension to conditionless outer/qualified joins |
+| `REGEXP` / `NOT REGEXP` / `RLIKE` / `NOT RLIKE` | Native regex operator AST and NOT handling, preserving the baseline engine behavior rather than promising full MariaDB regex equivalence |
+| `LIMIT offset, count` | Native limit/offset modifier; parameter numbering follows source order |
+| `DISTINCTROW` | Native DISTINCT |
+| `HIGH_PRIORITY`, `SQL_NO_CACHE`, `SQL_CACHE`, `SQL_BUFFER_RESULT`, `SQL_SMALL_RESULT`, `SQL_BIG_RESULT`, `SQL_CALC_FOUND_ROWS` | Parsed and ignored; no new execution semantics |
+| `FORCE INDEX(...)`, `USE INDEX(...)`, `IGNORE INDEX(...)` | Parsed and ignored on base tables, including supported INDEX/KEY names and FOR JOIN/ORDER BY/GROUP BY scopes; not supported on derived tables/table functions |
 
-### Known unhandled cases (currently fail or change semantics)
+### Deliberate refusals and remaining gaps
 
-These MariaDB constructs are **not yet rewritten** and either fail or have different semantics when pushed down. Because pushdown forwards the original `THD::query()` text (only backticks are converted to double quotes), MariaDB-specific token semantics survive into DuckDB. Discovered while running an analytical query set (402 queries) against DuckDB-engine tables.
+| Input / feature | Current behavior |
+|---|---|
+| Double-quoted string with `ANSI_QUOTES` off, e.g. `WHERE product = "MariaDB mug"` | SELECT/source pushdown is declined before DuckDB parsing. MariaDB evaluates its string semantics; the dialect does not reinterpret the token. Direct UPDATE/DELETE reject the lexical mismatch. |
+| `#` comments, potential dollar-quote openers, mismatched `--` or nested comments | Pushdown declined; inert occurrences inside validated quoted regions and dollar signs within ordinary ASCII identifiers remain allowed. |
+| Executable/versioned comments (`/*!...*/`, `/*M!...*/`) | Pushdown declined, including version-gated forms. No silent treatment as an ordinary DuckDB block comment. |
+| Quote-boundary backslash mismatches, malformed regions, NUL, E-prefixed or charset-introduced literals | Pushdown declined according to the session's actual quote flags. `NO_BACKSLASH_ESCAPES` does not bypass the other safety checks. |
+| Non-ASCII text | Bare non-ASCII tokens and non-ASCII in non-UTF8 client charsets are declined. Quoted UTF-8 text must also survive DuckDB normalization byte-for-byte, so an authorized identifier cannot change during parsing. |
+| Reserved-word aliases | No blanket keyword unreservation or text-based alias repair; use an explicit backtick-quoted alias. A dialect parse failure is an error, not a late fallback. |
+| `sql_mode` operators, literal values, regex/coercion/collation semantics | Fixed-profile parity only; no general mode propagation. `\|\|` keeps the baseline DuckDB AST interpretation, not a new logical-OR transform. N/X/B literals and boundary-preserving backslashes retain existing value-semantic gaps. |
 
-| MariaDB construct | Sent to DuckDB as | DuckDB result | Root cause |
-|---|---|---|---|
-| Double-quoted **string literal**, e.g. `JSON_OBJECT("month", ...)` | `"month"` (verbatim) | `Binder Error: Referenced column "month" not found` | MariaDB without `ANSI_QUOTES` treats `"x"` as a string literal; DuckDB treats `"x"` as an identifier. The forwarded literal is read as a column reference. |
-| Unquoted column **alias equal to a DuckDB reserved keyword**, e.g. `SELECT expr name` / `SELECT expr year` | `... name` / `... year` (verbatim) | `Parser Error: syntax error at or near "name"` | DuckDB forbids reserved keywords as unquoted identifiers. `AS name` or `"name"` work; bare `name` / `year` / `month` do not. This is why most implicit aliases pass but keyword aliases fail. |
-| MariaDB **executable/versioned comments**, e.g. `/*! + 1 */`, `/*!100000 + 1 */`, or `/*M! + 1 */` | Comment text (verbatim) | Contents are ignored as an ordinary block comment | MariaDB executes eligible `/*! ... */` and `/*M! ... */` contents as SQL, optionally gated by a version number; DuckDB treats the entire region as a comment. Forwarded queries can therefore silently use different predicates or expressions. |
+A factory refusal permits MariaDB's normal row-interface path; it does not guarantee that every fallback plan is supported. Once `init_scan()` starts dialect parsing, parse/bind/execute failures are reported without retrying either the old text executor or MariaDB execution. Cross-engine WHERE fragments and generated DDL/DML remain separate text channels, not reasons to restore top-level rewrites.
 
-Reproductions (against any DuckDB-engine table `t`):
-
-```sql
-SELECT JSON_OBJECT("k", 1) FROM t;   -- Binder Error: column "k" not found
-SELECT JSON_OBJECT('k', 1) FROM t;   -- OK
-SELECT col name FROM t;              -- Parser Error at "name"
-SELECT col AS name FROM t;           -- OK
-SELECT 1 /*! + 1 */ FROM t;          -- MariaDB: 2; DuckDB pushdown: 1
-```
-
-**Fix direction**: in `ha_duckdb_pushdown.cc`, convert double-quoted string literals to single-quoted form and quote (or `AS`-prefix) aliases that are DuckDB reserved keywords. Both require lexer-aware handling of the query text, not naive replacement — `backticks_to_double_quotes()` already produces legitimate double-quoted identifiers that must not be altered. Executable/versioned comments must either be expanded according to MariaDB's version rules or make the query ineligible for raw SQL forwarding.
+Regression coverage: `duckdb_lexical_guard`, `duckdb_peg_pushdown`, `duckdb_identifier_escaping`, `pushdown_rewrite`, and the standalone AST/result/metadata/error corpora. See [mariadb-peg-dialect-migration-design.md](mariadb-peg-dialect-migration-design.md) for scope, parser-count evidence, measurements, and open release gates.
 
 ---
 
@@ -167,8 +164,9 @@ Loaded via `cmake/duckdb_extensions.cmake`:
 | **ICU** | `SET TimeZone = ...`, locale-aware collations | YES |
 | **JSON** | JSON functions | YES |
 | **core_functions** | Basic scalar/aggregate functions | YES |
+| **parquet** | Parquet I/O | YES |
 
-Build flags in `cmake/duckdb.cmake`: `EXTENSION_STATIC_BUILD=1`, `DUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1`, `DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1`.
+`cmake/duckdb_extensions.cmake` statically links these extensions; `DuckdbManager::Initialize()` (`runtime/duckdb_manager.cc`) registers the generated loader before opening the database. Compile-time autoload/autoinstall defaults do not describe the runtime policy: initialization sets `autoinstall_known_extensions=false`, `allow_community_extensions=false`, and `lock_configuration=true`. Autoload stays enabled. External access is still enabled by default; configuration locking does not disable it. See [security-model.md](security-model.md).
 
 ---
 
@@ -179,7 +177,7 @@ DuckDB is built as a static library (`libduckdb_bundle.a`) via `ExternalProject_
 | Concern | Detail |
 |---|---|
 | **`_GLIBCXX_DEBUG`** | MariaDB debug builds define `_GLIBCXX_DEBUG` which changes `sizeof(std::vector)` etc. The plugin target strips this via `-U_GLIBCXX_DEBUG -U_GLIBCXX_ASSERTIONS` in `CMakeLists.txt`. Mismatch causes SIGSEGV in `~DuckDB()`. |
-| **C++ standard** | Plugin is built with C++17 (`CXX_STANDARD 17`). DuckDB v1.5.2 requires C++17. |
+| **C++ standard** | Plugin is built with C++17 (`CXX_STANDARD 17`), as is the pinned DuckDB build. |
 | **`_GLIBCXX_USE_CXX11_ABI`** | Not explicitly set — uses the compiler default (ABI=1). Both DuckDB and the plugin use the same default. |
 
 ---

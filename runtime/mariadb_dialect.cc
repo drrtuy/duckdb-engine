@@ -4,12 +4,52 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
+#include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace myduck
 {
+
+void add_mariadb_expression_grammar(duckdb::ParsedGrammar &grammar);
+void add_mariadb_select_grammar(duckdb::ParsedGrammar &grammar);
+
 namespace
 {
+
+class MariadbMatcherFactory : public duckdb::MatcherFactory
+{
+public:
+  explicit MariadbMatcherFactory(duckdb::CreateMatcherFactoryInput &input)
+      : duckdb::MatcherFactory(input.allocator, input.parsed_grammar, input.rules,
+                               input.keyword_helper, {})
+  {
+    AddPackratMemoizedRule("Identifier");
+    for (auto &entry : input.terminal_rules)
+      AddRuleOverride(entry.first.c_str(), std::move(entry.second));
+    auto &root= CreateRootMatcher("Program");
+    duckdb::ComputeFirstSets(root, input.keyword_helper.GetLiteralTable());
+    input.allocator.InitializeListChains();
+  }
+};
+
+class MariadbDialect : public duckdb::DialectExtension
+{
+public:
+  MariadbDialect() : duckdb::DialectExtension("mariadb") {}
+
+  void ApplyGrammarChanges(duckdb::GrammarChangesInput &input) override
+  {
+    add_mariadb_expression_grammar(input.parsed_grammar);
+    add_mariadb_select_grammar(input.parsed_grammar);
+  }
+
+  duckdb::unique_ptr<duckdb::MatcherFactory> CreateMatcherFactory(
+      duckdb::CreateMatcherFactoryInput &input) override
+  {
+    return duckdb::make_uniq<MariadbMatcherFactory>(input);
+  }
+};
 
 class MariadbDialectScope
 {
@@ -41,8 +81,13 @@ private:
 bool mariadb_query_has_lexical_mismatch(std::string_view query,
                                       bool backslash_escapes, bool ansi_quotes)
 {
-  if (query.find('\0') != std::string_view::npos)
-    return true;
+  bool non_ascii= false;
+  for (unsigned char c : query)
+  {
+    if (c == 0)
+      return true;
+    non_ascii|= c >= 0x80;
+  }
 
   auto quote_end= [query](size_t start, bool escapes) {
     for (size_t i= start + 1; i < query.size(); i++)
@@ -66,14 +111,14 @@ bool mariadb_query_has_lexical_mismatch(std::string_view query,
   for (size_t i= 0; i < query.size();)
   {
     unsigned char c= query[i];
-    if (c == '#' || c == '$' || c == '\\' || c >= 0x80)
+    if (c == '#' || c == '$' || c == '\\' || c >= 0x80 ||
+        (c == '"' && !ansi_quotes))
       return true;
     if (c == '\'' || c == '"' || c == '`')
     {
-      bool string_literal= c == '\'' || (c == '"' && !ansi_quotes);
       size_t end= quote_end(i, false);
       if (end == std::string_view::npos ||
-          (string_literal && backslash_escapes && quote_end(i, true) != end))
+          (c == '\'' && backslash_escapes && quote_end(i, true) != end))
         return true;
       i= end;
       continue;
@@ -124,13 +169,25 @@ bool mariadb_query_has_lexical_mismatch(std::string_view query,
     }
     i++;
   }
+  if (non_ascii)
+  {
+    try
+    {
+      std::string original(query);
+      return duckdb::Parser::NormalizeSQLString(original) != original;
+    }
+    catch (const duckdb::Exception &)
+    {
+      return true;
+    }
+  }
   return false;
 }
 
 void register_mariadb_dialect(duckdb::DBConfig &config)
 {
   duckdb::DialectExtension::Register(
-      config, duckdb::make_uniq<duckdb::DialectExtension>("mariadb"));
+      config, duckdb::make_uniq<MariadbDialect>());
 }
 
 duckdb::unique_ptr<duckdb::SQLStatement>
