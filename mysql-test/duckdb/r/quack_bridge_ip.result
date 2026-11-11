@@ -1,0 +1,28 @@
+#
+# MDEV-41383: with --skip-name-resolve the bridge matches accounts by
+# the peer address, as a MariaDB login does
+#
+CREATE DATABASE qb;
+CREATE TABLE qb.t (a INT PRIMARY KEY) ENGINE=DuckDB;
+CREATE USER u_host@'10.0.0.%';
+GRANT SELECT ON qb.t TO u_host@'10.0.0.%';
+CREATE USER u_local@localhost;
+GRANT SELECT ON qb.t TO u_local@localhost;
+CREATE USER u_local@'127.0.0.1';
+CREATE USER u_v6@'::1';
+GRANT SELECT ON qb.t TO u_v6@'::1';
+SELECT quack_bridge_test('check|u_host|10.0.0.5||qb.t:a') AS r;
+r
+allow
+SELECT quack_bridge_test('check|u_host|10.1.0.5||qb.t:a') AS r;
+r
+deny:no_such_account
+# Loopback is not "localhost" without name resolution
+SELECT quack_bridge_test('check|u_local|127.0.0.1||qb.t:a') AS r;
+r
+deny:denied
+SELECT quack_bridge_test('check|u_v6|::1||qb.t:a') AS r;
+r
+allow
+DROP USER u_host@'10.0.0.%', u_local@localhost, u_local@'127.0.0.1', u_v6@'::1';
+DROP DATABASE qb;

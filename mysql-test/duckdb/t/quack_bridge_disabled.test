@@ -1,0 +1,11 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # MDEV-41383: QUACK_BRIDGE_TEST() needs --duckdb-quack-bridge-test
+--echo #
+
+SELECT @@GLOBAL.duckdb_quack_bridge_test;
+--error ER_OPTION_PREVENTS_STATEMENT
+SELECT quack_bridge_test('check|root|127.0.0.1||mysql.user:*');
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL duckdb_quack_bridge_test= ON;
