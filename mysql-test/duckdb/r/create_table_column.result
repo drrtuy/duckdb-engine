@@ -1001,14 +1001,14 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 8]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
-e	5	VARCHAR	NULL
-f	6	VARCHAR	NULL
-g	7	VARCHAR	NULL
-h	8	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
+e	5	VARCHAR('NOCASE.NOACCENT')	NULL
+f	6	VARCHAR('NOCASE.NOACCENT')	NULL
+g	7	VARCHAR('NOCASE.NOACCENT')	NULL
+h	8	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_char ##
@@ -1077,14 +1077,14 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 8]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
-e	5	VARCHAR	NULL
-f	6	VARCHAR	NULL
-g	7	VARCHAR	NULL
-h	8	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
+e	5	VARCHAR('NOCASE.NOACCENT')	NULL
+f	6	VARCHAR('NOCASE.NOACCENT')	NULL
+g	7	VARCHAR('NOCASE.NOACCENT')	NULL
+h	8	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_varchar ##
@@ -1151,13 +1151,13 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 7]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-d	3	VARCHAR	NULL
-e	4	VARCHAR	NULL
-f	5	VARCHAR	NULL
-g	6	VARCHAR	NULL
-h	7	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+d	3	VARCHAR('NOCASE.NOACCENT')	NULL
+e	4	VARCHAR('NOCASE.NOACCENT')	NULL
+f	5	VARCHAR('NOCASE.NOACCENT')	NULL
+g	6	VARCHAR('NOCASE.NOACCENT')	NULL
+h	7	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_varchar ##
@@ -1222,12 +1222,12 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
-e	5	VARCHAR	NULL
-f	6	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
+e	5	VARCHAR('NOCASE.NOACCENT')	NULL
+f	6	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_text ##
@@ -1290,11 +1290,11 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
-e	5	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
+e	5	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_mediumtext ##
@@ -1359,12 +1359,12 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 6]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
-e	5	VARCHAR	NULL
-f	6	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
+e	5	VARCHAR('NOCASE.NOACCENT')	NULL
+f	6	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_longtext ##
@@ -2379,9 +2379,9 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
+a	1	VARCHAR('POSIX')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_json ##
@@ -2442,7 +2442,7 @@ VARCHAR	INTEGER	VARCHAR	INTEGER
 [ Rows: 3]
 a	1	INTEGER	32
 b	2	INTEGER	32
-c	3	VARCHAR	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_null ##
@@ -2501,9 +2501,9 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_ascii ##
@@ -2564,10 +2564,10 @@ run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FR
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
-a	1	VARCHAR	NULL
-b	2	VARCHAR	NULL
-c	3	VARCHAR	NULL
-d	4	VARCHAR	NULL
+a	1	VARCHAR('NOCASE.NOACCENT')	NULL
+b	2	VARCHAR('NOCASE.NOACCENT')	NULL
+c	3	VARCHAR('NOCASE.NOACCENT')	NULL
+d	4	VARCHAR('NOCASE.NOACCENT')	NULL
 
 
 # ② Print CONSTRAINTs of t_mb4_emoji ##

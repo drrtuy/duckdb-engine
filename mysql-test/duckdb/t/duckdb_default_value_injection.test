@@ -13,6 +13,10 @@ CREATE DATABASE IF NOT EXISTS injdb CHARACTER SET utf8mb4;
 USE injdb;
 --enable_query_log
 SET NAMES utf8mb4;
+CREATE USER default_injection_user@localhost;
+GRANT CREATE ON injdb.* TO default_injection_user@localhost;
+connect (default_injection, localhost, default_injection_user,,injdb);
+SET NAMES utf8mb4;
 
 --echo # The crafted DEFAULT closes the generated literal and appends a DuckDB COPY
 --echo # that would write a file in the data directory. With the literal escaped the
@@ -20,6 +24,8 @@ SET NAMES utf8mb4;
 --delimiter |
 CREATE TABLE t (id INT PRIMARY KEY, c VARCHAR(200) DEFAULT 'a'');COPY(SELECT 2)TO ''zz_def.csv'';--') ENGINE=DuckDB CHARSET=utf8mb4|
 --delimiter ;
+disconnect default_injection;
+connection default;
 
 --echo # No injected COPY ran: zz_def.csv must not exist anywhere under the vardir.
 perl;
@@ -39,6 +45,7 @@ INSERT INTO t (id) VALUES (2);
 SELECT d FROM t WHERE id = 2;
 
 DROP TABLE t;
+DROP USER default_injection_user@localhost;
 
 --disable_query_log
 DROP DATABASE injdb;

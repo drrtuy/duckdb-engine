@@ -1,0 +1,70 @@
+--disable_query_log
+SET @saved_sql_mode = @@SESSION.sql_mode;
+SET SESSION sql_mode = '';
+SET NAMES utf8mb4;
+--enable_query_log
+
+CREATE TABLE lexical_guard_phase1 (id INT PRIMARY KEY, v VARCHAR(100)) ENGINE=DuckDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO lexical_guard_phase1 VALUES (1, 'safe');
+
+SELECT REPEAT('a',5) AS $$ FROM lexical_guard_phase1 # $$ WHERE 0 UNION ALL SELECT 'hidden'
+;
+SELECT id FROM lexical_guard_phase1 UNION ALL SELECT id FROM lexical_guard_phase1 # ignored
+;
+SELECT 10--1 AS value FROM lexical_guard_phase1;
+SELECT 10 /* outer /* inner */ + 1 AS value FROM lexical_guard_phase1;
+SELECT id FROM lexical_guard_phase1 /*! WHERE v = 'missing' */;
+SELECT id FROM lexical_guard_phase1 /*M! WHERE v = 'missing' */;
+SELECT id FROM lexical_guard_phase1 /*!999999 WHERE v = 'missing' */;
+SELECT 'literal # $$ /* --' AS value FROM lexical_guard_phase1;
+SELECT id AS `quoted``#$$/*name` FROM lexical_guard_phase1;
+SELECT id AS cash$tag$ FROM lexical_guard_phase1;
+SELECT 'Привет' AS `café` FROM lexical_guard_phase1;
+SELECT id AS café FROM lexical_guard_phase1;
+SELECT id -- ignored 'quoted' # $$
+FROM lexical_guard_phase1;
+
+CREATE TABLE lexical_guard_dest (id INT) ENGINE=InnoDB;
+INSERT INTO lexical_guard_dest SELECT id FROM lexical_guard_phase1 # ignored $$
+;
+SELECT * FROM lexical_guard_dest;
+--disable_query_log
+let $control_insert= `SELECT CONCAT('INSERT INTO lexical_guard_dest --', CHAR(1), ' ignored SELECT 99', CHAR(10), 'SELECT id FROM lexical_guard_phase1')`;
+eval $control_insert;
+--enable_query_log
+SELECT * FROM lexical_guard_dest;
+
+--error ER_GET_ERRMSG
+UPDATE lexical_guard_phase1 SET v = 'changed' WHERE id = 999 # ignored
+;
+--error ER_GET_ERRMSG
+DELETE FROM lexical_guard_phase1 WHERE id = 999 /*! OR true */;
+SELECT * FROM lexical_guard_phase1;
+
+SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES';
+SELECT REPEAT('a',5) AS $$ FROM lexical_guard_phase1 # $$ WHERE 0 UNION ALL SELECT 'hidden'
+;
+SELECT 10--1 AS value FROM lexical_guard_phase1;
+SELECT id FROM lexical_guard_phase1 /*! WHERE v = 'missing' */;
+SELECT id AS `quoted#$$` FROM lexical_guard_phase1;
+
+SET SESSION sql_mode = 'ANSI_QUOTES';
+SELECT REPEAT('a',5) AS $$ FROM lexical_guard_phase1 # $$ WHERE 0 UNION ALL SELECT 'hidden'
+;
+SELECT id AS "quoted#$$" FROM lexical_guard_phase1;
+
+SET SESSION sql_mode = 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES';
+SELECT REPEAT('a',5) AS $$ FROM lexical_guard_phase1 # $$ WHERE 0 UNION ALL SELECT 'hidden'
+;
+SELECT id FROM lexical_guard_phase1 /*M! WHERE v = 'missing' */;
+SELECT id AS "quoted#$$" FROM lexical_guard_phase1;
+
+SET NAMES latin1;
+SELECT HEX(CONVERT('é' USING utf8mb4)) AS converted FROM lexical_guard_phase1;
+SET NAMES utf8mb4;
+
+DROP TABLE lexical_guard_dest;
+DROP TABLE lexical_guard_phase1;
+--disable_query_log
+SET SESSION sql_mode = @saved_sql_mode;
+--enable_query_log

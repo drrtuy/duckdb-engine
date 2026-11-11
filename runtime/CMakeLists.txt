@@ -5,6 +5,8 @@ SET(DUCKDB_RUNTIME_SOURCES
   duckdb_manager.cc
   duckdb_query.cc
   mariadb_dialect.cc
+  mariadb_dialect_expression.cc
+  mariadb_dialect_select.cc
   duckdb_context.cc
   delta_appender.cc
   cross_engine_scan.cc
@@ -17,11 +19,16 @@ ADD_LIBRARY(duckdb_runtime STATIC ${DUCKDB_RUNTIME_SOURCES})
 duckdb_setup_target(duckdb_runtime)
 
 TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PRIVATE
+  ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include)
 TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC duckdb_convertor duckdb_common)
 
 ADD_EXECUTABLE(mariadb_dialect_test EXCLUDE_FROM_ALL
-  mariadb_dialect_test.cc ${DUCKDB_STATIC_EXTENSION_LOADER})
+  mariadb_dialect_test.cc mariadb_dialect_expression_test.cc
+  mariadb_dialect_select_test.cc ${DUCKDB_STATIC_EXTENSION_LOADER})
 duckdb_setup_target(mariadb_dialect_test)
+TARGET_INCLUDE_DIRECTORIES(mariadb_dialect_test PRIVATE
+  ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include)
 TARGET_LINK_LIBRARIES(mariadb_dialect_test PRIVATE duckdb_runtime ${DUCKDB_LIBRARY}
   pthread dl
   -Wl,--wrap=_ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarERNS_12optional_idxE)
