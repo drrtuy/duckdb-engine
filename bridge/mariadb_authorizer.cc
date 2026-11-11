@@ -20,6 +20,9 @@
 #define MYSQL_SERVER 1
 #include "mariadb_authorizer.h"
 #include "acl_compat.h"
+#include "account_row.h"
+
+#include "password.h"
 
 #include "mysqld.h"
 #include "table.h"
@@ -178,12 +181,242 @@ Verdict MariaDBAuthorizer::run(AclWorker::Job job)
   return worker.Run(std::move(job), queue_size, timeout);
 }
 
-Verdict MariaDBAuthorizer::authenticate(const quack_guard::ClientClaims &,
-                                        const quack_guard::TransportFacts &,
-                                        std::shared_ptr<const quack_guard::Identity> &)
+/* What the worker found out about a login; the throttle and the session
+   limits are applied by the caller, which owns that state */
+struct LoginFacts
 {
-  /* Credentials are verified from the next stage on; until then nobody */
-  return Verdict::Deny(Reason::Unsupported);
+  Reason reason= Reason::Internal;  /* Allowed: all checks but the password passed */
+  bool password_ok= false;
+  std::string priv_user, priv_host, role;
+  int64_t max_user_connections= 0;
+  /* Changes when the account is altered (password, lock, ...) */
+  std::string row_version;
+};
+
+static void wipe(std::string &secret)
+{
+  volatile char *p= secret.empty() ? nullptr : &secret[0];
+  for (size_t i= 0; i < secret.size(); i++)
+    p[i]= 0;
+  secret.clear();
+}
+
+static bool same(const std::string &a, const std::string &b)
+{
+  /* constant time for equal lengths */
+  if (a.size() != b.size())
+    return false;
+  unsigned char diff= 0;
+  for (size_t i= 0; i < a.size(); i++)
+    diff|= (unsigned char) (std::toupper((unsigned char) a[i]) ^
+                            std::toupper((unsigned char) b[i]));
+  return diff == 0;
+}
+
+/* The account's own method: milestone 1 knows mysql_native_password */
+static bool password_matches(const AccountRow &row, const std::string &proof)
+{
+  if (row.authentication_string.empty())
+    return proof.empty();
+  if (row.authentication_string.size() != SCRAMBLED_PASSWORD_CHAR_LENGTH)
+    return false;  /* pre-4.1 hashes are not accepted */
+  char computed[SCRAMBLED_PASSWORD_CHAR_LENGTH + 1];
+  my_make_scrambled_password(computed, proof.c_str(), proof.size());
+  std::string ours(computed, SCRAMBLED_PASSWORD_CHAR_LENGTH);
+  bool match= same(ours, row.authentication_string);
+  wipe(ours);
+  return match;
+}
+
+static LoginFacts login_facts(THD *thd, const MariaDBIdentity &claimed,
+                              const std::string &proof,
+                              const quack_guard::TransportFacts &transport)
+{
+  LoginFacts facts;
+  Security_context sctx;
+  MariaDBIdentity base= claimed;
+  base.role.clear();
+  auto reason= become(thd, base, sctx);
+  if (reason != Reason::Allowed)
+  {
+    facts.reason= reason;
+    return facts;
+  }
+  facts.priv_user= sctx.priv_user;
+  facts.priv_host= sctx.priv_host;
+  thd->security_ctx= &thd->main_security_ctx;
+
+  AccountRow row;
+  if (!ReadAccount(facts.priv_user, facts.priv_host, row))
+    return facts;  /* Internal */
+  if (row.is_role)
+  {
+    facts.reason= Reason::NoSuchAccount;
+    return facts;
+  }
+  if (row.multiple_auth ||
+      !(row.plugin.empty() || row.plugin == "mysql_native_password"))
+  {
+    facts.reason= Reason::Unsupported;
+    return facts;
+  }
+  if (row.locked)
+  {
+    facts.reason= Reason::Locked;
+    return facts;
+  }
+  /* As the server: PASSWORD EXPIRE stores 0; for the lifetime a missing
+     date counts as 0, and whole days are compared with >= */
+  int64_t lifetime= row.password_lifetime < 0
+                        ? (int64_t) default_password_lifetime
+                        : row.password_lifetime;
+  int64_t changed= row.password_last_changed < 0 ? 0 : row.password_last_changed;
+  if (row.password_last_changed == 0 ||
+      (lifetime > 0 &&
+       ((int64_t) time(nullptr) - changed) / 3600 / 24 >= lifetime))
+  {
+    facts.reason= Reason::Expired;
+    return facts;
+  }
+  /* REQUIRE SSL is met by the listener's TLS; REQUIRE X509 / ISSUER /
+     SUBJECT / CIPHER need client certificates, which are not requested */
+  if (row.ssl_type > 1 || (row.ssl_type == 1 && !transport.tls))
+  {
+    facts.reason= Reason::RequirementUnmet;
+    return facts;
+  }
+  facts.password_ok= password_matches(row, proof);
+  /* The account's own limit if set, else the server's; 0 is none and a
+     negative one refuses (as the server does for such accounts) */
+  facts.max_user_connections= row.max_user_connections != 0
+                                  ? row.max_user_connections
+                                  : row.global_max_user_connections;
+  facts.row_version= row.authentication_string + "|" +
+                     std::to_string(row.password_last_changed) + "|" +
+                     (row.locked ? "L" : "U") + "|" +
+                     std::to_string(row.ssl_type) + "|" + row.plugin;
+
+  /* Role: the requested one must be granted; the default one is used when
+     none is requested and it is still granted */
+  std::string role= claimed.role.empty() ? row.default_role : claimed.role;
+  if (!role.empty())
+  {
+    MariaDBIdentity with_role= claimed;
+    with_role.role= role;
+    with_role.priv_user= facts.priv_user;
+    with_role.priv_host= facts.priv_host;
+    Security_context role_sctx;
+    if (become(thd, with_role, role_sctx) == Reason::Allowed)
+      facts.role= role;
+    else if (!claimed.role.empty())
+    {
+      facts.reason= Reason::Denied;
+      return facts;
+    }
+  }
+  facts.reason= Reason::Allowed;
+  return facts;
+}
+
+static const char *reason_text(Reason reason)
+{
+  switch (reason)
+  {
+  case Reason::Denied: return "wrong password or role not granted";
+  case Reason::NoSuchAccount: return "no such account";
+  case Reason::Locked: return "account locked or blocked after wrong passwords";
+  case Reason::Expired: return "password expired";
+  case Reason::RequirementUnmet: return "REQUIRE not met";
+  case Reason::Unsupported: return "authentication method or host not supported";
+  case Reason::Timeout: return "ACL worker timeout";
+  case Reason::Saturated: return "connection limit or ACL queue full";
+  case Reason::Shutdown: return "shutting down";
+  default: return "internal error";
+  }
+}
+
+/* As the server logs refused logins: with log_warnings > 1 */
+Verdict MariaDBAuthorizer::deny_login(const std::string &account,
+                                      const quack_guard::TransportFacts &transport,
+                                      Reason reason)
+{
+  if (global_system_variables.log_warnings > 1)
+    sql_print_warning("DuckDB: Quack login refused for '%s' from %s: %s",
+                      account.c_str(), transport.peer_ip.c_str(),
+                      reason_text(reason));
+  return Verdict::Deny(reason);
+}
+
+Verdict MariaDBAuthorizer::authenticate(
+    const quack_guard::ClientClaims &claims,
+    const quack_guard::TransportFacts &transport,
+    std::shared_ptr<const quack_guard::Identity> &out)
+{
+  try
+  {
+    return authenticate_unsafe(claims, transport, out);
+  }
+  catch (...)
+  {
+    return Verdict::Deny(Reason::Internal);
+  }
+}
+
+Verdict MariaDBAuthorizer::authenticate_unsafe(
+    const quack_guard::ClientClaims &claims,
+    const quack_guard::TransportFacts &transport,
+    std::shared_ptr<const quack_guard::Identity> &out)
+{
+  auto claimed= std::make_shared<MariaDBIdentity>();
+  claimed->user= claims.user;
+  claimed->ip= transport.peer_ip;
+  claimed->host= HostForPeer(transport.peer_ip);
+  claimed->role= claims.role;
+  /* The job owns a copy of the password and wipes it when done */
+  auto proof= std::make_shared<std::string>(claims.proof);
+  auto facts= std::make_shared<LoginFacts>();
+  auto transport_copy= std::make_shared<quack_guard::TransportFacts>(transport);
+  auto verdict= run([claimed, proof, facts, transport_copy](
+                        THD *thd, const std::atomic<bool> &) {
+    *facts= login_facts(thd, *claimed, *proof, *transport_copy);
+    wipe(*proof);
+    return facts->reason == Reason::Allowed ? Verdict::Allow()
+                                            : Verdict::Deny(facts->reason);
+  });
+  if (!verdict.allow)
+    return deny_login(claims.user, transport, verdict.reason);
+
+  std::string account= facts->priv_user + "@" + facts->priv_host;
+  auto identity= std::make_shared<MariaDBIdentity>(*claimed);
+  identity->priv_user= facts->priv_user;
+  identity->priv_host= facts->priv_host;
+  identity->role= facts->role;
+  {
+    std::lock_guard<std::mutex> guard(state_lock);
+    /* As max_password_errors: after that many wrong passwords in a row the
+       account is refused over Quack, even with the right password, until
+       the account is altered (ALTER USER: new password, lock/unlock, ...),
+       re-created, or the server restarts. Kept apart from the server's own
+       counter. */
+    auto &failed= failures[account];
+    if (failed.row_version != facts->row_version)
+      failed= {facts->row_version, 0};
+    if (max_password_errors && (uint) failed.count >= max_password_errors)
+      return deny_login(account, transport, Reason::Locked);
+    if (!facts->password_ok)
+    {
+      failed.count++;
+      return deny_login(account, transport, Reason::Denied);
+    }
+    failures.erase(account);
+    int64_t limit= facts->max_user_connections;
+    auto &open= sessions[account];
+    if (limit < 0 || (limit > 0 && open >= limit))
+      return deny_login(account, transport, Reason::Saturated);
+    open++;
+  }
+  out= identity;
+  return Verdict::Allow();
 }
 
 Verdict MariaDBAuthorizer::resolve(const std::string &user,
@@ -318,6 +551,15 @@ MariaDBAuthorizer::filter_unsafe(const quack_guard::Identity &identity_p,
   return verdict.allow ? *result : std::vector<ObjectName>();
 }
 
-void MariaDBAuthorizer::sessionClosed(const quack_guard::Identity &) {}
+void MariaDBAuthorizer::sessionClosed(const quack_guard::Identity &identity_p)
+{
+  auto *identity= dynamic_cast<const MariaDBIdentity *>(&identity_p);
+  if (!identity)
+    return;
+  std::lock_guard<std::mutex> guard(state_lock);
+  auto it= sessions.find(identity->priv_user + "@" + identity->priv_host);
+  if (it != sessions.end() && it->second > 0 && --it->second == 0)
+    sessions.erase(it);
+}
 
 } /* namespace quack_bridge */
