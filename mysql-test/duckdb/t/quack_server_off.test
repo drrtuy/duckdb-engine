@@ -1,0 +1,15 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # MDEV-41383: Quack is off unless enabled, and its settings are
+--echo # read-only
+--echo #
+
+SELECT @@GLOBAL.duckdb_quack_enabled, @@GLOBAL.duckdb_quack_port,
+       @@GLOBAL.duckdb_quack_bind_address;
+SELECT VARIABLE_NAME, VARIABLE_VALUE FROM information_schema.global_status
+  WHERE VARIABLE_NAME LIKE 'DUCKDB_QUACK%' ORDER BY VARIABLE_NAME;
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL duckdb_quack_enabled= ON;
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL duckdb_quack_ssl_cert= '/tmp/x.pem';

@@ -1,0 +1,171 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # MDEV-41383: Quack clients log in as MariaDB accounts and read only
+--echo # what their grants allow
+--echo #
+
+call mtr.add_suppression("DuckDB: Quack login refused");
+SET @saved_log_warnings= @@GLOBAL.log_warnings;
+SET GLOBAL log_warnings= 2;
+
+let $wait_condition= SELECT VARIABLE_VALUE = 'ON' FROM information_schema.global_status WHERE VARIABLE_NAME = 'DUCKDB_QUACK_RUNNING';
+--source include/wait_condition.inc
+let $endpoint= `SELECT VARIABLE_VALUE FROM information_schema.global_status WHERE VARIABLE_NAME = 'DUCKDB_QUACK_ENDPOINTS'`;
+let $fp= `SELECT VARIABLE_VALUE FROM information_schema.global_status WHERE VARIABLE_NAME = 'DUCKDB_QUACK_SSL_FINGERPRINT'`;
+--disable_query_log
+eval SELECT '$endpoint' LIKE '127.0.0.1:%' AS listening, LENGTH('$fp') > 64 AS fingerprint;
+--enable_query_log
+
+CREATE DATABASE qs;
+CREATE TABLE qs.t (id INT PRIMARY KEY, name VARCHAR(10), secret VARCHAR(10)) ENGINE=DuckDB;
+INSERT INTO qs.t VALUES (1, 'apple', 's1'), (2, 'bread', 's2');
+CREATE TABLE qs.hidden (id INT PRIMARY KEY) ENGINE=DuckDB;
+
+CREATE USER alice@localhost IDENTIFIED BY 'pw';
+GRANT SELECT ON qs.t TO alice@localhost;
+CREATE USER colin@localhost IDENTIFIED BY 'pw';
+GRANT SELECT (id, name) ON qs.t TO colin@localhost;
+CREATE USER locked@localhost IDENTIFIED BY 'pw' ACCOUNT LOCK;
+GRANT SELECT ON qs.t TO locked@localhost;
+CREATE USER expired@localhost IDENTIFIED BY 'pw' PASSWORD EXPIRE;
+GRANT SELECT ON qs.t TO expired@localhost;
+CREATE USER x509@localhost IDENTIFIED BY 'pw' REQUIRE X509;
+GRANT SELECT ON qs.t TO x509@localhost;
+CREATE USER other@localhost IDENTIFIED VIA mysql_native_password USING PASSWORD('pw') OR mysql_native_password USING PASSWORD('pw2');
+GRANT SELECT ON qs.t TO other@localhost;
+CREATE USER sslu@localhost IDENTIFIED BY 'pw' REQUIRE SSL;
+GRANT SELECT ON qs.t TO sslu@localhost;
+CREATE USER nopw@localhost;
+GRANT SELECT ON qs.t TO nopw@localhost;
+CREATE USER aged@localhost IDENTIFIED BY 'pw' PASSWORD EXPIRE INTERVAL 10 DAY;
+GRANT SELECT ON qs.t TO aged@localhost;
+CREATE USER lim@localhost IDENTIFIED BY 'pw' WITH MAX_USER_CONNECTIONS 1;
+GRANT SELECT ON qs.t TO lim@localhost;
+CREATE ROLE reader;
+GRANT SELECT ON qs.t TO reader;
+CREATE USER rolly@localhost IDENTIFIED BY 'pw';
+GRANT reader TO rolly@localhost;
+SET DEFAULT ROLE reader FOR rolly@localhost;
+CREATE USER carol@localhost IDENTIFIED BY 'pw';
+GRANT SELECT ON qs.t TO carol@localhost;
+
+# $q_head, sql, token, $q_tail: the last line of quack_query's answer
+# (the value); $e_head ... $e_tail: the whole answer (errors span lines).
+# The endpoint and fingerprint change from run to run: queries are not
+# logged.
+--let $q_head= SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM run_in_duckdb(CONCAT("FROM quack_query('quack:$endpoint', '"
+--let $q_tail= "', ssl_fingerprint => '$fp')"))), '\n', -1)
+--let $e_head= run_in_duckdb(CONCAT("FROM quack_query('quack:$endpoint', '"
+--let $e_tail= "', ssl_fingerprint => '$fp')"))
+--disable_query_log
+
+--echo # Log in: right password, wrong password, unknown user
+eval SELECT $q_head, "SELECT name FROM qs.t WHERE id = 2", "', token => 'alice:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'alice:wrong", $e_tail LIKE '%Authentication failed%' AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'nobody:pw", $e_tail LIKE '%Authentication failed%' AS r;
+
+--echo # Locked, expired, REQUIRE X509: refused, and accepted once fixed
+eval SELECT $e_head, "SELECT 1", "', token => 'locked:pw", $e_tail LIKE '%Authentication failed%' AS r;
+--let $quack_log_pattern= Quack login refused for 'locked' from 127.0.0.1: account locked
+--source ../include/quack_wait_for_log.inc
+--enable_query_log
+ALTER USER locked@localhost ACCOUNT UNLOCK;
+--disable_query_log
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'locked:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'expired:pw", $e_tail LIKE '%Authentication failed%' AS r;
+--enable_query_log
+ALTER USER expired@localhost IDENTIFIED BY 'pw';
+--disable_query_log
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'expired:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'x509:pw", $e_tail LIKE '%Authentication failed%' AS r;
+--enable_query_log
+ALTER USER x509@localhost REQUIRE NONE;
+--disable_query_log
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'x509:pw", $q_tail AS r;
+--echo # REQUIRE SSL is met by the listener's TLS; an empty password works
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'sslu:pw", $q_tail AS r;
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'nopw:", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'nopw:x", $e_tail LIKE '%Authentication failed%' AS r;
+--echo # Several authentication methods, and roles, cannot log in
+eval SELECT $e_head, "SELECT 1", "', token => 'other:pw", $e_tail LIKE '%Authentication failed%' AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'reader:", $e_tail LIKE '%Authentication failed%' AS r;
+--echo # A password older than its lifetime is expired
+--enable_query_log
+UPDATE mysql.global_priv SET Priv= JSON_SET(Priv, '$.password_last_changed',
+  UNIX_TIMESTAMP() - 20 * 86400) WHERE User = 'aged' AND Host = 'localhost';
+FLUSH PRIVILEGES;
+--disable_query_log
+eval SELECT $e_head, "SELECT 1", "', token => 'aged:pw", $e_tail LIKE '%Authentication failed%' AS r;
+
+--echo # Grants: table, columns, nothing
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'alice:pw", $q_tail AS r;
+eval SELECT $q_head, "SELECT name FROM qs.t WHERE id = 1", "', token => 'colin:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT secret FROM qs.t", "', token => 'colin:pw", $e_tail LIKE '%Access denied%' AS r;
+eval SELECT $e_head, "SELECT * FROM qs.hidden", "', token => 'alice:pw", $e_tail LIKE '%Access denied%' AS r;
+
+--echo # Default role applies; an explicit role must be granted
+eval SELECT $q_head, "SELECT name FROM qs.t WHERE id = 1", "', token => 'rolly:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'alice/reader:pw", $e_tail LIKE '%Authentication failed%' AS r;
+
+--echo # GRANT and REVOKE act on the next statement
+GRANT SELECT ON qs.hidden TO alice@localhost;
+eval SELECT $q_head, "SELECT count(*) FROM qs.hidden", "', token => 'alice:pw", $q_tail AS r;
+REVOKE SELECT ON qs.hidden FROM alice@localhost;
+eval SELECT $e_head, "SELECT count(*) FROM qs.hidden", "', token => 'alice:pw", $e_tail LIKE '%Access denied%' AS r;
+
+--echo # max_password_errors: a success resets the count; two wrong passwords
+--echo # in a row block also the right one, until the account is altered
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'carol:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'carol:no", $e_tail LIKE '%Authentication failed%' AS r;
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'carol:pw", $q_tail AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'carol:no", $e_tail LIKE '%Authentication failed%' AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'carol:no", $e_tail LIKE '%Authentication failed%' AS r;
+eval SELECT $e_head, "SELECT 1", "', token => 'carol:pw", $e_tail LIKE '%Authentication failed%' AS r;
+--enable_query_log
+ALTER USER carol@localhost IDENTIFIED BY 'pw2';
+--disable_query_log
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'carol:pw2", $q_tail AS r;
+
+--echo # The ACL worker's limits refuse logins too
+SET GLOBAL duckdb_quack_acl_timeout_ms= 0;
+eval SELECT $e_head, "SELECT 1", "', token => 'alice:pw", $e_tail LIKE '%Authentication failed%' AS r;
+SET GLOBAL duckdb_quack_acl_timeout_ms= DEFAULT;
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'alice:pw", $q_tail AS r;
+
+--echo # ATTACH lists what the account may see, and reads through it; the
+--echo # open session follows REVOKE and GRANT
+eval SELECT run_in_duckdb(CONCAT("ATTACH 'quack:$endpoint' AS remote (TOKEN 'alice:pw', SSL_FINGERPRINT '$fp')")) LIKE '%Error%' AS failed;
+SELECT SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM run_in_duckdb("SELECT string_agg(schema_name || '.' || table_name, ',') FROM duckdb_tables() WHERE database_name = 'remote'")), '\n', -1) AS listed;
+SELECT SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM run_in_duckdb("SELECT name FROM remote.qs.t WHERE id = 1")), '\n', -1) AS r;
+REVOKE SELECT ON qs.t FROM alice@localhost;
+SELECT run_in_duckdb("SELECT name FROM remote.qs.t WHERE id = 1") LIKE '%Access denied%' AS r;
+GRANT SELECT ON qs.t TO alice@localhost;
+SELECT SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM run_in_duckdb("SELECT name FROM remote.qs.t WHERE id = 1")), '\n', -1) AS r;
+SELECT run_in_duckdb("DETACH remote") LIKE '%Error%' AS failed;
+
+--echo # A column-only grantee sees no table
+eval SELECT run_in_duckdb(CONCAT("ATTACH 'quack:$endpoint' AS remote (TOKEN 'colin:pw', SSL_FINGERPRINT '$fp')")) LIKE '%Error%' AS failed;
+SELECT SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM run_in_duckdb("SELECT count(*) FROM duckdb_tables() WHERE database_name = 'remote'")), '\n', -1) AS listed;
+SELECT run_in_duckdb("DETACH remote") LIKE '%Error%' AS failed;
+
+--echo # MAX_USER_CONNECTIONS counts open Quack sessions
+eval SELECT run_in_duckdb(CONCAT("ATTACH 'quack:$endpoint' AS remote (TOKEN 'lim:pw', SSL_FINGERPRINT '$fp')")) LIKE '%Error%' AS failed;
+eval SELECT $e_head, "SELECT 1", "', token => 'lim:pw", $e_tail LIKE '%Authentication failed%' AS r;
+SELECT run_in_duckdb("DETACH remote") LIKE '%Error%' AS failed;
+let $wait_condition= SELECT VARIABLE_VALUE = '0' FROM information_schema.global_status WHERE VARIABLE_NAME = 'DUCKDB_QUACK_SESSIONS';
+--source include/wait_condition.inc
+--disable_query_log
+eval SELECT $q_head, "SELECT count(*) FROM qs.t", "', token => 'lim:pw", $q_tail AS r;
+
+--enable_query_log
+--echo # Every session was closed
+let $wait_condition= SELECT VARIABLE_VALUE = '0' FROM information_schema.global_status WHERE VARIABLE_NAME = 'DUCKDB_QUACK_SESSIONS';
+--source include/wait_condition.inc
+
+SET GLOBAL log_warnings= @saved_log_warnings;
+DROP USER alice@localhost, colin@localhost, locked@localhost, expired@localhost,
+          x509@localhost, other@localhost, rolly@localhost, carol@localhost,
+          sslu@localhost, nopw@localhost, aged@localhost, lim@localhost;
+DROP ROLE reader;
+DROP DATABASE qs;

@@ -17,7 +17,7 @@ duckdb_setup_target(duckdb_runtime)
 
 TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC duckdb_convertor duckdb_common)
-TARGET_LINK_LIBRARIES(duckdb_runtime PRIVATE quack_guard)
+TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC quack_guard)
 
 IF(DUCKDB_UNIT_TESTS)
   ADD_EXECUTABLE(fiber_context_test fiber_context_test.cc fiber_context.cpp)

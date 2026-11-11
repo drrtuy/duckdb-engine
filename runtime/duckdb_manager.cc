@@ -290,7 +290,7 @@ bool DuckdbManager::Initialize()
     register_cross_engine_scan(*m_database->instance);
 
     /* Quack: stock entry points closed, sessions guarded (MDEV-41383) */
-    quack_guard::Install(*m_database->instance, *con);
+    m_quack_guard= quack_guard::Install(*m_database->instance, *con);
 
     /*
       Lock the DuckDB configuration so SQL reaching DuckDB (pushdown,
@@ -360,6 +360,9 @@ bool DuckdbManager::CreateInstance()
 
 DuckdbManager::~DuckdbManager()
 {
+  /* Quack sessions hold the database: close them first */
+  StopQuackListener();
+  m_quack_guard.reset();
   if (m_database != nullptr)
   {
     try
@@ -393,6 +396,80 @@ std::shared_ptr<duckdb::Connection> DuckdbManager::CreateConnection()
   auto &instance= Get();
   auto connection= std::make_shared<duckdb::Connection>(*instance.m_database);
   return connection;
+}
+
+bool DuckdbManager::StartQuack(
+    const quack_guard::ListenerOptions &options,
+    std::shared_ptr<quack_guard::QuackAuthorizer> authorizer)
+{
+  if (m_instance == nullptr || !m_instance->m_quack_guard)
+  {
+    sql_print_error("DuckDB: the Quack listener did not start: no database");
+    return false;
+  }
+  auto &instance= *m_instance;
+  std::lock_guard<std::mutex> guard(instance.m_quack_mutex);
+  if (instance.m_quack_listener)
+    return true;
+  try
+  {
+    instance.m_quack_guard->SetAuthorizer(std::move(authorizer));
+    instance.m_quack_listener=
+        instance.m_quack_guard->StartListener(options);
+  }
+  catch (const std::exception &e)
+  {
+    instance.m_quack_guard->SetAuthorizer(nullptr);
+    sql_print_error("DuckDB: the Quack listener did not start: %s",
+                    duckdb::ErrorData(e).RawMessage().c_str());
+    return false;
+  }
+  auto status= instance.m_quack_listener->Status();
+  std::string endpoints;
+  for (auto &endpoint : status.endpoints)
+    endpoints+= (endpoints.empty() ? "" : ", ") + endpoint;
+  sql_print_information("DuckDB: Quack listening on %s (TLS, certificate "
+                        "fingerprint %s)",
+                        endpoints.c_str(), status.fingerprint.c_str());
+  return true;
+}
+
+void DuckdbManager::StopQuackListener()
+{
+  std::unique_ptr<quack_guard::Listener> listener;
+  {
+    std::lock_guard<std::mutex> guard(m_quack_mutex);
+    listener= std::move(m_quack_listener);
+  }
+  if (listener)
+  {
+    listener->Stop();
+    sql_print_information("DuckDB: Quack listener stopped");
+  }
+  if (m_quack_guard)
+    m_quack_guard->SetAuthorizer(nullptr);
+}
+
+void DuckdbManager::StopQuack()
+{
+  if (m_instance != nullptr)
+    m_instance->StopQuackListener();
+}
+
+quack_guard::ListenerStatus DuckdbManager::QuackStatus()
+{
+  if (m_instance == nullptr)
+    return {};
+  std::lock_guard<std::mutex> guard(m_instance->m_quack_mutex);
+  return m_instance->m_quack_listener ? m_instance->m_quack_listener->Status()
+                                      : quack_guard::ListenerStatus();
+}
+
+size_t DuckdbManager::QuackSessions()
+{
+  if (m_instance == nullptr || !m_instance->m_quack_guard)
+    return 0;
+  return m_instance->m_quack_guard->SessionCount();
 }
 
 } // namespace myduck
