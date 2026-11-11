@@ -1,0 +1,174 @@
+diff --git a/src/include/quack_message.hpp b/src/include/quack_message.hpp
+index 6d505e4..dad727a 100644
+--- a/src/include/quack_message.hpp
++++ b/src/include/quack_message.hpp
+@@ -251,6 +251,13 @@ public:
+ 	const string &AuthString() const {
+ 		return auth_string;
+ 	}
++	//! MariaDB: overwrite the credential once it has been checked.
++	void WipeAuthString() {
++		for (auto &c : auth_string) {
++			reinterpret_cast<volatile char &>(c) = 0;
++		}
++		auth_string.clear();
++	}
+ 	const string &ClientId() const {
+ 		return client_id;
+ 	}
+diff --git a/src/include/quack_server.hpp b/src/include/quack_server.hpp
+index 3458fa5..0af7830 100644
+--- a/src/include/quack_server.hpp
++++ b/src/include/quack_server.hpp
+@@ -20,6 +20,7 @@ namespace duckdb {
+ 
+ class ClientContext;
+ class QuackMessage;
++class ConnectionRequestMessage;
+ class Connection;
+ class MemoryStream;
+ class DatabaseInstance;
+@@ -182,6 +183,25 @@ protected:
+ 	unique_ptr<QuackMessage> HandleMessageInternal(DatabaseInstance &db, QuackMessage &received_message,
+ 	                                               optional_ptr<QuackConnection> connection);
+ 
++	//! MariaDB: decides a CONNECTION_REQUEST after Quack's version and heartbeat checks. Returns null to
++	//! admit (the session is then created), or the error to send. Default: the SQL authentication callback.
++	virtual unique_ptr<QuackMessage> AuthenticateConnection(DatabaseInstance &db,
++	                                                        ConnectionRequestMessage &request,
++	                                                        const string &connection_id);
++	//! MariaDB: decides a PREPARE_REQUEST's SQL. Returns null and sets `effective_sql` to the statement to run,
++	//! or returns the error to send. Default: the SQL authorization callback.
++	virtual unique_ptr<QuackMessage> AuthorizeStatement(DatabaseInstance &db, QuackConnection &connection,
++	                                                    const string &sql, string &effective_sql);
++	//! MariaDB: called for a new session before it becomes visible, with active_connections_mutex held.
++	//! Throwing aborts the session.
++	virtual void OnConnectionCreated(QuackConnection &connection) {
++	}
++	//! Interrupt and abort what `connection` is running; also wakes handlers parked on its streams.
++	static void CleanupExpiredConnection(QuackConnection &connection);
++	//! MariaDB: called once for every session removed (disconnect or expired lease), without locks held.
++	virtual void OnConnectionClosed(QuackConnection &connection) {
++	}
++
+ protected:
+ 	std::vector<std::thread> listen_threads;
+ 
+@@ -198,7 +218,6 @@ protected:
+ 
+ private:
+ 	bool RenewConnectionLease(const string &connection_id, const shared_ptr<QuackConnection> &connection);
+-	static void CleanupExpiredConnection(QuackConnection &connection);
+ 	//! Destroys reaped caches on a one-shot detached thread so no response waits on their teardown
+ 	void DestroyCachesDetached(vector<unique_ptr<QuackResultCache>> doomed);
+ 
+diff --git a/src/quack_server.cpp b/src/quack_server.cpp
+index 9993e46..fe11f42 100644
+--- a/src/quack_server.cpp
++++ b/src/quack_server.cpp
+@@ -240,6 +240,7 @@ bool QuackServer::RenewConnectionLease(const string &connection_id, const shared
+ 		expired_connection = std::move(entry->second);
+ 		active_connections.erase(entry);
+ 	}
++	OnConnectionClosed(*expired_connection);
+ 	CleanupExpiredConnection(*expired_connection);
+ 	return false;
+ }
+@@ -399,19 +400,25 @@ string QuackServer::CreateNewConnection(const string &connection_id, const strin
+ 	                                            make_shared_ptr<QuackSessionState>(connection_id));
+ 	connection_context.config.enable_progress_bar = false;
+ 	// new_connection->duckdb_connection->context->config.streaming_buffer_size = 10 * 1000000; // 10 MB
++	OnConnectionCreated(*new_connection);
+ 	active_connections[connection_id] = std::move(new_connection);
+ 	return connection_id;
+ }
+ 
+ bool QuackServer::DisconnectConnection(const string &connection_id) {
+-	std::lock_guard<std::mutex> lock(active_connections_mutex);
++	shared_ptr<QuackConnection> removed;
++	{
++		std::lock_guard<std::mutex> lock(active_connections_mutex);
+ 
+-	auto entry = active_connections.find(connection_id);
+-	if (entry == active_connections.end()) {
+-		// unknown client
+-		return false;
++		auto entry = active_connections.find(connection_id);
++		if (entry == active_connections.end()) {
++			// unknown client
++			return false;
++		}
++		removed = std::move(entry->second);
++		active_connections.erase(entry);
+ 	}
+-	active_connections.erase(entry);
++	OnConnectionClosed(*removed);
+ 	return true;
+ }
+ 
+@@ -483,6 +490,30 @@ static string ExtractQuery(QuackMessage &msg) {
+ 	return "";
+ }
+ 
++unique_ptr<QuackMessage> QuackServer::AuthenticateConnection(DatabaseInstance &db, ConnectionRequestMessage &request,
++                                                             const string &connection_id) {
++	auto auth = EvaluateAuthQuery(
++	    db, StringUtil::Format("SELECT %s(?, ?, ?)", GetSettingString(db, "quack_authentication_function")),
++	    Value(connection_id), Value(request.AuthString()), Value(Token()));
++	if (auth.Denied()) {
++		return auth.Failure("Authentication");
++	}
++	return nullptr;
++}
++
++unique_ptr<QuackMessage> QuackServer::AuthorizeStatement(DatabaseInstance &db, QuackConnection &connection,
++                                                         const string &sql, string &effective_sql) {
++	// TODO do not do this if there is no fun set
++	auto authz = EvaluateAuthQuery(
++	    db, StringUtil::Format("SELECT %s(?, ?)", GetSettingString(db, "quack_authorization_function")),
++	    Value(connection.connection_id), Value(sql));
++	if (authz.Denied()) {
++		return authz.Failure("Authorization");
++	}
++	effective_sql = (authz.value.type().id() == LogicalTypeId::VARCHAR) ? authz.value.GetValue<string>() : sql;
++	return nullptr;
++}
++
+ bool ServerSupportsMessage(MessageType type) {
+ 	switch (type) {
+ 	case MessageType::CONNECTION_REQUEST:
+@@ -625,11 +656,9 @@ unique_ptr<QuackMessage> QuackServer::HandleMessageInternal(DatabaseInstance &db
+ 			    "heartbeat_timeout out of range - must be between 1 and %llu seconds", MAX_HEARTBEAT_TIMEOUT_SECONDS));
+ 		}
+ 		string connection_id = GenerateConnectionId();
+-		auto auth = EvaluateAuthQuery(
+-		    db, StringUtil::Format("SELECT %s(?, ?, ?)", GetSettingString(db, "quack_authentication_function")),
+-		    Value(connection_id), Value(connection_request_message.AuthString()), Value(Token()));
+-		if (auth.Denied()) {
+-			return auth.Failure("Authentication");
++		auto failure = AuthenticateConnection(db, connection_request_message, connection_id);
++		if (failure) {
++			return failure;
+ 		}
+ 		string client_id_hash;
+ 		if (!connection_request_message.ClientId().empty()) {
+@@ -649,15 +678,11 @@ unique_ptr<QuackMessage> QuackServer::HandleMessageInternal(DatabaseInstance &db
+ 		auto &prepare_request_message = received_message.Cast<PrepareRequestMessage>();
+ 		auto &connection = *connection_p;
+ 
+-		// TODO do not do this if there is no fun set
+-		auto authz = EvaluateAuthQuery(
+-		    db, StringUtil::Format("SELECT %s(?, ?)", GetSettingString(db, "quack_authorization_function")),
+-		    Value(prepare_request_message.ConnectionId()), Value(prepare_request_message.Query()));
+-		if (authz.Denied()) {
+-			return authz.Failure("Authorization");
++		string effective_sql;
++		auto authz_failure = AuthorizeStatement(db, connection, prepare_request_message.Query(), effective_sql);
++		if (authz_failure) {
++			return authz_failure;
+ 		}
+-		auto effective_sql = (authz.value.type().id() == LogicalTypeId::VARCHAR) ? authz.value.GetValue<string>()
+-		                                                                         : prepare_request_message.Query();
+ 
+ 		// Stop the previous producer first. This joins its thread, so it frees the execution lock.
+ 		AbortStatement(connection, "superseded by a new query");
