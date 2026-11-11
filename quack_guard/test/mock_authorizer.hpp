@@ -27,6 +27,7 @@
 #include "quack_guard/authorizer.hpp"
 
 #include <functional>
+#include <atomic>
 #include <mutex>
 
 namespace quack_guard_test
@@ -71,9 +72,14 @@ public:
     }
     Verdict v= on_authenticate(claims, transport);
     if (v.allow)
+    {
       out= std::make_shared<MockIdentity>(
           claims.user + "@" + transport.peer_ip +
-          (claims.role.empty() ? "" : "/" + claims.role));
+          (claims.role.empty() ? "" : "/" + claims.role) + "#" +
+          std::to_string(++identities));
+      std::lock_guard<std::mutex> guard(lock);
+      allow_calls++;
+    }
     return v;
   }
 
@@ -105,15 +111,19 @@ public:
     return on_filter(identity, objects);
   }
 
-  void sessionClosed(const Identity &) override
+  void sessionClosed(const Identity &identity) override
   {
     std::lock_guard<std::mutex> guard(lock);
     closed_calls++;
+    closed_identities.push_back(identity.audit());
   }
 
   /* Guards the records below; read them only when no call is running. */
   std::mutex lock;
   int authenticate_calls= 0, check_calls= 0, filter_calls= 0, closed_calls= 0;
+  int allow_calls= 0;
+  std::atomic<int> identities{0};
+  std::vector<std::string> closed_identities;
   std::vector<TransportFacts> transports;
   std::vector<std::pair<std::string, std::vector<AccessRequest>>> checks;
 };

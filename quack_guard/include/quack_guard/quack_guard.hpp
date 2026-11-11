@@ -27,7 +27,10 @@
 
 #include "quack_guard/authorizer.hpp"
 
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace duckdb
 {
@@ -39,18 +42,70 @@ class DatabaseInstance;
 namespace quack_guard
 {
 
+struct ListenerOptions
+{
+  /* Addresses to bind, one listener each: IPv4 or IPv6 literals
+     ("127.0.0.1", "::1" or "[::1]") or host names (first resolved address) */
+  std::vector<std::string> addresses;
+  /* 0 = any free port: the first address picks one, the others reuse it */
+  uint16_t port= 0;
+  /* PEM server certificate and private key (unencrypted); TLS is mandatory */
+  std::string cert_file;
+  std::string key_file;
+  /* Concurrent client connections over all addresses; more are refused */
+  size_t max_connections= 64;
+  /* Authenticated sessions at once; more logins are refused */
+  size_t max_sessions= 256;
+  /* Largest heartbeat lease a client may ask for, in seconds */
+  uint64_t max_heartbeat_seconds= 300;
+  /* Largest request body accepted */
+  size_t max_request_bytes= 4 * 1024 * 1024;
+  /* How often abandoned sessions are looked for, in milliseconds */
+  uint64_t reap_interval_ms= 1000;
+};
+
+struct ListenerStatus
+{
+  bool running= false;
+  /* "host:port" per bound address ("[::1]:port" for IPv6) */
+  std::vector<std::string> endpoints;
+  /* SHA-256 fingerprint of the served certificate, for clients to pin */
+  std::string fingerprint;
+  /* Why a listener thread stopped on its own, empty if none did */
+  std::string failure;
+};
+
+/* A running listener. Owned by the caller; destroying it stops it. */
+class Listener
+{
+public:
+  virtual ~Listener()= default;
+  virtual ListenerStatus Status() const= 0;
+  /* Stop accepting, interrupt and close every session. Idempotent. Must
+     run before the database is destroyed, never on a listener thread. */
+  virtual void Stop()= 0;
+};
+
 /*
-  The guard of one database: owns the authorizer (and, later, the listener).
-  Without an authorizer every Quack session is denied.
+  The guard of one database: holds the authorizer and the session registry.
+  Without an authorizer every Quack login is refused.
 */
 class Guard
 {
 public:
   virtual ~Guard()= default;
 
-  /* Install or replace the authorizer; null removes it (deny all). */
+  /* Install or replace the authorizer; null removes it (deny all). Sessions
+     keep the authorizer that admitted them until they close. */
   virtual void SetAuthorizer(std::shared_ptr<QuackAuthorizer> authorizer)= 0;
   virtual std::shared_ptr<QuackAuthorizer> GetAuthorizer() const= 0;
+
+  /* Start a listener. Throws std::exception (nothing is left listening). */
+  virtual std::unique_ptr<Listener>
+  StartListener(const ListenerOptions &options)= 0;
+
+  /* Open Quack sessions */
+  virtual size_t SessionCount() const= 0;
 };
 
 /*

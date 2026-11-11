@@ -31,7 +31,7 @@ std::shared_ptr<Guard> Install(duckdb::DatabaseInstance &db,
                                duckdb::Connection &con)
 {
   Lockdown(db, con);
-  auto guard= std::make_shared<GuardImpl>();
+  auto guard= std::make_shared<GuardImpl>(db);
   RegisterPlanGate(db, guard);
   return guard;
 }

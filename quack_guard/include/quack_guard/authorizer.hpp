@@ -69,15 +69,19 @@ struct Verdict
 };
 
 /* Facts about the transport, filled by the server from the socket, never
-   from message content. */
+   from message content. The authorizer derives the account host from
+   peer_ip itself (e.g. loopback -> "localhost", name resolution as the
+   server is configured), and verifies password, lock and expiry itself. */
 struct TransportFacts
 {
+  /* Canonical numeric address: IPv4 dotted ("10.0.0.5", also for
+     IPv4-mapped IPv6 peers) or IPv6 without zone ("::1") */
   std::string peer_ip;
   bool tls= false;
+  /* Client certificates are not requested yet: always false/empty */
   bool client_cert_verified= false;
   std::string cert_subject;
   std::string cert_issuer;
-  std::string cipher;
 };
 
 /* What the client claims. The caller wipes `proof` after the call; an

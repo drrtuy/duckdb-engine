@@ -22,21 +22,31 @@
 #pragma once
 
 #include "quack_guard/quack_guard.hpp"
+#include "session_registry.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 
+#include <atomic>
 #include <mutex>
 
 namespace quack_guard
 {
 
-/* The guard of one database. Reached from DuckDB hooks through the planner
-   extension's info. */
-class GuardImpl : public Guard, public duckdb::PlannerExtensionInfo
+/* The guard of one database. Owned by the database (as the planner
+   extension's info) and by the plugin; reached from DuckDB hooks through the
+   planner extension's info. */
+class GuardImpl : public Guard,
+                  public duckdb::PlannerExtensionInfo,
+                  public std::enable_shared_from_this<GuardImpl>
 {
 public:
+  explicit GuardImpl(duckdb::DatabaseInstance &db_p)
+      : db(db_p.shared_from_this())
+  {
+  }
+
   void SetAuthorizer(std::shared_ptr<QuackAuthorizer> authorizer_p) override
   {
     std::lock_guard<std::mutex> guard(lock);
@@ -47,10 +57,21 @@ public:
     std::lock_guard<std::mutex> guard(lock);
     return authorizer;
   }
+  std::unique_ptr<Listener>
+  StartListener(const ListenerOptions &options) override;
+  size_t SessionCount() const override { return sessions.Count(); }
+
+  SessionRegistry &Sessions() { return sessions; }
+  /* One listener per guard: its reaper owns the registry. */
+  void ListenerStopped() { listener_active= false; }
 
 private:
+  std::atomic<bool> listener_active{false};
+  /* Not owning: the guard is owned by the database */
+  duckdb::weak_ptr<duckdb::DatabaseInstance> db;
   mutable std::mutex lock;
   std::shared_ptr<QuackAuthorizer> authorizer;
+  SessionRegistry sessions;
 };
 
 /* Load Quack and pin its stock callbacks to deny-all system functions. */
