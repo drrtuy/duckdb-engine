@@ -41,7 +41,7 @@ SET(_DUCKDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/duckdb-build")
 # local_extension_repository is left out on purpose: it would redirect
 # automatic installs to the DuckDB build tree.
 SET(_DUCKDB_LINKED_EXTENSIONS
-  httplib loadable_extensions core_functions icu json parquet)
+  httplib loadable_extensions core_functions icu json parquet quack)
 
 SET(_DUCKDB_STATIC_LIBS
   "${_DUCKDB_BUILD_DIR}/src/main/http/libduckdb_httplib.a"
@@ -50,6 +50,7 @@ SET(_DUCKDB_STATIC_LIBS
   "${_DUCKDB_BUILD_DIR}/extension/icu/libicu_extension.a"
   "${_DUCKDB_BUILD_DIR}/extension/json/libjson_extension.a"
   "${_DUCKDB_BUILD_DIR}/extension/parquet/libparquet_extension.a"
+  "${_DUCKDB_BUILD_DIR}/extension/quack/libquack_extension.a"
   "${_DUCKDB_BUILD_DIR}/src/libduckdb_static.a"
 )
 
@@ -57,6 +58,81 @@ MESSAGE(STATUS "=== Building DuckDB from submodule (${DUCKDB_SUBMODULE_DIR}) ===
 IF(NOT EXISTS "${DUCKDB_SUBMODULE_DIR}/CMakeLists.txt")
   MESSAGE(FATAL_ERROR "DuckDB submodule is missing: run 'git submodule update --init third_parties/duckdb'")
 ENDIF()
+IF(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_parties/duckdb-quack/CMakeLists.txt")
+  MESSAGE(FATAL_ERROR "Quack submodule is missing: run 'git submodule update --init third_parties/duckdb-quack'")
+ENDIF()
+
+# Quack serves HTTPS through httplib's OpenSSL backend. OpenSSL was found in
+# CMakeLists.txt; Quack's own find_package(OpenSSL) in the DuckDB build gets
+# the same paths (see ExternalProject_Add below).
+
+SET(_QUACK_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_parties/duckdb-quack")
+
+# The submodule must be the commit DuckDB itself pins for this release.
+FILE(STRINGS "${DUCKDB_SUBMODULE_DIR}/.github/config/extensions/quack.cmake"
+     _QUACK_PIN_LINE REGEX "GIT_TAG")
+STRING(REGEX MATCH "[0-9a-f]+$" _QUACK_PIN "${_QUACK_PIN_LINE}")
+EXECUTE_PROCESS(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY "${_QUACK_SUBMODULE_DIR}"
+  OUTPUT_VARIABLE _QUACK_HEAD OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE _rc ERROR_QUIET)
+IF(_rc EQUAL 0 AND NOT _QUACK_HEAD STREQUAL _QUACK_PIN)
+  MESSAGE(FATAL_ERROR "third_parties/duckdb-quack is at ${_QUACK_HEAD}, "
+          "but DuckDB pins Quack ${_QUACK_PIN}")
+ENDIF()
+
+# Quack is built from a patched copy of the submodule, so the submodule itself
+# stays clean. Patches are applied in this order; each is security-relevant,
+# see Quack.MD.
+SET(_QUACK_PATCHES
+  0001-random-token-from-openssl.patch
+  0002-disable-quack-serve.patch
+  0003-client-loopback-only.patch
+)
+LIST(TRANSFORM _QUACK_PATCHES
+     PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/patches/duckdb-quack/")
+SET(_QUACK_STAGING_DIR "${CMAKE_CURRENT_BINARY_DIR}/duckdb-quack-staging")
+SET(QUACK_SOURCE_DIR   "${CMAKE_CURRENT_BINARY_DIR}/duckdb-quack-src")
+FILE(REMOVE_RECURSE "${_QUACK_STAGING_DIR}")
+FILE(COPY "${_QUACK_SUBMODULE_DIR}/CMakeLists.txt" "${_QUACK_SUBMODULE_DIR}/src"
+     DESTINATION "${_QUACK_STAGING_DIR}")
+FIND_PROGRAM(PATCH_EXECUTABLE patch)
+IF(NOT PATCH_EXECUTABLE)
+  MESSAGE(FATAL_ERROR "'patch' is needed to build Quack")
+ENDIF()
+FOREACH(_patch IN LISTS _QUACK_PATCHES)
+  EXECUTE_PROCESS(
+    # Not git apply: inside the repo's build dir it silently skips the paths.
+    COMMAND ${PATCH_EXECUTABLE} -p1 --forward --batch --no-backup-if-mismatch
+            --fuzz=0 --input "${_patch}"
+    WORKING_DIRECTORY "${_QUACK_STAGING_DIR}"
+    RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err)
+  IF(NOT _rc EQUAL 0)
+    MESSAGE(FATAL_ERROR "Cannot apply ${_patch} to Quack: ${_out}${_err}")
+  ENDIF()
+ENDFOREACH()
+
+# Mirror staging into QUACK_SOURCE_DIR. CONFIGURE_FILE(COPYONLY) rewrites a
+# file only when its content changes, so incremental builds stay incremental;
+# files no longer in staging are removed.
+FILE(GLOB_RECURSE _QUACK_FILES RELATIVE "${_QUACK_STAGING_DIR}"
+     "${_QUACK_STAGING_DIR}/*")
+FILE(GLOB_RECURSE _QUACK_OLD_FILES RELATIVE "${QUACK_SOURCE_DIR}"
+     "${QUACK_SOURCE_DIR}/*")
+FOREACH(_f IN LISTS _QUACK_OLD_FILES)
+  IF(NOT _f IN_LIST _QUACK_FILES)
+    FILE(REMOVE "${QUACK_SOURCE_DIR}/${_f}")
+  ENDIF()
+ENDFOREACH()
+FOREACH(_f IN LISTS _QUACK_FILES)
+  CONFIGURE_FILE("${_QUACK_STAGING_DIR}/${_f}" "${QUACK_SOURCE_DIR}/${_f}" COPYONLY)
+ENDFOREACH()
+# Re-stage when a submodule file or a patch changes.
+FILE(GLOB_RECURSE _QUACK_SUBMODULE_FILES CONFIGURE_DEPENDS
+     "${_QUACK_SUBMODULE_DIR}/CMakeLists.txt" "${_QUACK_SUBMODULE_DIR}/src/*")
+SET_PROPERTY(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             ${_QUACK_SUBMODULE_FILES} ${_QUACK_PATCHES})
 
 SET(_DUCKDB_GIT_DESCRIBE "v2.0.0")
 
@@ -119,6 +195,10 @@ ExternalProject_Add(duckdb_build
     -DBUILD_TPCE=OFF
     -DEXTENSION_STATIC_BUILD=1
     "-DDUCKDB_EXTENSION_CONFIGS=${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_extensions.cmake"
+    "-DMARIADB_QUACK_SOURCE_DIR=${QUACK_SOURCE_DIR}"
+    "-DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}"
+    "-DOPENSSL_SSL_LIBRARY=${OPENSSL_SSL_LIBRARY}"
+    "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_CRYPTO_LIBRARY}"
     "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${_DUCKDB_EXTRA_CXX_FLAGS}"
     "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
     "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
@@ -132,6 +212,11 @@ ExternalProject_Add(duckdb_build
   BUILD_BYPRODUCTS ${_DUCKDB_STATIC_LIBS}
   USES_TERMINAL_BUILD ON
 )
+
+# The build step is not BUILD_ALWAYS; re-run it when the staged Quack sources
+# (submodule + patches) change.
+FILE(GLOB_RECURSE _QUACK_STAGED_FILES "${QUACK_SOURCE_DIR}/*")
+ExternalProject_Add_StepDependencies(duckdb_build build ${_QUACK_STAGED_FILES})
 
 # Expose all DuckDB archives as a single INTERFACE target so the rest of the
 # cmake tree links against "libduckdb" unchanged.

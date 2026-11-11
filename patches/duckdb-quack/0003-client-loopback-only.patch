@@ -1,0 +1,16 @@
+diff --git a/src/quack_client.cpp b/src/quack_client.cpp
+index b9e6aa8..8eb7a29 100644
+--- a/src/quack_client.cpp
++++ b/src/quack_client.cpp
+@@ -299,6 +299,11 @@ unique_ptr<QuackMessage> PinnedHttpsQuackClient::RequestInternal(optional_ptr<Cl
+ }
+ 
+ unique_ptr<QuackClient> QuackClient::GetClient(DatabaseInstance &db, const QuackUri &uri) {
++	// MariaDB: no network egress from SQL; the client may only reach this host.
++	auto host = StringUtil::Lower(uri.Host());
++	if (host != "localhost" && host != "127.0.0.1" && host != "::1") {
++		throw PermissionException("Quack client is limited to loopback addresses in the MariaDB DuckDB engine");
++	}
+ 	if (uri.Ssl() && !uri.SslFingerprint().empty()) {
+ 		// pinned: our own TLS client, nothing from httpfs is involved
+ 		return make_uniq<PinnedHttpsQuackClient>(db, uri);

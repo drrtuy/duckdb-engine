@@ -54,6 +54,14 @@ engine embeds DuckDB as a pluggable storage engine, enabling fast analytical
 
 IF(TARGET duckdb)
 
+  # Quack (MDEV-41383) serves HTTPS through OpenSSL. Linked dynamically: on
+  # distribution builds this is the same libssl/libcrypto mariadbd loads.
+  FIND_PACKAGE(OpenSSL)
+  IF(NOT OPENSSL_FOUND)
+    MESSAGE(FATAL_ERROR "DuckDB: OpenSSL development files are required "
+            "(libssl-dev / openssl-devel)")
+  ENDIF()
+
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb.cmake)
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_target_setup.cmake)
 
@@ -69,7 +77,7 @@ IF(TARGET duckdb)
   # atomic: GCC lowers the 16-byte atomic ops of the AUTO_INCREMENT block
   # cache (Duckdb_share::autoinc_range) to libatomic calls.
   target_link_libraries(duckdb duckdb_runtime duckdb_convertor duckdb_common
-    ${DUCKDB_LIBRARY} atomic
+    ${DUCKDB_LIBRARY} OpenSSL::SSL OpenSSL::Crypto atomic
   )
   TARGET_SOURCES(duckdb PRIVATE ${DUCKDB_STATIC_EXTENSION_LOADER})
 

@@ -10,6 +10,7 @@ SET(DUCKDB_RUNTIME_SOURCES
   duckdb_mysql_compat.cc
   fiber_context.cpp
   fiber_scan.cc
+  quack_lockdown.cc
 )
 
 ADD_LIBRARY(duckdb_runtime STATIC ${DUCKDB_RUNTIME_SOURCES})
