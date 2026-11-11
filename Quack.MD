@@ -18,9 +18,10 @@ not implemented yet.
 - **Regular MariaDB users are not affected.** Quack's restrictions apply per
   connection; the only global settings the plugin sets are Quack's own
   (`quack_*`), which do nothing for SQL that does not use Quack.
-- **DuckDB-side code stays separate** from the handler: a self-contained
-  module (*planned*: `quack_guard/`) talks to MariaDB through a narrow bridge
-  interface (*planned*: `bridge/`).
+- **DuckDB-side code stays separate** from the handler: the self-contained
+  module `quack_guard/` (no MariaDB headers) talks to MariaDB only through the
+  bridge interface `quack_guard/include/quack_guard/authorizer.hpp`; the
+  MariaDB side (*planned*: `bridge/`) implements it.
 
 ## Build and linking
 
@@ -67,7 +68,7 @@ callbacks are pinned. Quack names them in global settings:
 `quack_authentication_function` (login, default: a shared-token check) and
 `quack_authorization_function` (every statement, default: allow all). Before
 the plugin locks DuckDB's configuration, `DuckdbManager::Initialize()` calls
-`quack_lockdown()` (`runtime/quack_lockdown.cc`), which:
+`quack_guard::Install()`, whose `Lockdown()` (`quack_guard/src/lockdown.cpp`):
 
 1. registers two internal functions in the system catalog:
    `mariadb_quack_deny_all(connection_id, auth_string, token)` returns `false`,
@@ -87,6 +88,82 @@ Known gaps for SUPER users with `run_in_duckdb`: `CREATE SECRET (TYPE quack)`
 can hold a client token in memory, and `quack_identify()` writes the cosmetic
 `whoami_*` settings past the configuration lock. Neither opens access.
 
+## The quack_guard module
+
+```
+quack_guard/
+  include/quack_guard/authorizer.hpp   bridge interface (both sides include it)
+  include/quack_guard/quack_guard.hpp  Install(), AttachPrincipal(), IsQuackSession()
+  src/lockdown.cpp                     stock Quack entry points closed (above)
+  src/guard.cpp                        principal state
+  src/plan_gate.cpp                    post-bind hook
+  test/                                Layer A tests, mock authorizer
+```
+
+`quack_guard` is a static library built with DuckDB and Quack headers only; it
+is added before the plugin's `LINK_LIBRARIES(mariadb_private ...)`, so it cannot
+include MariaDB headers by accident.
+
+### Bridge interface
+
+`QuackAuthorizer` (`authorizer.hpp`) is the only way `quack_guard` learns
+anything about MariaDB:
+
+| Call | Purpose |
+|---|---|
+| `authenticate(credentials, out)` | map the client's credentials and the transport facts (peer address, TLS, taken from the socket) to a MariaDB principal |
+| `check(identity, requests)` | all table/column accesses of one statement; allowed only if every one is |
+| `filterVisible(identity, objects)` | which catalog objects the principal may see |
+| `sessionClosed(identity)` | bookkeeping when a session ends |
+
+The contract is fail closed: a default `Verdict` denies, an empty request list
+denies, a request without columns denies unless it is explicitly
+"any column" (`count(*)`), `filterVisible` returns an empty list on error.
+`Identity` is opaque to `quack_guard`; its `audit()` text ("user@host/role") is
+for logs and errors only.
+
+### Which contexts are guarded
+
+A Quack session is a DuckDB `ClientContext` that carries a principal
+(`PrincipalState` in `registered_state`, attached once by the plugin's
+listener right after it creates the session, before the client learns the
+session id; it cannot be replaced) or that Quack's server created (it always
+registers `quack_session`); a Quack session without a principal gets nothing.
+Everything else - MariaDB-side connections, `run_in_duckdb`, DuckDB's
+internal connections (WAL replay, checkpoints) - is not affected.
+
+`Install()` returns the database's `Guard`, which holds the
+`QuackAuthorizer`. Without an authorizer every Quack session is denied.
+
+The planning team had proposed the opposite (every context untrusted unless
+the plugin marks it). That breaks DuckDB's own internal connections, which
+bind SQL during WAL replay and checkpoints, and would change behaviour for
+regular users. Contexts a Quack session might open indirectly (for example
+`json_execute_serialized_sql`) must instead be prevented before binding, by
+the statement gate (*planned*), because bind-time code runs before the plan
+gate (see below).
+
+### Plan gate
+
+`plan_gate.cpp` registers a DuckDB `PlannerExtension` whose `post_bind`
+function runs for every bound statement (every path that plans goes through
+`Planner::CreatePlan`, including `Prepare` and rebinds). For other contexts it
+returns immediately. For Quack sessions it currently rejects every statement
+(*planned*: allowlist and grant checks). `PrincipalState` forces a rebind on
+every `EXECUTE`, so prepared statements are re-authorized each time.
+
+`post_bind` runs after binding, and binding has effects: table-function
+binds open files (`read_csv`), constant arguments are evaluated, pragmas are
+expanded, binder errors name existing objects. These are closed by the
+statement gate on the parsed statement (*planned*, required before any
+listener is enabled), not by the plan gate.
+
+### MariaDB tables are out of reach
+
+The engine's cross-engine path (`_mdb_scan` and the MariaDB replacement scan
+in `runtime/cross_engine_scan.cc`) refuses Quack sessions explicitly, in
+addition to its thread-local table registry being empty on Quack threads.
+
 ### Quack client without `httpfs`
 
 Quack's client needs `httpfs` for plain HTTP(S), except when the server
@@ -96,6 +173,16 @@ fingerprint, which is how the in-server loopback client used by MTR tests
 connects.
 
 ### Tests
+
+- `quack_guard/test/guard_test.cpp` (Layer A, plain DuckDB, mock authorizer;
+  build with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`):
+  contract defaults deny; regular connections unaffected; stock callbacks
+  pinned; a Quack session is denied every planned statement kind (queries,
+  DML, DDL, SET, EXPLAIN, CALL, transactions, ATTACH, LOAD, PREPARE,
+  multi-statement strings, the `Prepare` API) without side effects; a
+  session Quack created without a principal is denied too; a principal
+  cannot be replaced or be null; the guard's authorizer can be set and
+  removed.
 
 - `mysql-test/duckdb/t/quack_lockdown.test`: both callbacks are pinned, cannot
   be set (any scope), reset, replaced or dropped, and deny; `quack_serve()`

@@ -31,7 +31,7 @@
 
 #include "cross_engine_scan.h"
 #include "duckdb_mysql_compat.h"
-#include "quack_lockdown.h"
+#include "quack_guard/quack_guard.hpp"
 
 /* Defined by the generated duckdb_static_extension_loader.c */
 extern "C" int32_t duckdb_register_static_extensions(void);
@@ -289,8 +289,8 @@ bool DuckdbManager::Initialize()
     /* Register cross-engine scan support (_mdb_scan + replacement scan) */
     register_cross_engine_scan(*m_database->instance);
 
-    /* Quack is linked in; keep its stock login closed (MDEV-41383) */
-    quack_lockdown(*m_database->instance, *con);
+    /* Quack: stock entry points closed, sessions guarded (MDEV-41383) */
+    quack_guard::Install(*m_database->instance, *con);
 
     /*
       Lock the DuckDB configuration so SQL reaching DuckDB (pushdown,

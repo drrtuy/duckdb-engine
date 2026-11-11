@@ -32,6 +32,7 @@
 #include "fiber_scan.h"
 #include "ddl_convertor.h"
 #include "duckdb_log.h"
+#include "quack_guard/quack_guard.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/types/datetime.hpp"
@@ -297,6 +298,10 @@ mdb_scan_bind(duckdb::ClientContext &context,
               duckdb::vector<duckdb::LogicalType> &return_types,
               duckdb::vector<duckdb::Identifier> &names)
 {
+  /* Quack clients never reach MariaDB tables through this path */
+  if (quack_guard::IsQuackSession(context))
+    throw duckdb::PermissionException("_mdb_scan: not available over Quack");
+
   auto key= input.inputs[0].GetValue<std::string>();
 
   TABLE *tbl= find_external_table(key);
@@ -542,6 +547,9 @@ duckdb::unique_ptr<duckdb::TableRef> mariadb_replacement_scan(
     duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
     duckdb::optional_ptr<duckdb::ReplacementScanData> data)
 {
+  if (quack_guard::IsQuackSession(context))
+    return nullptr;
+
   TABLE *tbl= find_external_table(input.table_name);
   if (!tbl)
     return nullptr;

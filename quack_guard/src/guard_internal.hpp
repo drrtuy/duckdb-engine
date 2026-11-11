@@ -1,0 +1,97 @@
+/*
+  Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin <drrtuy@gmail.com>
+  Copyright (c) 2026, Leonid Fedorov <leontodys@gmail.com>
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; version 2 of the License.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335 USA
+*/
+
+/* Internal to quack_guard. */
+
+#pragma once
+
+#include "quack_guard/quack_guard.hpp"
+
+#include "duckdb.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/planner/planner_extension.hpp"
+
+#include <mutex>
+
+namespace quack_guard
+{
+
+/* The guard of one database. Reached from DuckDB hooks through the planner
+   extension's info. */
+class GuardImpl : public Guard, public duckdb::PlannerExtensionInfo
+{
+public:
+  void SetAuthorizer(std::shared_ptr<QuackAuthorizer> authorizer_p) override
+  {
+    std::lock_guard<std::mutex> guard(lock);
+    authorizer= std::move(authorizer_p);
+  }
+  std::shared_ptr<QuackAuthorizer> GetAuthorizer() const override
+  {
+    std::lock_guard<std::mutex> guard(lock);
+    return authorizer;
+  }
+
+private:
+  mutable std::mutex lock;
+  std::shared_ptr<QuackAuthorizer> authorizer;
+};
+
+/* Load Quack and pin its stock callbacks to deny-all system functions. */
+void Lockdown(duckdb::DatabaseInstance &db, duckdb::Connection &con);
+
+/* Register the post-bind hook that authorizes Quack sessions. */
+void RegisterPlanGate(duckdb::DatabaseInstance &db,
+                      std::shared_ptr<GuardImpl> guard);
+
+/* The principal of a Quack session; stored in ClientContext::registered_state. */
+class PrincipalState : public duckdb::ClientContextState
+{
+public:
+  static const std::string KEY;
+
+  explicit PrincipalState(std::shared_ptr<const Identity> identity_p)
+      : identity(std::move(identity_p))
+  {
+  }
+
+  /* Re-plan (and so re-authorize) every EXECUTE of a prepared statement. */
+  duckdb::RebindQueryInfo
+  OnRebindPreparedStatement(duckdb::ClientContext &,
+                            duckdb::BindPreparedStatementCallbackInfo &,
+                            duckdb::RebindQueryInfo) override
+  {
+    return duckdb::RebindQueryInfo::ATTEMPT_TO_REBIND;
+  }
+
+  const std::shared_ptr<const Identity> identity;
+};
+
+/*
+  Attach `identity` to the context of a newly created Quack session, before
+  the client learns the session id. Once only; it cannot be replaced.
+  Called by the listener; not part of the public API.
+*/
+void AttachPrincipal(duckdb::ClientContext &context,
+                     std::shared_ptr<const Identity> identity);
+
+/* The session's principal, or null for a non-Quack context. */
+std::shared_ptr<const Identity> GetPrincipal(duckdb::ClientContext &context);
+
+} /* namespace quack_guard */

@@ -221,7 +221,9 @@ ExternalProject_Add_StepDependencies(duckdb_build build ${_QUACK_STAGED_FILES})
 # Expose all DuckDB archives as a single INTERFACE target so the rest of the
 # cmake tree links against "libduckdb" unchanged.
 ADD_LIBRARY(libduckdb INTERFACE)
-TARGET_LINK_LIBRARIES(libduckdb INTERFACE -Wl,--start-group ${_DUCKDB_STATIC_LIBS} -Wl,--end-group)
+# OpenSSL after the archives: libquack_extension.a uses it.
+TARGET_LINK_LIBRARIES(libduckdb INTERFACE -Wl,--start-group ${_DUCKDB_STATIC_LIBS} -Wl,--end-group
+  OpenSSL::SSL OpenSSL::Crypto)
 ADD_DEPENDENCIES(libduckdb duckdb_build)
 
 MESSAGE(STATUS "DuckDB include: ${DUCKDB_INCLUDE_DIR}")
