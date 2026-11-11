@@ -86,16 +86,21 @@ static const std::unordered_set<std::string> &functions()
   return list;
 }
 
-bool FunctionAllowed(const std::string &name)
+static std::string lower(std::string s)
 {
-  std::string lower(name);
-  std::transform(lower.begin(), lower.end(), lower.begin(),
+  std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return (char) std::tolower(c); });
-  return functions().count(lower) > 0;
+  return s;
 }
 
-bool SchemaReserved(const std::string &schema)
+bool FunctionAllowed(const std::string &name)
 {
+  return functions().count(lower(name)) > 0;
+}
+
+bool SchemaReserved(const std::string &schema_any_case)
+{
+  auto schema= lower(schema_any_case);
   return schema.empty() || schema == "main" || schema == "pg_catalog" ||
          schema == "information_schema" || schema == "temp";
 }
@@ -103,7 +108,7 @@ bool SchemaReserved(const std::string &schema)
 bool TableReserved(const std::string &table)
 {
   /* MariaDB's temporary names during ALTER TABLE */
-  return table.empty() || table.rfind("#sql", 0) == 0;
+  return table.empty() || lower(table).rfind("#sql", 0) == 0;
 }
 
 } /* namespace quack_guard */

@@ -113,6 +113,14 @@ GuardedQuackServer::GuardedQuackServer(duckdb::ClientContext &context,
 {
   if (options.addresses.empty())
     throw duckdb::InvalidInputException("Quack: no listen address");
+  if (options.max_transaction_seconds == 0 ||
+      options.max_transaction_seconds > 7 * 24 * 3600)
+    throw duckdb::InvalidInputException(
+        "Quack: max_transaction_seconds must be 1..604800");
+  if (options.max_heartbeat_seconds == 0 ||
+      options.max_heartbeat_seconds > 7 * 24 * 3600)
+    throw duckdb::InvalidInputException(
+        "Quack: max_heartbeat_seconds must be 1..604800");
   if (options.cert_file.empty() || options.key_file.empty())
     throw duckdb::InvalidInputException(
         "Quack: a TLS certificate and key are required");
@@ -433,6 +441,9 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthorizeStatement(
     duckdb::DatabaseInstance &, duckdb::QuackConnection &connection,
     const std::string &sql, std::string &effective_sql)
 {
+  /* The client's own catalog queries (ATTACH): answered filtered */
+  if (CatalogQuery(sql, effective_sql))
+    return nullptr;
   std::string why;
   auto decision=
       connection.duckdb_connection
@@ -537,6 +548,30 @@ GuardedQuackServer::Evict(const std::string &connection_id)
 void GuardedQuackServer::ReapExpired()
 {
   auto now= std::chrono::steady_clock::now();
+  /* A transaction keeps one snapshot of the shared database open: bounded.
+     Observed from the session's real state, not predicted from statements
+     (those can fail, be interrupted or run in another order). */
+  std::vector<std::string> too_long;
+  {
+    std::lock_guard<std::mutex> guard_tx(transactions_lock);
+    std::map<std::string, std::chrono::steady_clock::time_point> still_open;
+    for (auto &id : guard->Sessions().Ids())
+    {
+      auto connection= GetConnection(id);
+      if (!connection || !connection->duckdb_connection ||
+          connection->duckdb_connection->context->transaction.IsAutoCommit())
+        continue;
+      auto seen= transactions.find(id);
+      auto since= seen == transactions.end() ? now : seen->second;
+      if (now - since > std::chrono::seconds(options.max_transaction_seconds))
+        too_long.push_back(id);
+      else
+        still_open.emplace(id, since);
+    }
+    transactions.swap(still_open);
+  }
+  for (auto &id : too_long)
+    Evict(id);
   for (auto &id : guard->Sessions().Ids())
   {
     auto connection= GetConnection(id);

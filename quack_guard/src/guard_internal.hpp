@@ -96,6 +96,15 @@ GateDecision StatementAllowed(duckdb::ClientContext &context,
 /* Per-session hardening of a new Quack session's context. */
 void HardenSession(duckdb::ClientContext &context);
 
+/* Catalog discovery (catalog_filter.cpp): the filtering table function, and
+   recognizing the client's catalog queries. */
+extern const char *const CATALOG_FUNCTION;
+void RegisterCatalogFunction(duckdb::DatabaseInstance &db,
+                             const std::shared_ptr<GuardImpl> &guard);
+/* True if `sql` is one of Quack's catalog load queries; `replacement` is
+   then the filtered query to run instead. */
+bool CatalogQuery(const std::string &sql, std::string &replacement);
+
 /* Register the post-bind hook that authorizes Quack sessions. */
 void RegisterPlanGate(duckdb::DatabaseInstance &db,
                       std::shared_ptr<GuardImpl> guard);

@@ -48,6 +48,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -354,6 +355,16 @@ void check_statement(SQLStatement &statement)
   case StatementType::SELECT_STATEMENT:
     check_node(*statement.Cast<SelectStatement>().node);
     break;
+  case StatementType::TRANSACTION_STATEMENT:
+  {
+    /* Quack's own client wraps work on an attached database in these */
+    auto &info= *statement.Cast<TransactionStatement>().info;
+    if (info.type != TransactionType::BEGIN_TRANSACTION &&
+        info.type != TransactionType::COMMIT &&
+        info.type != TransactionType::ROLLBACK)
+      refuse("transaction form");
+    break;
+  }
   case StatementType::EXPLAIN_STATEMENT:
   {
     auto &explain= statement.Cast<ExplainStatement>();
@@ -373,7 +384,7 @@ void check_statement(SQLStatement &statement)
 GateDecision StatementAllowed(ClientContext &context, const std::string &sql,
                               std::string &why)
 {
-  Walk walk{context, {}};
+  Walk walk{context, {}, {}};
   walk_state= &walk;
   struct Reset
   {
