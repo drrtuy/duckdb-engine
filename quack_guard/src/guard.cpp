@@ -61,6 +61,18 @@ void AttachPrincipal(duckdb::ClientContext &context,
     throw duckdb::InternalException("Quack: session already has a principal");
 }
 
+void HardenSession(duckdb::ClientContext &context)
+{
+  /* An unknown table name never becomes a file read (the statement gate
+     already refuses unknown names; this is the second line) */
+  context.config.use_replacement_scans= false;
+}
+
+duckdb::shared_ptr<PrincipalState> GetPrincipalState(duckdb::ClientContext &context)
+{
+  return context.registered_state->Get<PrincipalState>(PrincipalState::KEY);
+}
+
 std::shared_ptr<const Identity> GetPrincipal(duckdb::ClientContext &context)
 {
   auto state= context.registered_state->Get<PrincipalState>(PrincipalState::KEY);

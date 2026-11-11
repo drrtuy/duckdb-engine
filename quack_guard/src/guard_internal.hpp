@@ -77,6 +77,25 @@ private:
 /* Load Quack and pin its stock callbacks to deny-all system functions. */
 void Lockdown(duckdb::DatabaseInstance &db, duckdb::Connection &con);
 
+enum class GateDecision
+{
+  Allowed,
+  /* The form of the statement: answered STATEMENT_DENIED */
+  StatementDenied,
+  /* About an object (missing, reserved, not a table): answered ACCESS_DENIED
+     like a denied one, so existence is not revealed */
+  AccessDenied
+};
+
+/* The statement gate: may a Quack session run `sql`? Parses, and looks up
+   referenced tables on a separate connection; binds nothing. On refusal
+   `why` says what was refused (for logs, never for clients). */
+GateDecision StatementAllowed(duckdb::ClientContext &context,
+                              const std::string &sql, std::string &why);
+
+/* Per-session hardening of a new Quack session's context. */
+void HardenSession(duckdb::ClientContext &context);
+
 /* Register the post-bind hook that authorizes Quack sessions. */
 void RegisterPlanGate(duckdb::DatabaseInstance &db,
                       std::shared_ptr<GuardImpl> guard);
@@ -91,6 +110,11 @@ public:
       : identity(std::move(identity_p))
   {
   }
+
+  /* Each statement starts unauthorized; the plan gate sets it once the
+     statement's access is granted. Errors before that are masked. */
+  void QueryBegin(duckdb::ClientContext &) override { authorized= false; }
+  std::atomic<bool> authorized{false};
 
   /* Re-plan (and so re-authorize) every EXECUTE of a prepared statement. */
   duckdb::RebindQueryInfo
@@ -111,6 +135,9 @@ public:
 */
 void AttachPrincipal(duckdb::ClientContext &context,
                      std::shared_ptr<const Identity> identity);
+
+/* The session's principal state, or null for a non-Quack context. */
+duckdb::shared_ptr<PrincipalState> GetPrincipalState(duckdb::ClientContext &context);
 
 /* The session's principal, or null for a non-Quack context. */
 std::shared_ptr<const Identity> GetPrincipal(duckdb::ClientContext &context);

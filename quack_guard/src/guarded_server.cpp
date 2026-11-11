@@ -18,6 +18,7 @@
 */
 
 #include "guarded_server.hpp"
+#include "allowlist.hpp"
 #include "login.hpp"
 #include "transport.hpp"
 
@@ -150,7 +151,7 @@ GuardedQuackServer::GuardedQuackServer(duckdb::ClientContext &context,
       server.set_payload_max_length(options.max_request_bytes
                                         ? options.max_request_bytes
                                         : 1);
-      server.set_keep_alive_timeout(5);
+      server.set_keep_alive_timeout(30);
       server.set_keep_alive_max_count(1 << 20);
       server.set_tcp_nodelay(true);
       /* While stopping, every answer ends its connection */
@@ -391,7 +392,59 @@ GuardedQuackServer::Dispatch(duckdb::MemoryStream &body,
   if (!guard->Sessions().Find(header.connection_id, entry) ||
       entry.peer_ip != peer)
     return duckdb::make_uniq<ErrorResponse>(BAD_SESSION);
-  return HandleMessage(body);
+  auto response= HandleMessage(body);
+  /* Only errors that cannot tell about objects the client may not see reach
+     it as they are: the gates' own answers, and execution errors, which
+     only happen once access was granted. Binder, catalog, I/O, extension
+     and anything new get one answer ("did you mean ...", paths, ...). */
+  if (response->Type() == MessageType::ERROR_RESPONSE)
+  {
+    /* Our own answers pass as they are. Of the others, only execution
+       errors pass, and only once the plan gate granted the statement:
+       several of them are also thrown while binding, before authorization. */
+    auto &error= response->Cast<ErrorResponse>().Error();
+    if (error.Type() == duckdb::ExceptionType::PERMISSION &&
+        (error.RawMessage() == STATEMENT_DENIED ||
+         error.RawMessage() == ACCESS_DENIED))
+      return response;
+    bool authorized= false;
+    if (auto connection= GetConnection(header.connection_id))
+      if (connection->duckdb_connection)
+        if (auto state= GetPrincipalState(*connection->duckdb_connection->context))
+          authorized= state->authorized;
+    switch (authorized ? error.Type() : duckdb::ExceptionType::INVALID)
+    {
+    case duckdb::ExceptionType::CONVERSION:
+    case duckdb::ExceptionType::OUT_OF_RANGE:
+    case duckdb::ExceptionType::DIVIDE_BY_ZERO:
+    case duckdb::ExceptionType::INVALID_INPUT:
+    case duckdb::ExceptionType::INTERRUPT:
+    case duckdb::ExceptionType::OUT_OF_MEMORY:
+      break;
+    default:
+      return duckdb::make_uniq<ErrorResponse>(
+          duckdb::ErrorData(duckdb::ExceptionType::PERMISSION, ACCESS_DENIED));
+    }
+  }
+  return response;
+}
+
+duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthorizeStatement(
+    duckdb::DatabaseInstance &, duckdb::QuackConnection &connection,
+    const std::string &sql, std::string &effective_sql)
+{
+  std::string why;
+  auto decision=
+      connection.duckdb_connection
+          ? StatementAllowed(*connection.duckdb_connection->context, sql, why)
+          : GateDecision::StatementDenied;
+  if (decision != GateDecision::Allowed)
+    return duckdb::make_uniq<ErrorResponse>(duckdb::ErrorData(
+        duckdb::ExceptionType::PERMISSION,
+        decision == GateDecision::AccessDenied ? ACCESS_DENIED
+                                               : STATEMENT_DENIED));
+  effective_sql= sql;
+  return nullptr;
 }
 
 duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
@@ -453,7 +506,9 @@ void GuardedQuackServer::OnConnectionCreated(duckdb::QuackConnection &connection
   auto *login= tl_login;
   if (!login || !login->identity || !connection.duckdb_connection)
     throw duckdb::InternalException("Quack: session without a login");
-  AttachPrincipal(*connection.duckdb_connection->context, login->identity);
+  auto &context= *connection.duckdb_connection->context;
+  AttachPrincipal(context, login->identity);
+  HardenSession(context);
   if (!guard->Sessions().Add(
           connection.connection_id,
           SessionRegistry::Entry{login->peer, login->identity, login->issuer},
