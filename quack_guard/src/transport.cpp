@@ -44,8 +44,10 @@ namespace quack_guard
 namespace http= duckdb_httplib_openssl;
 
 CappedPool::CappedPool(std::shared_ptr<std::atomic<size_t>> live_p,
-                       size_t cap_p)
-    : live(std::move(live_p)), cap(cap_p ? cap_p : 1)
+                       size_t cap_p,
+                       std::shared_ptr<std::atomic<uint64_t>> refused_p)
+    : live(std::move(live_p)), cap(cap_p ? cap_p : 1),
+      refused(std::move(refused_p))
 {
 }
 
@@ -60,6 +62,8 @@ bool CappedPool::enqueue(std::function<void()> fn)
   if (live->fetch_add(1) >= cap)
   {
     live->fetch_sub(1);
+    if (refused)
+      (*refused)++;
     return false;  /* httplib closes the socket */
   }
   auto done= std::make_shared<std::atomic<bool>>(false);

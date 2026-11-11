@@ -318,35 +318,6 @@ static LoginFacts login_facts(THD *thd, const MariaDBIdentity &claimed,
   return facts;
 }
 
-static const char *reason_text(Reason reason)
-{
-  switch (reason)
-  {
-  case Reason::Denied: return "wrong password or role not granted";
-  case Reason::NoSuchAccount: return "no such account";
-  case Reason::Locked: return "account locked or blocked after wrong passwords";
-  case Reason::Expired: return "password expired";
-  case Reason::RequirementUnmet: return "REQUIRE not met";
-  case Reason::Unsupported: return "authentication method or host not supported";
-  case Reason::Timeout: return "ACL worker timeout";
-  case Reason::Saturated: return "connection limit or ACL queue full";
-  case Reason::Shutdown: return "shutting down";
-  default: return "internal error";
-  }
-}
-
-/* As the server logs refused logins: with log_warnings > 1 */
-Verdict MariaDBAuthorizer::deny_login(const std::string &account,
-                                      const quack_guard::TransportFacts &transport,
-                                      Reason reason)
-{
-  if (global_system_variables.log_warnings > 1)
-    sql_print_warning("DuckDB: Quack login refused for '%s' from %s: %s",
-                      account.c_str(), transport.peer_ip.c_str(),
-                      reason_text(reason));
-  return Verdict::Deny(reason);
-}
-
 Verdict MariaDBAuthorizer::authenticate(
     const quack_guard::ClientClaims &claims,
     const quack_guard::TransportFacts &transport,
@@ -384,7 +355,7 @@ Verdict MariaDBAuthorizer::authenticate_unsafe(
                                             : Verdict::Deny(facts->reason);
   });
   if (!verdict.allow)
-    return deny_login(claims.user, transport, verdict.reason);
+    return Verdict::Deny(verdict.reason);
 
   std::string account= facts->priv_user + "@" + facts->priv_host;
   auto identity= std::make_shared<MariaDBIdentity>(*claimed);
@@ -402,17 +373,17 @@ Verdict MariaDBAuthorizer::authenticate_unsafe(
     if (failed.row_version != facts->row_version)
       failed= {facts->row_version, 0};
     if (max_password_errors && (uint) failed.count >= max_password_errors)
-      return deny_login(account, transport, Reason::Locked);
+      return Verdict::Deny(Reason::Locked);
     if (!facts->password_ok)
     {
       failed.count++;
-      return deny_login(account, transport, Reason::Denied);
+      return Verdict::Deny(Reason::Denied);
     }
     failures.erase(account);
     int64_t limit= facts->max_user_connections;
     auto &open= sessions[account];
     if (limit < 0 || (limit > 0 && open >= limit))
-      return deny_login(account, transport, Reason::Saturated);
+      return Verdict::Deny(Reason::Saturated);
     open++;
   }
   out= identity;

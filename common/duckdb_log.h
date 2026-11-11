@@ -29,7 +29,9 @@ extern ulonglong duckdb_log_options;
 enum enum_duckdb_log_types
 {
   DUCKDB_QUERY,
-  DUCKDB_QUERY_RESULT
+  DUCKDB_QUERY_RESULT,
+  /* Statements refused to Quack sessions (MDEV-41383) */
+  DUCKDB_QUACK
 };
 
 extern const char *duckdb_log_types[];
@@ -38,6 +40,7 @@ extern TYPELIB log_options_typelib;
 #define LOG_DUCKDB_QUERY (1ULL << myduck::enum_duckdb_log_types::DUCKDB_QUERY)
 #define LOG_DUCKDB_QUERY_RESULT                                               \
   (1ULL << myduck::enum_duckdb_log_types::DUCKDB_QUERY_RESULT)
+#define LOG_DUCKDB_QUACK (1ULL << myduck::enum_duckdb_log_types::DUCKDB_QUACK)
 } // namespace myduck
 
 #endif // DUCKDB_LOG_H

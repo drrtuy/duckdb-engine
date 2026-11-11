@@ -417,7 +417,8 @@ std::shared_ptr<duckdb::Connection> DuckdbManager::CreateConnection()
 
 bool DuckdbManager::StartQuack(
     const quack_guard::ListenerOptions &options,
-    std::shared_ptr<quack_guard::QuackAuthorizer> authorizer)
+    std::shared_ptr<quack_guard::QuackAuthorizer> authorizer,
+    quack_guard::AuditLog audit)
 {
   if (m_instance == nullptr || !m_instance->m_quack_guard)
   {
@@ -430,6 +431,7 @@ bool DuckdbManager::StartQuack(
     return true;
   try
   {
+    instance.m_quack_guard->SetAuditLog(std::move(audit));
     instance.m_quack_guard->SetAuthorizer(std::move(authorizer));
     instance.m_quack_listener=
         instance.m_quack_guard->StartListener(options);
@@ -437,6 +439,7 @@ bool DuckdbManager::StartQuack(
   catch (const std::exception &e)
   {
     instance.m_quack_guard->SetAuthorizer(nullptr);
+    instance.m_quack_guard->SetAuditLog(nullptr);
     sql_print_error("DuckDB: the Quack listener did not start: %s",
                     duckdb::ErrorData(e).RawMessage().c_str());
     return false;
@@ -464,7 +467,10 @@ void DuckdbManager::StopQuackListener()
     sql_print_information("DuckDB: Quack listener stopped");
   }
   if (m_quack_guard)
+  {
     m_quack_guard->SetAuthorizer(nullptr);
+    m_quack_guard->SetAuditLog(nullptr);
+  }
 }
 
 void DuckdbManager::StopQuack()
@@ -480,6 +486,13 @@ quack_guard::ListenerStatus DuckdbManager::QuackStatus()
   std::lock_guard<std::mutex> guard(m_instance->m_quack_mutex);
   return m_instance->m_quack_listener ? m_instance->m_quack_listener->Status()
                                       : quack_guard::ListenerStatus();
+}
+
+quack_guard::GuardCounters DuckdbManager::QuackCounters()
+{
+  if (m_instance == nullptr || !m_instance->m_quack_guard)
+    return {};
+  return m_instance->m_quack_guard->Counters();
 }
 
 size_t DuckdbManager::QuackSessions()

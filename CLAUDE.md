@@ -82,6 +82,8 @@ All engine code is in the `myduck` namespace (except `ha_duckdb` which is in glo
 
 - **Function wrappers** (`duckdb_udf_wrappers.cc`) — Function plugins (`duckdb_load_*`, `duckdb_export_*`, `duckdb_checkpoint`, ...) that build one fixed DuckDB statement from validated arguments, so operators do not need `run_in_duckdb()` (`duckdb_udf.cc`). Access rules are in `docs/security-model.md`, section 7.
 
+- **Quack server** (MDEV-41383, `Quack.MD` is the design doc) — serves the DuckDB database over the Quack protocol to MariaDB accounts. `quack_guard/` is a DuckDB-side module (no MariaDB headers): TLS listener, session registry, pre-bind statement gate, post-bind plan gate, catalog filter, counters. `bridge/` implements its `QuackAuthorizer` interface (`quack_guard/include/quack_guard/authorizer.hpp`) on MariaDB accounts, roles and grants, running every ACL call on one worker thread with a background THD. `ha_duckdb_quack.cc` starts and stops it, logs its audit events and exposes its status variables (the `duckdb_quack_*` settings are defined in `ha_duckdb.cc`); `DuckdbManager` owns the guard and the listener. Off by default (`duckdb_quack_enabled`). Unit tests: configure with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`; MTR: `quack_*.test`.
+
 ### SQL generation conventions
 
 DuckDB follows the SQL standard and delimits identifiers with **double quotes**, not backticks.

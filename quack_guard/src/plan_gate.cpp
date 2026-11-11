@@ -236,8 +236,22 @@ void post_bind(PlannerExtensionInput &input, BoundStatement &statement)
   auto identity= GetPrincipal(input.context);
   auto *guard= dynamic_cast<GuardImpl *>(input.info.get());
   auto authorizer= guard ? guard->GetAuthorizer() : nullptr;
-  if (!identity || !authorizer || !statement.plan)
+  auto state= GetPrincipalState(input.context);
+  auto refuse= [&](std::string why, Reason reason) {
+    if (guard)
+    {
+      AuditEvent event;
+      event.principal= identity ? identity->audit() : std::string();
+      event.peer= state ? state->peer : std::string();
+      event.detail= std::move(why);
+      event.reason= reason;
+      guard->Audit(std::move(event));
+    }
     throw PermissionException(ACCESS_DENIED);
+  };
+  if (!identity || !authorizer || !statement.plan)
+    refuse(!identity ? "no principal" : !authorizer ? "no authorizer" : "no plan",
+           Reason::Internal);
 
   Reads reads;
   default_database= DatabaseManager::GetDefaultDatabase(input.context);
@@ -245,17 +259,17 @@ void post_bind(PlannerExtensionInput &input, BoundStatement &statement)
   {
     check_plan(*statement.plan, reads);
   }
-  catch (const Refused &)
+  catch (const Refused &refused)
   {
     /* The plan exists only because every name resolved: answering
        differently from a missing object would reveal that it exists. */
-    throw PermissionException(ACCESS_DENIED);
+    refuse(refused.why, Reason::Denied);
   }
-  auto state= GetPrincipalState(input.context);
   if (reads.tables.empty())
   {
     if (state)
       state->authorized= true;
+    guard->CountStatement();
     return;  /* nothing to authorize: constants */
   }
 
@@ -270,18 +284,28 @@ void post_bind(PlannerExtensionInput &input, BoundStatement &statement)
     requests.push_back(std::move(request));
   }
   Verdict verdict;
+  bool answered= false;
   try
   {
     verdict= authorizer->check(*identity, requests);
+    answered= true;
   }
   catch (...)
   {
     verdict= Verdict::Deny(Reason::Internal);
   }
   if (!verdict.allow)
-    throw PermissionException(ACCESS_DENIED);
+  {
+    std::string tables;
+    for (auto &request : requests)
+      tables+= (tables.empty() ? "" : ", ") + request.schema + "." + request.table;
+    refuse(std::string(answered ? "" : "authorizer failed: ") + "access to " +
+               tables,
+           verdict.reason);
+  }
   if (state)
     state->authorized= true;
+  guard->CountStatement();
 }
 
 } /* namespace */

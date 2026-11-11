@@ -28,7 +28,7 @@ namespace myduck
 ulonglong duckdb_log_options= 0;
 
 const char *duckdb_log_types[]= {"DUCKDB_QUERY", "DUCKDB_QUERY_RESULT",
-                                 nullptr};
+                                 "DUCKDB_QUACK", nullptr};
 
 TYPELIB log_options_typelib= CREATE_TYPELIB_FOR(duckdb_log_types);
 
