@@ -57,6 +57,7 @@ Each patch is security-relevant and a candidate for upstream.
 | `0001-random-token-from-openssl.patch` | Session ids, the HMAC key and generated tokens come from OpenSSL's CSPRNG (`RAND_bytes`). Stock Quack takes them from DuckDB's writable crypto module, which exists only when the `httpfs` extension is loaded; the plugin deliberately does not link `httpfs` (network access from SQL, see `docs/security-model.md`). |
 | `0002-disable-quack-serve.patch` | `quack_serve()` always fails. The stock server would listen inside `mariadbd` and parse unauthenticated requests; the plugin runs its own authenticated listener (*planned*). |
 | `0003-client-loopback-only.patch` | The Quack client (`quack_query`, `ATTACH 'quack:...'`) only reaches `localhost`, `127.0.0.1` or `::1`. With a pinned certificate fingerprint it needs no `httpfs`, so without this patch `run_in_duckdb` would gain network egress. Loopback stays open for the in-server test client. |
+| `0004-connection-hooks.patch` | Virtual hooks in `QuackServer` so the plugin's listener overrides Quack's login and statement decisions instead of copying Quack's code (a Quack update that changes them then breaks the patch, not silently the listener): `AuthenticateConnection()` (a connection request, after Quack's version and heartbeat checks), `AuthorizeStatement()` (the SQL of a `PREPARE_REQUEST`), `OnConnectionCreated()` (a new session before it becomes visible), `OnConnectionClosed()` (every session removed by disconnect or lease expiry); `CleanupExpiredConnection()` made reachable for subclasses; `ConnectionRequestMessage::WipeAuthString()`. Each default keeps Quack's behaviour. |
 
 ## Stock Quack entry points are closed
 
@@ -93,16 +94,20 @@ can hold a client token in memory, and `quack_identify()` writes the cosmetic
 ```
 quack_guard/
   include/quack_guard/authorizer.hpp   bridge interface (both sides include it)
-  include/quack_guard/quack_guard.hpp  Install(), AttachPrincipal(), IsQuackSession()
+  include/quack_guard/quack_guard.hpp  Install(), Guard, Listener, IsQuackSession()
   src/lockdown.cpp                     stock Quack entry points closed (above)
   src/guard.cpp                        principal state
+  src/session_registry.{hpp,cpp}       open sessions, exactly-once close
+  src/login.{hpp,cpp}                  auth string and peer address parsing
   src/plan_gate.cpp                    post-bind hook
+  src/guarded_server.{hpp,cpp}         the plugin's Quack listener
   test/                                Layer A tests, mock authorizer
 ```
 
 `quack_guard` is a static library built with DuckDB and Quack headers only; it
 is added before the plugin's `LINK_LIBRARIES(mariadb_private ...)`, so it cannot
-include MariaDB headers by accident.
+include MariaDB headers by accident. The MariaDB side links only the
+`quack_guard_api` interface target (the `include/` directory).
 
 ### Bridge interface
 
@@ -133,7 +138,8 @@ Everything else - MariaDB-side connections, `run_in_duckdb`, DuckDB's
 internal connections (WAL replay, checkpoints) - is not affected.
 
 `Install()` returns the database's `Guard`, which holds the
-`QuackAuthorizer`. Without an authorizer every Quack session is denied.
+`QuackAuthorizer`. Without an authorizer every Quack session is denied. `Guard::StartListener()`
+returns a caller-owned `Listener` (see below).
 
 The planning team had proposed the opposite (every context untrusted unless
 the plugin marks it). That breaks DuckDB's own internal connections, which
@@ -142,6 +148,70 @@ regular users. Contexts a Quack session might open indirectly (for example
 `json_execute_serialized_sql`) must instead be prevented before binding, by
 the statement gate (*planned*), because bind-time code runs before the plan
 gate (see below).
+
+### Listener
+
+`GuardedQuackServer` (`src/guarded_server.cpp`) is Quack's `QuackServer`
+with the plugin's own transport, and with login, session creation and
+session end handled in the hooks of patch 0004. `Guard::StartListener()`
+returns a `Listener` handle owned by the caller (the plugin keeps it next to
+the database and stops it before the database is destroyed). One listener
+per guard.
+
+- **Transport, TLS only.** Certificate and key are read once into memory
+  (unencrypted key; a passphrase is never prompted for) and the published
+  fingerprint is computed from the same bytes. One httplib `SSLServer` per
+  address; IPv6 addresses are written `[::1]` in endpoints, sockets are
+  `IPV6_V6ONLY` and use `SO_REUSEADDR` (not `SO_REUSEPORT`, so a port in use
+  is an error); a host name that does not resolve is reported as such. With
+  port 0 the first address picks a port and the others reuse it. If anything
+  fails while starting, everything already bound is closed again. Client
+  connections over all addresses are capped by `max_connections`; beyond the
+  cap a connection is closed at once, not queued. Idle client connections
+  are kept 5 s. Request bodies are capped by `max_request_bytes`; an
+  incomplete body is answered 400 and never parsed. A listener thread that
+  stops on its own is reported in `ListenerStatus::failure` (and its socket
+  is not closed a second time).
+- **Peer address.** Taken from the socket (`X-Forwarded-For` is never
+  trusted) and canonicalized (`CanonicalPeer`): IPv4-mapped IPv6 becomes
+  IPv4, the IPv6 zone is dropped, anything else is refused.
+- **Login** (`AuthenticateConnection`). The auth string is
+  `user[/role]:password`; `%XX` escapes any byte but NUL in user and role
+  (for `:`, `/`, `%` in names); user and role up to 512 bytes after
+  unescaping (MariaDB's 128 characters in utf8mb4; the authorizer applies the
+  exact limit), password 1024; an empty user is passed on (the authorizer
+  decides about anonymous accounts).
+  Refused before the authorizer is asked: listener stopping, heartbeat lease
+  longer than `max_heartbeat_seconds`, `max_sessions` reached, no authorizer,
+  malformed auth string. Then `QuackAuthorizer::authenticate()` gets the
+  claims and the transport facts; the password is wiped afterwards in our
+  copies, in Quack's decoded message and in the request buffer (httplib's
+  socket buffers are not under our control). Every refusal and every authorizer error answers the same
+  "Authentication failed" (except the heartbeat and session-cap limits).
+- **Session creation** (`OnConnectionCreated`, inside Quack before the
+  session is visible): the principal is attached to the session's context
+  and the session is registered in the guard's `SessionRegistry` (id, peer,
+  identity, the authorizer that admitted it). If that fails the session is
+  not created and the identity is released.
+- **Messages.** Every other message must name a registered session and come
+  from its peer address; otherwise "Invalid connection id". Quack then
+  handles it, including its own statement callback, which is still the
+  deny-all function (*planned*: the statement gate).
+- **Session end** (`OnConnectionClosed`): disconnect, an expired lease
+  noticed by Quack, or the listener's reaper, which every `reap_interval_ms`
+  interrupts and removes sessions whose heartbeat lease ran out (Quack itself
+  only notices expiry when the client comes back). The registry then tells
+  the admitting authorizer `sessionClosed()` exactly once, even if the
+  guard's authorizer has been replaced meanwhile.
+- **Stop.** Refuse new logins and mark every answer `Connection: close`,
+  stop the reaper, close the listening sockets, then until no client
+  connection is left: remove every session and abort what it runs (also a
+  statement that started after an earlier abort), and shut down every
+  accepted client socket on the listener's ports (found via
+  `/proc/self/fd`; httplib offers no accept hook), so neither a long
+  statement nor a slow client, logged in or not, can hold the stop. Then
+  join the listener threads. Idempotent; also runs when the handle is
+  destroyed. Must not run on a listener thread.
 
 ### Plan gate
 
@@ -182,7 +252,19 @@ connects.
   multi-statement strings, the `Prepare` API) without side effects; a
   session Quack created without a principal is denied too; a principal
   cannot be replaced or be null; the guard's authorizer can be set and
-  removed.
+  removed; `ParseAuthString` (escapes, roles, limits, anonymous) and
+  `CanonicalPeer`. Listener, driven by Quack's own client and by a raw
+  client: refuses to start without TLS or with an unreadable certificate;
+  one listener per guard; a failed second address leaves nothing bound; a
+  fixed port in use is an error; no authorizer, wrong password or malformed
+  auth string are refused; the right password creates a session (its
+  statement is then refused by the closed statement callback); peer
+  addresses reach the authorizer canonical, IPv4 and IPv6; a session id is
+  refused from another peer address and unknown ids are refused; heartbeat
+  and session caps; disconnect, reaping of an abandoned session and stop
+  each close sessions exactly once, through the authorizer that admitted
+  them; authorizer errors and deny-with-identity leak nothing; concurrent
+  logins with stop.
 
 - `mysql-test/duckdb/t/quack_lockdown.test`: both callbacks are pinned, cannot
   be set (any scope), reset, replaced or dropped, and deny; `quack_serve()`
