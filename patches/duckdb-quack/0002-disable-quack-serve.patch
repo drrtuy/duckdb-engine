@@ -1,0 +1,14 @@
+diff --git a/src/quack_start_stop.cpp b/src/quack_start_stop.cpp
+index 4d3eb81..faf798a 100644
+--- a/src/quack_start_stop.cpp
++++ b/src/quack_start_stop.cpp
+@@ -31,6 +31,9 @@ static unique_ptr<FunctionData> QuackServeBind(ClientContext &context, TableFunc
+ 	                              "to already available endpoint");
+ #endif
+ 
++	// MariaDB: the storage engine runs its own authenticated listener; the stock one stays off.
++	throw PermissionException("quack_serve() is disabled in the MariaDB DuckDB engine");
++
+ 	auto bind_data = make_uniq<QuackStartStopFunctionData>();
+ 	bool explicit_uri = !input.inputs.empty();
+ 	string listen_uri = "quack:localhost";
