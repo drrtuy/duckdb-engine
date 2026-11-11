@@ -41,6 +41,88 @@ std::shared_ptr<Guard> Install(duckdb::DatabaseInstance &db,
    (QuackSessionState::KEY in quack_session_state.hpp). */
 static const std::string QUACK_SESSION_KEY= "quack_session";
 
+GuardCounters GuardImpl::Counters() const
+{
+  GuardCounters out;
+  out.connections_refused= *connections_refused;
+  out.logins= counters->logins;
+  out.logins_refused= counters->logins_refused;
+  out.statements= counters->statements;
+  out.statements_refused= counters->statements_refused;
+  out.acl_timeouts= counters->acl_timeouts;
+  out.limit_refusals= counters->limit_refusals;
+  out.sessions_evicted= counters->sessions_evicted;
+  return out;
+}
+
+const char *ReasonText(Reason reason)
+{
+  switch (reason)
+  {
+  case Reason::Allowed: return "allowed";
+  case Reason::Denied: return "denied";
+  case Reason::NoSuchAccount: return "no such account";
+  case Reason::Locked: return "account locked or blocked after wrong passwords";
+  case Reason::Expired: return "password expired";
+  case Reason::RequirementUnmet: return "REQUIRE not met";
+  case Reason::Unsupported: return "authentication method or host not supported";
+  case Reason::Timeout: return "ACL worker timeout";
+  case Reason::Saturated: return "connection limit or ACL queue full";
+  case Reason::Shutdown: return "shutting down";
+  case Reason::Internal: return "internal error";
+  }
+  return "internal error";
+}
+
+/* Client-chosen text in a log line: no control characters (a forged log
+   line), bounded length */
+static std::string LogSafe(const std::string &text)
+{
+  static const size_t MAX_LENGTH= 200;
+  std::string out;
+  for (unsigned char c : text)
+  {
+    if (out.size() >= MAX_LENGTH)
+    {
+      out+= "...";
+      break;
+    }
+    out+= (c < 0x20 || c == 0x7f) ? '?' : (char) c;
+  }
+  return out;
+}
+
+void GuardImpl::Audit(AuditEvent event)
+{
+  switch (event.kind)
+  {
+  case AuditEvent::Kind::Login: counters->logins++; break;
+  case AuditEvent::Kind::LoginRefused: counters->logins_refused++; break;
+  case AuditEvent::Kind::StatementRefused: counters->statements_refused++; break;
+  case AuditEvent::Kind::SessionClosed: break;
+  }
+  if (event.reason == Reason::Timeout)
+    counters->acl_timeouts++;
+  else if (event.reason == Reason::Saturated)
+    counters->limit_refusals++;
+  std::shared_ptr<const AuditLog> log;
+  {
+    std::lock_guard<std::mutex> guard(lock);
+    log= audit_log;
+  }
+  if (!log || !*log)
+    return;
+  event.principal= LogSafe(event.principal);
+  event.detail= LogSafe(event.detail);
+  try
+  {
+    (*log)(event);
+  }
+  catch (...)
+  {
+  }
+}
+
 bool IsQuackSession(duckdb::ClientContext &context)
 {
   /* A Quack session without a principal (e.g. one a future code path
@@ -51,13 +133,14 @@ bool IsQuackSession(duckdb::ClientContext &context)
 }
 
 void AttachPrincipal(duckdb::ClientContext &context,
-                     std::shared_ptr<const Identity> identity)
+                     std::shared_ptr<const Identity> identity,
+                     const std::string &peer)
 {
   if (!identity)
     throw duckdb::InternalException("Quack: no principal to attach");
   auto *wanted= identity.get();
   auto state= context.registered_state->GetOrCreate<PrincipalState>(
-      PrincipalState::KEY, std::move(identity));
+      PrincipalState::KEY, std::move(identity), peer);
   if (state->identity.get() != wanted)
     throw duckdb::InternalException("Quack: session already has a principal");
 }

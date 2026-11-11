@@ -3,6 +3,7 @@
 # what their grants allow
 #
 call mtr.add_suppression("DuckDB: Quack login refused");
+call mtr.add_suppression("DuckDB: Quack statement refused");
 SET @saved_log_warnings= @@GLOBAL.log_warnings;
 SET GLOBAL log_warnings= 2;
 listening	fingerprint
@@ -120,6 +121,12 @@ r
 r
 1
 r
+1
+# Malformed credentials are refused before the bridge is asked
+r
+1
+Found in the error log: Quack login refused for '' from 127.0.0.1: malformed credentials
+r
 2
 # ATTACH lists what the account may see, and reads through it; the
 # open session follows REVOKE and GRANT
@@ -151,6 +158,38 @@ failed
 0
 r
 2
+# Sessions and refused statements are not logged by default
+logged: 0
+# duckdb_log_options=DUCKDB_QUACK logs sessions and refused statements
+r
+1
+Found in the error log: Quack session opened for 'alice@localhost' from 127.0.0.1
+Found in the error log: Quack statement refused for 'alice@localhost' from 127.0.0.1: statement PRAGMA_STATEMENT
+Found in the error log: Quack session closed for 'alice@localhost' from 127.0.0.1
+r
+1
+Found in the error log: Quack statement refused for 'colin@localhost' from 127.0.0.1: access to qs.t
+r
+1
+Found in the error log: Quack statement refused for 'colin@localhost' from 127.0.0.1: failed before authorization
+# Counters, as changed by this test
+SELECT LOWER(n.VARIABLE_NAME) AS name,
+IF(n.VARIABLE_NAME = 'DUCKDB_QUACK_STATEMENTS', n.VARIABLE_VALUE - c.value > 20,
+n.VARIABLE_VALUE - c.value) AS delta
+FROM information_schema.global_status n JOIN quack_counters c ON c.name = n.VARIABLE_NAME
+WHERE n.VARIABLE_NAME NOT IN ('DUCKDB_QUACK_RUNNING', 'DUCKDB_QUACK_ENDPOINTS',
+'DUCKDB_QUACK_SSL_FINGERPRINT', 'DUCKDB_QUACK_SESSIONS')
+ORDER BY name;
+name	delta
+duckdb_quack_acl_timeouts	2
+duckdb_quack_connections_refused	0
+duckdb_quack_limit_refusals	1
+duckdb_quack_logins	24
+duckdb_quack_logins_refused	18
+duckdb_quack_sessions_evicted	0
+duckdb_quack_statements	1
+duckdb_quack_statements_refused	7
+DROP TEMPORARY TABLE quack_counters;
 # Every session was closed
 SET GLOBAL log_warnings= @saved_log_warnings;
 DROP USER alice@localhost, colin@localhost, locked@localhost, expired@localhost,

@@ -39,6 +39,7 @@ SET(CMAKE_CXX_FLAGS_DEBUG
 SET(DUCKDB_PLUGIN_SOURCES
   ha_duckdb.cc
   ha_duckdb_pushdown.cc
+  ha_duckdb_quack.cc
   duckdb_udf.cc
   bridge/bridge_test_udf.cc
 )

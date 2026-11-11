@@ -77,7 +77,8 @@ private:
   void ReapExpired();
   /* Drop the session from Quack and abort what it runs; returns it. */
   duckdb::shared_ptr<duckdb::QuackConnection>
-  Evict(const std::string &connection_id);
+  /* `reaped`: the reaper closes it (counted and logged as evicted) */
+  Evict(const std::string &connection_id, bool reaped);
   /* Undo a partly constructed server. */
   void Teardown();
 

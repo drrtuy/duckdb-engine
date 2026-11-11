@@ -40,7 +40,8 @@ namespace quack_guard
 class CappedPool : public duckdb_httplib_openssl::TaskQueue
 {
 public:
-  CappedPool(std::shared_ptr<std::atomic<size_t>> live_p, size_t cap_p);
+  CappedPool(std::shared_ptr<std::atomic<size_t>> live_p, size_t cap_p,
+             std::shared_ptr<std::atomic<uint64_t>> refused_p);
   ~CappedPool() override;
   bool enqueue(std::function<void()> fn) override;
   void shutdown() override;
@@ -50,6 +51,7 @@ private:
 
   std::shared_ptr<std::atomic<size_t>> live;
   const size_t cap;
+  std::shared_ptr<std::atomic<uint64_t>> refused;
   std::mutex lock;
   bool shutting_down= false;
   std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>>

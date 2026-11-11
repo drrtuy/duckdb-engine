@@ -60,6 +60,22 @@ public:
   std::unique_ptr<Listener>
   StartListener(const ListenerOptions &options) override;
   size_t SessionCount() const override { return sessions.Count(); }
+  GuardCounters Counters() const override;
+  void SetAuditLog(AuditLog log) override
+  {
+    std::lock_guard<std::mutex> guard(lock);
+    audit_log= std::make_shared<const AuditLog>(std::move(log));
+  }
+
+  /* Count the event and pass it to the audit log */
+  void Audit(AuditEvent event);
+  void CountStatement() { counters->statements++; }
+  void CountEvicted() { counters->sessions_evicted++; }
+  /* Shared with the listener's connection pools */
+  std::shared_ptr<std::atomic<uint64_t>> ConnectionsRefused() const
+  {
+    return connections_refused;
+  }
 
   SessionRegistry &Sessions() { return sessions; }
   /* One listener per guard: its reaper owns the registry. */
@@ -71,7 +87,17 @@ private:
   duckdb::weak_ptr<duckdb::DatabaseInstance> db;
   mutable std::mutex lock;
   std::shared_ptr<QuackAuthorizer> authorizer;
+  std::shared_ptr<const AuditLog> audit_log;
   SessionRegistry sessions;
+  struct CounterSet
+  {
+    std::atomic<uint64_t> logins{0}, logins_refused{0}, statements{0},
+        statements_refused{0}, acl_timeouts{0}, limit_refusals{0},
+        sessions_evicted{0};
+  };
+  std::unique_ptr<CounterSet> counters{new CounterSet()};
+  std::shared_ptr<std::atomic<uint64_t>> connections_refused{
+      std::make_shared<std::atomic<uint64_t>>(0)};
 };
 
 /* Load Quack and pin its stock callbacks to deny-all system functions. */
@@ -115,8 +141,8 @@ class PrincipalState : public duckdb::ClientContextState
 public:
   static const std::string KEY;
 
-  explicit PrincipalState(std::shared_ptr<const Identity> identity_p)
-      : identity(std::move(identity_p))
+  PrincipalState(std::shared_ptr<const Identity> identity_p, std::string peer_p)
+      : identity(std::move(identity_p)), peer(std::move(peer_p))
   {
   }
 
@@ -135,6 +161,8 @@ public:
   }
 
   const std::shared_ptr<const Identity> identity;
+  /* The client's address, for the refusal log */
+  const std::string peer;
 };
 
 /*
@@ -143,7 +171,8 @@ public:
   Called by the listener; not part of the public API.
 */
 void AttachPrincipal(duckdb::ClientContext &context,
-                     std::shared_ptr<const Identity> identity);
+                     std::shared_ptr<const Identity> identity,
+                     const std::string &peer= std::string());
 
 /* The session's principal state, or null for a non-Quack context. */
 duckdb::shared_ptr<PrincipalState> GetPrincipalState(duckdb::ClientContext &context);

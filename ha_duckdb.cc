@@ -45,6 +45,7 @@
 #include "dml_convertor.h"
 #include "row_helpers.h"
 #include "ha_duckdb_pushdown.h"
+#include "ha_duckdb_quack.h"
 #include "duckdb_log.h"
 
 /* Global status counters */
@@ -237,118 +238,6 @@ static void duckdb_drop_database(handlerton *hton, char *path)
 
 /* ----- Handlerton init ----- */
 
-extern my_bool quack_bridge_test;
-extern ulong quack_acl_queue_size;
-extern ulong quack_acl_timeout_ms;
-extern my_bool quack_enabled;
-extern char *quack_bind_address, *quack_ssl_cert, *quack_ssl_key;
-extern uint quack_port, quack_max_connections, quack_max_sessions,
-    quack_max_transaction_seconds, quack_max_heartbeat_seconds;
-
-/*
-  Quack (MDEV-41383): the listener starts only once the server is fully up
-  (grant tables loaded), from a thread that waits for it; it never starts
-  with --skip-grant-tables. Stopping waits for that thread first.
-*/
-static std::thread quack_starter;
-static std::atomic<bool> quack_stop_requested{false};
-
-static quack_guard::ListenerOptions quack_listener_options()
-{
-  quack_guard::ListenerOptions options;
-  std::string addresses= quack_bind_address ? quack_bind_address : "";
-  size_t start= 0;
-  while (start <= addresses.size())
-  {
-    size_t comma= addresses.find(',', start);
-    if (comma == std::string::npos)
-      comma= addresses.size();
-    std::string address= addresses.substr(start, comma - start);
-    address.erase(0, address.find_first_not_of(" \t"));
-    address.erase(address.find_last_not_of(" \t") + 1);
-    if (!address.empty())
-      options.addresses.push_back(address);
-    start= comma + 1;
-  }
-  options.port= (uint16_t) quack_port;
-  options.cert_file= quack_ssl_cert ? quack_ssl_cert : "";
-  options.key_file= quack_ssl_key ? quack_ssl_key : "";
-  options.max_connections= quack_max_connections;
-  options.max_sessions= quack_max_sessions;
-  options.max_transaction_seconds= quack_max_transaction_seconds;
-  options.max_heartbeat_seconds= quack_max_heartbeat_seconds;
-  return options;
-}
-
-static bool quack_start_listener()
-{
-  while (!mysqld_server_started && !abort_loop && !quack_stop_requested)
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  if (abort_loop || quack_stop_requested)
-    return false;
-  if (opt_noacl)
-  {
-    sql_print_error("DuckDB: Quack is not started with --skip-grant-tables");
-    return false;
-  }
-  auto bridge= quack_bridge::Bridge();
-  if (!bridge)
-  {
-    sql_print_error("DuckDB: Quack is not started: the ACL worker stopped");
-    return false;
-  }
-  return myduck::DuckdbManager::StartQuack(quack_listener_options(), bridge);
-}
-
-static void quack_start_when_ready()
-{
-  bool started= false;
-  try
-  {
-    started= quack_start_listener();
-  }
-  catch (...)
-  {
-    sql_print_error("DuckDB: Quack is not started: internal error");
-  }
-  /* The ACL worker serves only the listener (and the test function) */
-  if (!started && !quack_bridge_test)
-    quack_bridge::StopBridge();
-}
-
-static void quack_start()
-{
-  if (!quack_enabled)
-    return;
-  if (!quack_bridge::StartBridge(duckdb_hton))
-  {
-    sql_print_error("DuckDB: Quack is not started: the ACL worker did not "
-                    "start");
-    return;
-  }
-  quack_stop_requested= false;
-  try
-  {
-    quack_starter= std::thread(quack_start_when_ready);
-  }
-  catch (...)
-  {
-    sql_print_error("DuckDB: Quack is not started: no thread");
-  }
-}
-
-static void quack_stop()
-{
-  quack_stop_requested= true;
-  if (quack_starter.joinable())
-    quack_starter.join();
-  myduck::DuckdbManager::StopQuack();
-  quack_bridge::StopBridge();
-}
-
-/* After client connections are closed, before plugins go down */
-static void duckdb_pre_shutdown(void) { quack_stop(); }
-
 static int duckdb_init_func(void *p)
 {
   DBUG_ENTER("duckdb_init_func");
@@ -375,12 +264,7 @@ static int duckdb_init_func(void *p)
     DBUG_RETURN(1);
   }
 
-  quack_bridge::acl_queue_size= quack_acl_queue_size;
-  quack_bridge::acl_timeout_ms= quack_acl_timeout_ms;
-  duckdb_hton->pre_shutdown= duckdb_pre_shutdown;
-  if (quack_bridge_test && !quack_bridge::StartBridge(duckdb_hton))
-    sql_print_warning("DuckDB: could not start the Quack bridge");
-  quack_start();
+  quack_init(duckdb_hton);
 
   sql_print_information("DuckDB storage engine initialized");
   DBUG_RETURN(0);
@@ -1911,56 +1795,9 @@ static int show_duckdb_version(MYSQL_THD, struct st_mysql_show_var *var,
   return 0;
 }
 
-/* Quack status: copied into the status buffer of the caller */
-static int show_quack_running(MYSQL_THD, struct st_mysql_show_var *var,
-                              void *buff, system_status_var *, enum_var_type)
-{
-  var->type= SHOW_BOOL;
-  var->value= (char *) buff;
-  *(bool *) buff= myduck::DuckdbManager::QuackStatus().running;
-  return 0;
-}
-
-static int show_quack_endpoints(MYSQL_THD, struct st_mysql_show_var *var,
-                                void *buff, system_status_var *, enum_var_type)
-{
-  std::string endpoints;
-  for (auto &endpoint : myduck::DuckdbManager::QuackStatus().endpoints)
-    endpoints+= (endpoints.empty() ? "" : ",") + endpoint;
-  var->type= SHOW_CHAR;
-  var->value= (char *) buff;
-  strmake((char *) buff, endpoints.c_str(), SHOW_VAR_FUNC_BUFF_SIZE - 1);
-  return 0;
-}
-
-static int show_quack_fingerprint(MYSQL_THD, struct st_mysql_show_var *var,
-                                  void *buff, system_status_var *,
-                                  enum_var_type)
-{
-  var->type= SHOW_CHAR;
-  var->value= (char *) buff;
-  strmake((char *) buff,
-          myduck::DuckdbManager::QuackStatus().fingerprint.c_str(),
-          SHOW_VAR_FUNC_BUFF_SIZE - 1);
-  return 0;
-}
-
-static int show_quack_sessions(MYSQL_THD, struct st_mysql_show_var *var,
-                               void *buff, system_status_var *, enum_var_type)
-{
-  var->type= SHOW_LONGLONG;
-  var->value= (char *) buff;
-  *(longlong *) buff= (longlong) myduck::DuckdbManager::QuackSessions();
-  return 0;
-}
-
 static struct st_mysql_show_var duckdb_status_variables[]= {
     {"Duckdb_version", (char *) show_duckdb_version, SHOW_SIMPLE_FUNC},
-    {"Duckdb_quack_running", (char *) show_quack_running, SHOW_SIMPLE_FUNC},
-    {"Duckdb_quack_endpoints", (char *) show_quack_endpoints, SHOW_SIMPLE_FUNC},
-    {"Duckdb_quack_ssl_fingerprint", (char *) show_quack_fingerprint,
-     SHOW_SIMPLE_FUNC},
-    {"Duckdb_quack_sessions", (char *) show_quack_sessions, SHOW_SIMPLE_FUNC},
+    {"Duckdb_quack", (char *) quack_status_variables, SHOW_ARRAY},
     {"Duckdb_rows_insert", (char *) &srv_duckdb_status.duckdb_rows_insert,
      SHOW_LONGLONG},
     {"Duckdb_rows_update", (char *) &srv_duckdb_status.duckdb_rows_update,

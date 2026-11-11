@@ -153,8 +153,9 @@ GuardedQuackServer::GuardedQuackServer(duckdb::ClientContext &context,
       server.set_ipv6_v6only(true);
       auto cap= options.max_connections;
       auto live_count= live;
-      server.new_task_queue= [live_count, cap] {
-        return new CappedPool(live_count, cap);
+      auto refused= guard->ConnectionsRefused();
+      server.new_task_queue= [live_count, cap, refused] {
+        return new CappedPool(live_count, cap, refused);
       };
       server.set_payload_max_length(options.max_request_bytes
                                         ? options.max_request_bytes
@@ -306,7 +307,7 @@ void GuardedQuackServer::Close()
     std::vector<duckdb::shared_ptr<duckdb::QuackConnection>> evicted;
     auto sweep= [&] {
       for (auto &id : guard->Sessions().Ids())
-        if (auto connection= Evict(id))
+        if (auto connection= Evict(id, false))
           evicted.push_back(std::move(connection));
       for (auto &connection : evicted)
         CleanupExpiredConnection(*connection);
@@ -420,6 +421,16 @@ GuardedQuackServer::Dispatch(duckdb::MemoryStream &body,
       if (connection->duckdb_connection)
         if (auto state= GetPrincipalState(*connection->duckdb_connection->context))
           authorized= state->authorized;
+    if (!authorized && header.type == MessageType::PREPARE_REQUEST)
+    {
+      /* Failed before authorization (binder, catalog, ...): a refusal too */
+      AuditEvent event;
+      event.principal= entry.identity ? entry.identity->audit() : std::string();
+      event.peer= entry.peer_ip;
+      event.detail= "failed before authorization";
+      event.reason= Reason::Denied;
+      guard->Audit(std::move(event));
+    }
     switch (authorized ? error.Type() : duckdb::ExceptionType::INVALID)
     {
     case duckdb::ExceptionType::CONVERSION:
@@ -444,16 +455,28 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthorizeStatement(
   /* The client's own catalog queries (ATTACH): answered filtered */
   if (CatalogQuery(sql, effective_sql))
     return nullptr;
-  std::string why;
+  std::string why= "no session";
   auto decision=
       connection.duckdb_connection
           ? StatementAllowed(*connection.duckdb_connection->context, sql, why)
           : GateDecision::StatementDenied;
   if (decision != GateDecision::Allowed)
+  {
+    AuditEvent event;
+    event.detail= std::move(why);
+    event.reason= Reason::Denied;
+    if (connection.duckdb_connection)
+      if (auto state= GetPrincipalState(*connection.duckdb_connection->context))
+      {
+        event.principal= state->identity->audit();
+        event.peer= state->peer;
+      }
+    guard->Audit(std::move(event));
     return duckdb::make_uniq<ErrorResponse>(duckdb::ErrorData(
         duckdb::ExceptionType::PERMISSION,
         decision == GateDecision::AccessDenied ? ACCESS_DENIED
                                                : STATEMENT_DENIED));
+  }
   effective_sql= sql;
   return nullptr;
 }
@@ -463,18 +486,39 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
     const std::string &)
 {
   auto *login= tl_login;
+  auto refuse= [&](const std::string &user, Reason reason, const char *why) {
+    AuditEvent event;
+    event.kind= AuditEvent::Kind::LoginRefused;
+    event.principal= user;
+    event.peer= login ? login->peer : std::string();
+    event.detail= why;
+    event.reason= reason;
+    guard->Audit(std::move(event));
+  };
   if (!login || closing)
+  {
+    refuse("", Reason::Shutdown, "shutting down");
     return duckdb::make_uniq<ErrorResponse>(LOGIN_FAILED);
+  }
   if (request.HeartbeatTimeoutSeconds() > options.max_heartbeat_seconds)
+  {
+    refuse("", Reason::Denied, "heartbeat_timeout out of range");
     return duckdb::make_uniq<ErrorResponse>(
         "heartbeat_timeout out of range - must be between 1 and %llu seconds",
         (unsigned long long) options.max_heartbeat_seconds);
+  }
   /* Checked again, atomically, when the session is registered */
   if (guard->Sessions().Count() >= options.max_sessions)
+  {
+    refuse("", Reason::Saturated, "duckdb_quack_max_sessions reached");
     return duckdb::make_uniq<ErrorResponse>(TOO_MANY);
+  }
   auto authorizer= guard->GetAuthorizer();
   if (!authorizer)
+  {
+    refuse("", Reason::Internal, "no authorizer");
     return duckdb::make_uniq<ErrorResponse>(LOGIN_FAILED);
+  }
 
   ClientClaims claims;
   std::string auth= request.AuthString();
@@ -484,6 +528,7 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
   if (!parsed)
   {
     Wipe(claims.proof);
+    refuse("", Reason::Denied, "malformed credentials");
     return duckdb::make_uniq<ErrorResponse>(LOGIN_FAILED);
   }
   TransportFacts transport;
@@ -492,9 +537,11 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
 
   std::shared_ptr<const Identity> identity;
   Verdict verdict;
+  bool answered= false;
   try
   {
     verdict= authorizer->authenticate(claims, transport, identity);
+    answered= true;
   }
   catch (...)
   {
@@ -505,6 +552,9 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
   {
     if (identity)
       NotifyClosed(authorizer, *identity);
+    auto reason= verdict.allow ? Reason::Internal : verdict.reason;
+    refuse(claims.user, reason,
+           answered ? ReasonText(reason) : "authorizer failed");
     return duckdb::make_uniq<ErrorResponse>(LOGIN_FAILED);
   }
   login->identity= std::move(identity);
@@ -515,29 +565,81 @@ duckdb::unique_ptr<QuackMessage> GuardedQuackServer::AuthenticateConnection(
 void GuardedQuackServer::OnConnectionCreated(duckdb::QuackConnection &connection)
 {
   auto *login= tl_login;
-  if (!login || !login->identity || !connection.duckdb_connection)
-    throw duckdb::InternalException("Quack: session without a login");
-  auto &context= *connection.duckdb_connection->context;
-  AttachPrincipal(context, login->identity);
-  HardenSession(context);
-  if (!guard->Sessions().Add(
-          connection.connection_id,
-          SessionRegistry::Entry{login->peer, login->identity, login->issuer},
-          options.max_sessions))
-    throw duckdb::InvalidInputException(TOO_MANY);
+  AuditEvent event;
+  event.kind= AuditEvent::Kind::LoginRefused;
+  event.reason= Reason::Internal;
+  event.detail= "session setup failed";
+  if (login)
+  {
+    event.peer= login->peer;
+    if (login->identity)
+      event.principal= login->identity->audit();
+  }
+  try
+  {
+    if (!login || !login->identity || !connection.duckdb_connection)
+      throw duckdb::InternalException("Quack: session without a login");
+    auto &context= *connection.duckdb_connection->context;
+    AttachPrincipal(context, login->identity, login->peer);
+    HardenSession(context);
+    if (!guard->Sessions().Add(
+            connection.connection_id,
+            SessionRegistry::Entry{login->peer, login->identity, login->issuer},
+            options.max_sessions))
+    {
+      event.reason= Reason::Saturated;
+      event.detail= "duckdb_quack_max_sessions reached";
+      throw duckdb::InvalidInputException(TOO_MANY);
+    }
+  }
+  catch (...)
+  {
+    guard->Audit(std::move(event));
+    throw;
+  }
   login->attached= true;
+  event.kind= AuditEvent::Kind::Login;
+  event.reason= Reason::Allowed;
+  event.detail.clear();
+  guard->Audit(std::move(event));
 }
+
+/* Set while the server itself closes a session (Evict) */
+static thread_local bool tl_evicting= false;
 
 void GuardedQuackServer::OnConnectionClosed(duckdb::QuackConnection &connection)
 {
+  SessionRegistry::Entry entry;
+  bool known= guard->Sessions().Find(connection.connection_id, entry);
   guard->Sessions().Remove(connection.connection_id);
+  if (!known)
+    return;
+  AuditEvent event;
+  event.kind= AuditEvent::Kind::SessionClosed;
+  event.principal= entry.identity ? entry.identity->audit() : std::string();
+  event.peer= entry.peer_ip;
+  if (tl_evicting)
+    event.detail= "evicted";
+  guard->Audit(std::move(event));
 }
 
 duckdb::shared_ptr<duckdb::QuackConnection>
-GuardedQuackServer::Evict(const std::string &connection_id)
+GuardedQuackServer::Evict(const std::string &connection_id, bool reaped)
 {
   auto connection= GetConnection(connection_id);
-  if (!DisconnectConnection(connection_id))
+  tl_evicting= reaped;
+  bool disconnected= false;
+  try
+  {
+    disconnected= DisconnectConnection(connection_id);
+  }
+  catch (...)
+  {
+  }
+  tl_evicting= false;
+  if (disconnected && reaped)
+    guard->CountEvicted();
+  else
     guard->Sessions().Remove(connection_id);  /* Quack had dropped it */
   /* Interrupt, and wake handlers parked on the session's streams */
   if (connection)
@@ -571,7 +673,9 @@ void GuardedQuackServer::ReapExpired()
     transactions.swap(still_open);
   }
   for (auto &id : too_long)
-    Evict(id);
+  {
+    Evict(id, true);
+  }
   for (auto &id : guard->Sessions().Ids())
   {
     auto connection= GetConnection(id);
@@ -587,7 +691,9 @@ void GuardedQuackServer::ReapExpired()
       expired= connection->LeaseExpiredLocked(now);
     }
     if (expired)
-      Evict(id);
+    {
+      Evict(id, true);
+    }
   }
 }
 

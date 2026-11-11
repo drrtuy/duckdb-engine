@@ -47,11 +47,13 @@ public:
   /* Quack (MDEV-41383): start the listener with `authorizer`; false and a
      logged reason on failure (nothing listens then). */
   static bool StartQuack(const quack_guard::ListenerOptions &options,
-                         std::shared_ptr<quack_guard::QuackAuthorizer> authorizer);
+                         std::shared_ptr<quack_guard::QuackAuthorizer> authorizer,
+                         quack_guard::AuditLog audit);
   /* Stop the listener and close every Quack session. Idempotent. */
   static void StopQuack();
   static quack_guard::ListenerStatus QuackStatus();
   static size_t QuackSessions();
+  static quack_guard::GuardCounters QuackCounters();
 
 private:
   static DuckdbManager *m_instance;

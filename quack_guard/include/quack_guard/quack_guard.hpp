@@ -28,6 +28,7 @@
 #include "quack_guard/authorizer.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -77,6 +78,58 @@ struct ListenerStatus
   std::string failure;
 };
 
+/* Counts since the guard was installed; never reset. */
+struct GuardCounters
+{
+  /* Client connections closed at once (duckdb_quack_max_connections) */
+  uint64_t connections_refused= 0;
+  /* Sessions opened, and logins refused */
+  uint64_t logins= 0;
+  uint64_t logins_refused= 0;
+  /* Statements the plan gate authorized (also the client's catalog
+     queries and transaction control), and refused ones (by either gate,
+     or failing before authorization: answered "access denied") */
+  uint64_t statements= 0;
+  uint64_t statements_refused= 0;
+  /* Refusals because the authorizer timed out */
+  uint64_t acl_timeouts= 0;
+  /* Refusals because a limit was reached: the authorizer's queue or the
+     account's connection limit, or duckdb_quack_max_sessions */
+  uint64_t limit_refusals= 0;
+  /* Sessions the server closed itself: transaction too long, lease
+     expired */
+  uint64_t sessions_evicted= 0;
+};
+
+/* One event for the audit log. Never holds the proof or the statement
+   text; client-chosen names in it are cut short and stripped of control
+   characters. */
+struct AuditEvent
+{
+  enum class Kind
+  {
+    Login,             /* a session was opened */
+    LoginRefused,
+    StatementRefused,
+    SessionClosed
+  };
+  Kind kind= Kind::StatementRefused;
+  /* Identity::audit(), or the claimed user name of a refused login */
+  std::string principal;
+  std::string peer;
+  /* Refusals: what was refused (statement form, function, table, ...) or
+     why the login was; SessionClosed: "evicted" when the server closed it */
+  std::string detail;
+  Reason reason= Reason::Allowed;
+};
+
+/* Called on listener and DuckDB threads; must not block long. Exceptions
+   are ignored. */
+using AuditLog= std::function<void(const AuditEvent &)>;
+
+/* Text for logs, e.g. "account locked" */
+const char *ReasonText(Reason reason);
+
 /* A running listener. Owned by the caller; destroying it stops it. */
 class Listener
 {
@@ -108,6 +161,9 @@ public:
 
   /* Open Quack sessions */
   virtual size_t SessionCount() const= 0;
+  virtual GuardCounters Counters() const= 0;
+  /* Install or replace the audit log; an empty one logs nothing. */
+  virtual void SetAuditLog(AuditLog log)= 0;
 };
 
 /*

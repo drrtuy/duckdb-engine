@@ -819,6 +819,151 @@ static void test_listener_login(duckdb::DuckDB &db,
   guard->SetAuthorizer(nullptr);
 }
 
+/* Counters and the audit log. */
+static void test_listener_counters(duckdb::DuckDB &db,
+                                   const std::shared_ptr<quack_guard::Guard> &guard)
+{
+  using Kind= quack_guard::AuditEvent::Kind;
+  using quack_guard::Reason;
+  std::mutex lock;
+  std::vector<quack_guard::AuditEvent> log;
+  /* Installed before the listener starts, as the plugin does */
+  guard->SetAuditLog([&](const quack_guard::AuditEvent &e) {
+    std::lock_guard<std::mutex> guard_log(lock);
+    log.push_back(e);
+  });
+  auto listener= guard->StartListener(listener_options());
+  auto endpoint= listener->Status().endpoints[0];
+  auto fp= listener->Status().fingerprint;
+  const std::string proof= "s3cr3t-proof";
+  auto mock= password_mock("alice", proof);
+  bool slow= false;
+  mock->on_check= [&slow](const quack_guard::Identity &,
+                          const std::vector<quack_guard::AccessRequest> &r) {
+    if (slow)
+      return quack_guard::Verdict::Deny(Reason::Timeout);
+    for (auto &req : r)
+      if (req.table != "items")
+        return quack_guard::Verdict::Deny(Reason::Denied);
+    return quack_guard::Verdict::Allow();
+  };
+  guard->SetAuthorizer(mock);
+  duckdb::Connection client(db);
+  auto q= [&](const std::string &sql, const std::string &token) {
+    return quack_query(client, endpoint, fp, token, sql);
+  };
+  auto ok= "alice:" + proof;
+  auto before= guard->Counters();
+
+  EXPECT(has(q("SELECT 1", "alice:wrong-" + proof), "Authentication failed"));
+  EXPECT(has(q("SELECT 1", "al%ZZice:" + proof), "Authentication failed"));
+  EXPECT(q("SELECT name FROM shop.items WHERE id = 2", ok) == "bread");
+  EXPECT(has(q("SELECT qty FROM shop.orders", ok), quack_guard::ACCESS_DENIED));
+  EXPECT(has(q("PRAGMA version", ok), quack_guard::STATEMENT_DENIED));
+  EXPECT(has(q("SELECT * FROM read_csv(''/nonexistent/x.csv'')", ok),
+             quack_guard::STATEMENT_DENIED));
+  /* Fails in the binder, after the statement gate: masked, and a refusal */
+  EXPECT(has(q("SELECT nosuch FROM shop.items", ok), quack_guard::ACCESS_DENIED));
+  /* A client-chosen name cannot forge log lines or flood them */
+  EXPECT(has(q("SELECT \"x\nforged\"()", ok), quack_guard::STATEMENT_DENIED));
+  EXPECT(has(q("SELECT \"" + std::string(1000, 'n') + "\"()", ok),
+             quack_guard::STATEMENT_DENIED));
+  slow= true;
+  EXPECT(has(q("SELECT name FROM shop.items", ok), quack_guard::ACCESS_DENIED));
+  slow= false;
+  EXPECT(wait_for([&] { return guard->SessionCount() == 0; }));
+
+  auto after= guard->Counters();
+  EXPECT(after.logins_refused - before.logins_refused == 2);
+  EXPECT(after.logins - before.logins == 8);
+  EXPECT(after.statements - before.statements == 1);
+  EXPECT(after.statements_refused - before.statements_refused == 7);
+  EXPECT(after.acl_timeouts - before.acl_timeouts == 1);
+  EXPECT(after.limit_refusals == before.limit_refusals);
+  {
+    std::lock_guard<std::mutex> guard_log(lock);
+    std::vector<quack_guard::AuditEvent> refused;
+    int opened= 0, closed_events= 0;
+    for (auto &e : log)
+    {
+      EXPECT(!has(e.principal, proof) && !has(e.detail, proof) &&
+             !has(e.peer, proof));
+      EXPECT(e.detail.find('\n') == std::string::npos &&
+             e.principal.size() < 300 && e.detail.size() < 300);
+      if (e.kind == Kind::Login)
+        opened++;
+      else if (e.kind == Kind::SessionClosed)
+      {
+        closed_events++;
+        EXPECT(e.detail.empty() && has(e.principal, "alice"));
+      }
+      else
+        refused.push_back(e);
+    }
+    EXPECT(opened == 8 && closed_events == 8);
+    EXPECT(refused.size() == 9);
+    auto is= [&](size_t i, Kind kind, const char *detail, Reason reason) {
+      bool match= i < refused.size() && refused[i].kind == kind &&
+                  refused[i].detail == detail && refused[i].reason == reason &&
+                  refused[i].peer == "127.0.0.1";
+      if (!match && i < refused.size())
+        std::fprintf(stderr, "event %zu: [%s] [%s]\n", i,
+                     refused[i].principal.c_str(), refused[i].detail.c_str());
+      return match;
+    };
+    EXPECT(is(0, Kind::LoginRefused, "denied", Reason::Denied) &&
+           refused[0].principal == "alice");
+    EXPECT(is(1, Kind::LoginRefused, "malformed credentials", Reason::Denied) &&
+           refused[1].principal.empty());
+    EXPECT(is(2, Kind::StatementRefused, "access to shop.orders", Reason::Denied) &&
+           has(refused[2].principal, "alice"));
+    EXPECT(is(3, Kind::StatementRefused, "statement PRAGMA_STATEMENT", Reason::Denied));
+    EXPECT(is(4, Kind::StatementRefused, "table reference TABLE_FUNCTION",
+              Reason::Denied));
+    EXPECT(is(5, Kind::StatementRefused, "failed before authorization",
+              Reason::Denied));
+    EXPECT(refused.size() > 7 && has(refused[6].detail, "x?forged") &&
+           refused[7].detail.size() <= 210 && has(refused[7].detail, "..."));
+    EXPECT(is(8, Kind::StatementRefused, "access to shop.items", Reason::Timeout));
+  }
+
+  /* An authorizer that throws: refused, and said so */
+  auto thrower= std::make_shared<MockAuthorizer>();
+  thrower->on_authenticate= [](const quack_guard::ClientClaims &,
+                               const quack_guard::TransportFacts &) -> quack_guard::Verdict {
+    throw std::runtime_error("boom");
+  };
+  guard->SetAuthorizer(thrower);
+  EXPECT(has(q("SELECT 1", ok), "Authentication failed"));
+  {
+    std::lock_guard<std::mutex> guard_log(lock);
+    EXPECT(!log.empty() && log.back().kind == Kind::LoginRefused &&
+           log.back().detail == "authorizer failed" &&
+           log.back().reason == Reason::Internal);
+  }
+  guard->SetAuthorizer(mock);
+
+  /* A throwing log is ignored; an empty one logs nothing */
+  size_t logged;
+  {
+    std::lock_guard<std::mutex> guard_log(lock);
+    logged= log.size();
+  }
+  guard->SetAuditLog([](const quack_guard::AuditEvent &) { throw std::runtime_error("x"); });
+  EXPECT(has(q("SELECT 1", "alice:no"), "Authentication failed"));
+  guard->SetAuditLog(nullptr);
+  EXPECT(has(q("SELECT 1", "alice:no"), "Authentication failed"));
+  guard->SetAuditLog(quack_guard::AuditLog());
+  EXPECT(has(q("SELECT 1", "alice:no"), "Authentication failed"));
+  EXPECT(guard->Counters().logins_refused - after.logins_refused == 4);
+  {
+    std::lock_guard<std::mutex> guard_log(lock);
+    EXPECT(log.size() == logged);
+  }
+  listener->Stop();
+  guard->SetAuthorizer(nullptr);
+}
+
 /* Sessions: peer binding, ids, heartbeats, reaping, limits, stop. */
 static void test_listener_sessions(const std::shared_ptr<quack_guard::Guard> &guard)
 {
@@ -871,6 +1016,7 @@ static void test_listener_sessions(const std::shared_ptr<quack_guard::Guard> &gu
     id6= v4.Login("alice:pw", 60);
 
   /* Heartbeat leases are bounded; refused before the authorizer is asked */
+  auto counted= guard->Counters();
   int asked= counter(*mock, &MockAuthorizer::authenticate_calls);
   EXPECT(v4.Login("alice:pw", 61, &error).empty());
   EXPECT(has(error, "heartbeat_timeout"));
@@ -886,6 +1032,13 @@ static void test_listener_sessions(const std::shared_ptr<quack_guard::Guard> &gu
   EXPECT(has(error, "Too many Quack sessions"));
   EXPECT(counter(*mock, &MockAuthorizer::authenticate_calls) == asked);
   EXPECT(guard->SessionCount() == 3);
+  {
+    /* 61 and the cap are ours; 0 is refused by Quack before the hook */
+    auto now= guard->Counters();
+    EXPECT(now.logins_refused - counted.logins_refused == 2);
+    EXPECT(now.limit_refusals - counted.limit_refusals == 1);
+    EXPECT(now.logins - counted.logins == 1);
+  }
 
   /* Disconnect closes exactly that session */
   v4.Disconnect(id3);
@@ -907,8 +1060,10 @@ static void test_listener_sessions(const std::shared_ptr<quack_guard::Guard> &gu
   }
   EXPECT(closed(*mock) == 1);
   /* ...an abandoned one is */
+  auto evicted= guard->Counters().sessions_evicted;
   EXPECT(wait_for([&] { return closed(*mock) == 2; }));
   EXPECT(has(v4.Heartbeat(short_lived), "Invalid connection id"));
+  EXPECT(guard->Counters().sessions_evicted == evicted + 1);
 
   /* Sessions are closed by the authorizer that admitted them */
   auto other= password_mock("alice", "pw");
@@ -916,6 +1071,7 @@ static void test_listener_sessions(const std::shared_ptr<quack_guard::Guard> &gu
   listener->Stop();
   EXPECT(closed(*mock) == 4);  /* id and id6 */
   EXPECT(closed(*other) == 0);
+  EXPECT(guard->Counters().sessions_evicted == evicted + 1);  /* not on stop */
   EXPECT(guard->SessionCount() == 0);
   guard->SetAuthorizer(nullptr);
 }
@@ -951,6 +1107,7 @@ static void test_listener_transaction_cap(const std::shared_ptr<quack_guard::Gua
     EXPECT(throws([&] { guard->StartListener(invalid); }));
   }
   options.max_transaction_seconds= 1;
+  auto evicted= guard->Counters().sessions_evicted;
   auto listener= guard->StartListener(options);
   auto mock= password_mock("alice", "pw");
   guard->SetAuthorizer(mock);
@@ -971,6 +1128,7 @@ static void test_listener_transaction_cap(const std::shared_ptr<quack_guard::Gua
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
   EXPECT(closed(*mock) == 1);  /* the finished ones are kept */
   EXPECT(raw.Heartbeat(quick).empty() && raw.Heartbeat(undone).empty());
+  EXPECT(guard->Counters().sessions_evicted == evicted + 1);
   listener->Stop();
   guard->SetAuthorizer(nullptr);
 }
@@ -1082,11 +1240,13 @@ static void test_listener_limits(const std::shared_ptr<quack_guard::Guard> &guar
   auto c1= std::make_unique<RawClient>(endpoint);
   auto c2= std::make_unique<RawClient>(endpoint);
   std::string error;
+  auto refused= guard->Counters().connections_refused;
   EXPECT(!c1->Login("alice:pw", 60).empty());
   EXPECT(!c2->Login("alice:pw", 60).empty());
   RawClient c3(endpoint);
   EXPECT(c3.Login("alice:pw", 60, &error).empty());
   EXPECT(error == "no response");
+  EXPECT(guard->Counters().connections_refused > refused);
   /* A slot frees when a client goes away */
   c1.reset();
   EXPECT(wait_for([&] { return !c3.Login("alice:pw", 60).empty(); }));
@@ -1529,6 +1689,7 @@ int main()
   test_listener_limits(guard);
   test_listener_concurrency(guard);
   test_listener_queries(db, guard);
+  test_listener_counters(db, guard);
   test_listener_attach(db, guard);
   test_catalog_many_tables(db, guard);
   if (failures)

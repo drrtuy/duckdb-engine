@@ -98,9 +98,6 @@ public:
 
 private:
   quack_guard::Verdict run(AclWorker::Job job);
-  quack_guard::Verdict deny_login(const std::string &account,
-                                  const quack_guard::TransportFacts &transport,
-                                  quack_guard::Reason reason);
   quack_guard::Verdict
   authenticate_unsafe(const quack_guard::ClientClaims &claims,
                       const quack_guard::TransportFacts &transport,
