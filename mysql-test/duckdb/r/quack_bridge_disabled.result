@@ -1,0 +1,10 @@
+#
+# MDEV-41383: QUACK_BRIDGE_TEST() needs --duckdb-quack-bridge-test
+#
+SELECT @@GLOBAL.duckdb_quack_bridge_test;
+@@GLOBAL.duckdb_quack_bridge_test
+0
+SELECT quack_bridge_test('check|root|127.0.0.1||mysql.user:*');
+ERROR HY000: The MariaDB server is running with the --skip-duckdb-quack-bridge-test option so it cannot execute this statement
+SET GLOBAL duckdb_quack_bridge_test= ON;
+ERROR HY000: Variable 'duckdb_quack_bridge_test' is a read only variable

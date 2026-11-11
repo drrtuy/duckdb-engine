@@ -40,6 +40,7 @@ SET(DUCKDB_PLUGIN_SOURCES
   ha_duckdb.cc
   ha_duckdb_pushdown.cc
   duckdb_udf.cc
+  bridge/bridge_test_udf.cc
 )
 
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
@@ -76,11 +77,12 @@ IF(TARGET duckdb)
   ADD_SUBDIRECTORY(common)
   ADD_SUBDIRECTORY(convertor)
   ADD_SUBDIRECTORY(runtime)
+  ADD_SUBDIRECTORY(bridge)
 
   # atomic: GCC lowers the 16-byte atomic ops of the AUTO_INCREMENT block
   # cache (Duckdb_share::autoinc_range) to libatomic calls.
   target_link_libraries(duckdb duckdb_runtime duckdb_convertor duckdb_common
-    quack_guard ${DUCKDB_LIBRARY} atomic
+    quack_bridge quack_guard ${DUCKDB_LIBRARY} atomic
   )
   TARGET_SOURCES(duckdb PRIVATE ${DUCKDB_STATIC_EXTENSION_LOADER})
 
