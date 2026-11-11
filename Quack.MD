@@ -597,3 +597,22 @@ connects.
   fails; the client refuses non-loopback hosts and still tries loopback. The
   test does not use `have_duckdb.inc`, so a lockdown failure that keeps the
   engine from loading fails it instead of skipping it.
+
+## Follow-ups
+
+- **More authentication methods.** `ed25519` needs the server's own
+  derivation of the key (SHA-512 of the password, not exported); PARSEC
+  and other challenge-response plugins need a multi-message exchange in
+  Quack. Client certificates (`REQUIRE X509` / `ISSUER` / `SUBJECT`) need
+  the listener to request one and the stock client to present one. Unix
+  peer authentication needs a Unix-socket transport in Quack. The end
+  state on the MariaDB side is an exported `acl_authenticate`-style call,
+  so login rules are not reconstructed in the bridge.
+- **DML** over Quack: INSERT/UPDATE/DELETE as authorized statements,
+  together with MariaDB transactions, the delta appender, binlog and MDL.
+- **DDL** only through MariaDB (discovery, MDL, binlog, replication).
+- **Operations:** a way to list and kill Quack sessions from MariaDB (they
+  are not in the process list); name-resolved remote clients (today they
+  need `skip_name_resolve`).
+- **Quack upstream:** the hooks of patch 0004 and the RAND_bytes fix of
+  0001, so the patches can be dropped.
