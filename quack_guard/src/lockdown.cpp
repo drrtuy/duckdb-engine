@@ -1,5 +1,7 @@
 /*
   Copyright (c) 2026, MariaDB Foundation.
+  Copyright (c) 2026, Roman Nozdrin <drrtuy@gmail.com>
+  Copyright (c) 2026, Leonid Fedorov <leontodys@gmail.com>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -15,12 +17,12 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335 USA
 */
 
-#include "quack_lockdown.h"
+#include "guard_internal.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
-namespace myduck
+namespace quack_guard
 {
 
 static const char *const DENY_AUTH_FUNCTION= "mariadb_quack_deny_all";
@@ -53,7 +55,7 @@ static void register_system_function(duckdb::DatabaseInstance &db,
   catalog.CreateFunction(transaction, info);
 }
 
-void quack_lockdown(duckdb::DatabaseInstance &db, duckdb::Connection &con)
+void Lockdown(duckdb::DatabaseInstance &db, duckdb::Connection &con)
 {
   using duckdb::LogicalType;
   /* (connection id, auth string, server token) -> admitted */
@@ -84,4 +86,4 @@ void quack_lockdown(duckdb::DatabaseInstance &db, duckdb::Connection &con)
   }
 }
 
-} /* namespace myduck */
+} /* namespace quack_guard */

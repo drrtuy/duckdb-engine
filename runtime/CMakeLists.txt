@@ -14,7 +14,6 @@ SET(DUCKDB_RUNTIME_SOURCES
   duckdb_mariadb_tz.cc
   fiber_context.cpp
   fiber_scan.cc
-  quack_lockdown.cc
 )
 
 ADD_LIBRARY(duckdb_runtime STATIC ${DUCKDB_RUNTIME_SOURCES})
@@ -25,6 +24,7 @@ TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PRIVATE
   ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include
   ${DUCKDB_SUBMODULE_DIR}/extension/icu/datetime/include)
 TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC duckdb_convertor duckdb_common)
+TARGET_LINK_LIBRARIES(duckdb_runtime PRIVATE quack_guard)
 
 ADD_EXECUTABLE(mariadb_dialect_test EXCLUDE_FROM_ALL
   mariadb_dialect_test.cc mariadb_dialect_expression_test.cc
