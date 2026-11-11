@@ -1,0 +1,19 @@
+#
+# MDEV-41383: Quack is off unless enabled, and its settings are
+# read-only
+#
+SELECT @@GLOBAL.duckdb_quack_enabled, @@GLOBAL.duckdb_quack_port,
+@@GLOBAL.duckdb_quack_bind_address;
+@@GLOBAL.duckdb_quack_enabled	@@GLOBAL.duckdb_quack_port	@@GLOBAL.duckdb_quack_bind_address
+0	0	127.0.0.1
+SELECT VARIABLE_NAME, VARIABLE_VALUE FROM information_schema.global_status
+WHERE VARIABLE_NAME LIKE 'DUCKDB_QUACK%' ORDER BY VARIABLE_NAME;
+VARIABLE_NAME	VARIABLE_VALUE
+DUCKDB_QUACK_ENDPOINTS	
+DUCKDB_QUACK_RUNNING	OFF
+DUCKDB_QUACK_SESSIONS	0
+DUCKDB_QUACK_SSL_FINGERPRINT	
+SET GLOBAL duckdb_quack_enabled= ON;
+ERROR HY000: Variable 'duckdb_quack_enabled' is a read only variable
+SET GLOBAL duckdb_quack_ssl_cert= '/tmp/x.pem';
+ERROR HY000: Variable 'duckdb_quack_ssl_cert' is a read only variable

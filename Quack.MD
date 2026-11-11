@@ -387,8 +387,41 @@ bridge/
   `lower_case_table_names=0` (`Sales` next to `sales`); other twins
   (`Sales` next to `SALES`) are not, a limitation the engine already has
   for regular users, since DuckDB's catalog does not tell them apart.
-- **`authenticate()`** refuses everyone until credentials are verified
-  (*planned*: next stage).
+- **`authenticate()`** logs a Quack client in as a MariaDB account, on the
+  ACL worker:
+  1. The account is matched as above (`acl_getroot`, the peer's host and
+     address); its row is read from `mysql.global_priv` through the
+     server's SQL service on the worker's THD (`bridge/account_row.cc`; the
+     server extracts the JSON fields, names go in as hex literals). One
+     internal query per login; nothing is cached or copied.
+  2. Refused: roles, accounts with more than one authentication method,
+     methods other than `mysql_native_password` (milestone 1; `ed25519`,
+     PARSEC and others follow, see "Follow-ups"), `ACCOUNT LOCK`, an expired
+     password (`PASSWORD EXPIRE`, or older than its lifetime or
+     `default_password_lifetime`; Quack has no sandbox mode), `REQUIRE X509`
+     / `ISSUER` / `SUBJECT` / `CIPHER` (client certificates are not
+     requested yet). `REQUIRE SSL` is met by the listener's TLS.
+  3. The password is checked with the server's own
+     `my_make_scrambled_password()` against the stored hash (constant-time
+     compare); pre-4.1 hashes are refused. The copies are wiped.
+  4. Role: the requested one (`user/role:password`) must be granted; with
+     none requested, the account's default role applies while granted.
+  5. `max_password_errors`: after that many wrong passwords in a row, the
+     account is refused over Quack (also with the right password) until
+     the account row changes (`ALTER USER`, lock/unlock, re-create) or the
+     server restarts; a successful login resets the count. Kept apart from
+     the server's own counter.
+  6. Connection limit: the account's `MAX_USER_CONNECTIONS`, else
+     `@@max_user_connections` (a negative global value refuses, as in the
+     server), counted over the account's open Quack sessions (MariaDB
+     connections are not counted together).
+  Every refusal reaches the client as the same "Authentication failed".
+  With `log_warnings > 1` the server log gets `DuckDB: Quack login refused
+  for '<user>' from <address>: <reason>`, as for refused MariaDB logins
+  (the account is `user@host` once matched).
+- **Worker transactions.** The worker THD runs with autocommit forced;
+  after each request it commits and releases its transactional locks, so
+  a login's read of `mysql.global_priv` holds nothing afterwards.
 - **`QUACK_BRIDGE_TEST(spec)`** drives `check()` and `filterVisible()` from
   SQL for MTR, also with an identity kept across account changes (`pin`). It exists only with `--duckdb-quack-bridge-test` (read-only,
   default OFF), needs SUPER, and never handles credentials.
@@ -396,6 +429,47 @@ bridge/
 Residual: a listed table's DDL is passed through as DuckDB stores it. Only
 tables the principal may read entirely are listed, so its columns reveal
 nothing new; its defaults name the table's own autoincrement sequence.
+
+## In the server
+
+`ha_duckdb.cc` wires it up; `DuckdbManager` owns the database's `Guard` and
+the running `Listener`, and stops the listener before the database is
+destroyed.
+
+| System variable | Default | |
+|---|---|---|
+| `duckdb_quack_enabled` | OFF | serve Quack (read-only, startup) |
+| `duckdb_quack_bind_address` | `127.0.0.1` | comma-separated, one socket each |
+| `duckdb_quack_port` | 0 | 0 = any free port |
+| `duckdb_quack_ssl_cert`, `duckdb_quack_ssl_key` | none | PEM; required |
+| `duckdb_quack_max_connections` | 64 | client connections over all addresses |
+| `duckdb_quack_max_sessions` | 256 | open sessions |
+| `duckdb_quack_max_transaction_seconds` | 300 | longest open transaction |
+| `duckdb_quack_max_heartbeat_seconds` | 300 | longest heartbeat lease |
+| `duckdb_quack_acl_queue_size` | 64 | dynamic; 0 denies all |
+| `duckdb_quack_acl_timeout_ms` | 5000 | dynamic; 0 denies all |
+| `duckdb_quack_bridge_test` | OFF | enables `QUACK_BRIDGE_TEST()` (read-only) |
+
+All listener settings are read-only (startup only). Status:
+`Duckdb_quack_running`, `Duckdb_quack_endpoints` (`host:port`, comma
+separated), `Duckdb_quack_ssl_fingerprint` (what clients pin with
+`ssl_fingerprint`), `Duckdb_quack_sessions`.
+
+- **Start.** At plugin init the ACL worker starts; the listener starts only
+  once the server is fully up (`mysqld_server_started`: grant tables
+  loaded), from a thread that waits for it. With `--skip-grant-tables`, no
+  certificate or key, or any other failure it does not start (logged);
+  the engine works as before either way.
+- **Stop.** In the handlerton's `pre_shutdown` and in plugin deinit: the
+  start thread is joined, the listener stopped (sessions closed), then the
+  ACL worker. Quack sessions are not MariaDB connections: they are not in
+  the process list and cannot be killed with `KILL`; stopping the plugin
+  or the server closes them.
+- **Clients** connect with
+  `ATTACH 'quack:<endpoint>' AS r (TOKEN 'user:password', SSL_FINGERPRINT
+  '<Duckdb_quack_ssl_fingerprint>')` or
+  `quack_query('quack:<endpoint>', '<sql>', token => ..., ssl_fingerprint
+  => ...)`.
 
 ### Quack client without `httpfs`
 
@@ -406,6 +480,25 @@ fingerprint, which is how the in-server loopback client used by MTR tests
 connects.
 
 ### Tests
+
+- `quack_server.test` (Quack on, TLS from MTR's `std_data`,
+  `--max-password-errors=2`): a real listener in `mariadbd`, driven by
+  DuckDB's own Quack client through `run_in_duckdb`: login with the right
+  and wrong password and unknown users; locked, expired, `REQUIRE X509`
+  accounts refused and accepted once altered (and the refusal logged);
+  `REQUIRE SSL` and an empty password accepted; several authentication
+  methods, roles as logins and a password past its lifetime refused;
+  table and column grants; default role; an ungranted explicit role
+  refused; live GRANT/REVOKE, also on an open `ATTACH`; the password-error
+  throttle, its reset by a success and by `ALTER USER`; logins refused with
+  `duckdb_quack_acl_timeout_ms=0`; a column-only grantee lists nothing;
+  `MAX_USER_CONNECTIONS` counted over open sessions; `ATTACH` lists only
+  visible tables and reads through them; every session closed at the end.
+  `quack_server_off.test`: off by default, settings read-only, status
+  empty. `quack_server_noacl.test`: not started with
+  `--skip-grant-tables`. `quack_server_nocert.test`: not started without
+  TLS material, the engine still works. Both wait for the logged reason
+  (`include/quack_wait_for_log.inc`).
 
 - `mysql-test/duckdb/t/quack_bridge.test` (`--duckdb-quack-bridge-test`):
   table, database, global and column grants, "any column" (`count(*)`
