@@ -1,0 +1,161 @@
+CREATE TABLE peg_t (id INT PRIMARY KEY, v VARCHAR(30)) ENGINE=DuckDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO peg_t VALUES (1, 'a'), (2, 'b'), (3, 'a');
+SELECT id, v FROM peg_t WHERE v = "a" ORDER BY id;
+id	v
+1	a
+3	a
+SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES';
+SELECT id, v FROM peg_t WHERE v = "a" ORDER BY id;
+id	v
+1	a
+3	a
+SET SESSION sql_mode = '';
+SELECT CONVERT('a,b', CHAR) AS converted FROM peg_t ORDER BY id LIMIT 1;
+converted
+a,b
+SELECT CONVERT /* function */ (id, CHAR) AS converted FROM peg_t ORDER BY id LIMIT 1,2;
+converted
+2
+3
+SELECT id FROM peg_t WHERE v /* operand */ NOT /* operator */ RLIKE /* pattern */ 'b' ORDER BY id;
+id
+1
+3
+SELECT SQL_NO_CACHE STRAIGHT_JOIN a.id, b.v FROM peg_t a
+STRAIGHT_JOIN peg_t b ON a.id=b.id ORDER BY a.id LIMIT 1,2;
+id	v
+2	b
+3	a
+SELECT id FROM peg_t FORCE INDEX FOR JOIN (PRIMARY) ORDER BY id LIMIT 1,2;
+id
+2
+3
+SELECT v, COUNT(*) AS n FROM peg_t GROUP BY v WITH ROLLUP;
+v	n
+NULL	3
+a	2
+b	1
+SELECT * FROM (SELECT id FROM peg_t ORDER BY id LIMIT 0,2) s ORDER BY id LIMIT 1,1;
+id
+2
+SELECT 'STRAIGHT_JOIN CONVERT(x,y) LIMIT 1,2' AS literal FROM peg_t ORDER BY id LIMIT 1;
+literal
+STRAIGHT_JOIN CONVERT(x,y) LIMIT 1,2
+SELECT CURRENT_DATE() = CURRENT_DATE AS same_date,
+CURRENT_TIME(3) IS NOT NULL AS has_time, CURRENT_TIMESTAMP(6) IS NOT NULL AS has_timestamp
+FROM peg_t ORDER BY id LIMIT 1;
+same_date	has_time	has_timestamp
+1	1	1
+CREATE TABLE peg_i (id INT PRIMARY KEY, v VARCHAR(30)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO peg_i VALUES (1, 'x'), (2, 'y');
+SELECT CONVERT /* source */ (d.id, CHAR) AS id, i.v
+FROM peg_t d JOIN peg_i i ON d.id=i.id ORDER BY d.id LIMIT 0,2;
+id	v
+1	x
+2	y
+SELECT GROUP_CONCAT(i.v SEPARATOR ':') FROM peg_t d JOIN peg_i i ON d.id=i.id;
+ERROR HY000: Got error 122 'Parser Error: syntax error at or near "SEPARATOR"
+
+LINE 1: SELECT GROUP_CONCAT(i.v SEPARATOR ':') FROM peg_t d JOIN peg_i i ON d.id=i.id
+                                ^^^^^^^^^' from DuckDB
+SELECT COUNT(*) AS restored_after_error FROM peg_t d JOIN peg_i i ON d.id=i.id;
+restored_after_error
+2
+SELECT CONVERT /* source */ (id, CHAR) AS id FROM peg_t
+UNION ALL SELECT CONVERT(id, CHAR) AS id FROM peg_i ORDER BY id LIMIT 1,3;
+id
+1
+2
+2
+CREATE TABLE peg_dest (v VARCHAR(30)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO peg_dest SELECT CONVERT /* source */ (id, CHAR) FROM peg_t ORDER BY id LIMIT 1,2;
+SELECT * FROM peg_dest ORDER BY v;
+v
+2
+3
+SELECT CONVERT(v, UNSIGNED) FROM peg_t;
+ERROR HY000: Got error 122 'Catalog Error: Type with name UNSIGNED does not exist!
+Did you mean "PARQUET_VARIANT"?
+
+LINE 1: SELECT CONVERT(v, UNSIGNED) FROM peg_t
+                          ^^^^^^^^' from DuckDB
+SELECT GROUP_CONCAT(v SEPARATOR ':') FROM peg_t;
+ERROR HY000: Got error 122 'Parser Error: syntax error at or near "SEPARATOR"
+
+LINE 1: SELECT GROUP_CONCAT(v SEPARATOR ':') FROM peg_t
+                              ^^^^^^^^^' from DuckDB
+ALTER TABLE peg_t ADD COLUMN `after"error` INT DEFAULT 7;
+UPDATE peg_t SET `after"error` = 8 WHERE id = 1;
+SELECT id, `after"error` FROM peg_t ORDER BY id;
+id	after"error
+1	8
+2	7
+3	7
+ALTER TABLE peg_t ADD COLUMN `norm space` INT DEFAULT 1;
+normalization_safe
+6
+connect  peg_other, localhost, root,,test;
+SET SESSION sql_mode = 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES';
+SELECT CONVERT /* other */ (id, CHAR) AS "converted" FROM peg_t ORDER BY id LIMIT 0,1;
+converted
+1
+connection default;
+SELECT CONVERT /* original */ (id, CHAR) AS converted FROM peg_t ORDER BY id LIMIT 2,1;
+converted
+3
+connection peg_other;
+SELECT id AS "id" FROM peg_t ORDER BY id LIMIT 1,1;
+id
+2
+disconnect peg_other;
+connection default;
+CREATE USER peg_column_user@localhost;
+GRANT SELECT(id) ON test.peg_t TO peg_column_user@localhost;
+connect  peg_acl, localhost, peg_column_user,,test;
+SET SESSION sql_mode = '';
+include/assert.inc [Default-mode double quotes must not read an unauthorized column]
+SELECT "v" AS literal FROM peg_t;
+literal
+v
+v
+v
+SELECT REPEAT('a',5) AS $$ FROM peg_t # $$ WHERE 0 UNION ALL SELECT v FROM peg_t
+;
+$$
+aaaaa
+aaaaa
+aaaaa
+SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES';
+SELECT REPEAT('a',5) AS $$ FROM peg_t # $$ WHERE 0 UNION ALL SELECT v FROM peg_t
+;
+$$
+aaaaa
+aaaaa
+aaaaa
+SET SESSION sql_mode = 'ANSI_QUOTES';
+SELECT "v" FROM peg_t;
+ERROR 42000: SELECT command denied to user 'peg_column_user'@'localhost' for column 'v' in table 'peg_t'
+SELECT "id" FROM peg_t;
+id
+1
+2
+3
+SELECT REPEAT('a',5) AS $$ FROM peg_t # $$ WHERE 0 UNION ALL SELECT v FROM peg_t
+;
+$$
+aaaaa
+aaaaa
+aaaaa
+SET SESSION sql_mode = 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES';
+SELECT REPEAT('a',5) AS $$ FROM peg_t # $$ WHERE 0 UNION ALL SELECT v FROM peg_t
+;
+$$
+aaaaa
+aaaaa
+aaaaa
+disconnect peg_acl;
+connection default;
+DROP USER peg_column_user@localhost;
+DROP TABLE peg_dest;
+DROP TABLE peg_i;
+DROP TABLE peg_t;

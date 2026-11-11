@@ -31,10 +31,10 @@ false	false	true	false
 #
 SELECT run_in_duckdb("SET autoinstall_known_extensions=true");
 run_in_duckdb("SET autoinstall_known_extensions=true")
-Invalid Input Error: Cannot change configuration option ""autoinstall_known_extensions"" - the configuration has been locked
+Invalid Input Error: Cannot change configuration option "autoinstall_known_extensions" - the configuration has been locked
 SELECT run_in_duckdb("SET lock_configuration=false");
 run_in_duckdb("SET lock_configuration=false")
-Invalid Input Error: Cannot change configuration option ""lock_configuration"" - the configuration has been locked
+Invalid Input Error: Cannot change configuration option "lock_configuration" - the configuration has been locked
 SELECT run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall");
 run_in_duckdb("SELECT current_setting('autoinstall_known_extensions') AS autoinstall")
 autoinstall	

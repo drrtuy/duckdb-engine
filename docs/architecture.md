@@ -2,7 +2,7 @@
 
 ## Overview
 
-DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). MariaDB owns metadata (`.frm` files), SQL parsing, optimization, and the client protocol. DuckDB owns data storage, columnar analytical execution, and MVCC transactions. The two systems communicate through MariaDB's standard handler API and the `select_handler` interface for query pushdown.
+DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). MariaDB owns metadata (`.frm` files), client SQL parsing/resolution/authorization, the row-interface plan, and the client protocol. DuckDB parses eligible forwarded source through the `mariadb` PEG dialect, then owns its binding/optimization, columnar execution, data storage, and MVCC transactions. The two systems communicate through MariaDB's handler API and the `select_handler` pushdown interface.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -18,8 +18,8 @@ DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). Ma
 │  │        ha_duckdb  (storage engine)      │              │
 │  │                                         │              │
 │  │  DDL convertors ──┐                     │              │
-│  │  DML convertors ──┼── SQL generation    │              │
-│  │  select_handler ──┘                     │              │
+│  │  DML convertors ──┴── SQL generation    │              │
+│  │  select_handler ── dialect → AST       │              │
 │  │                                         │              │
 │  │  DuckdbThdContext (per THD)             │              │
 │  │   └─ duckdb::Connection                 │              │
@@ -37,10 +37,10 @@ DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). Ma
 ### Initialization (`duckdb_init_func`)
 
 1. Registers handlerton callbacks: `create`, `commit`, `rollback`, `close_connection`, `drop_database`, `create_select`, `create_unit`.
-2. `DuckdbManager::CreateInstance()` opens a single `duckdb.db` file in the MariaDB datadir, creating the `duckdb::DuckDB` instance.
-3. Registers SQL macros for MySQL compatibility (`adddate`, `datediff`, `curdate`, `convert_tz`, `substring_index`, `strcmp`, etc.).
-4. Registers C++ UDFs via `register_mariadb_compat_functions()` — `mid`, `oct`, `bin`, `hex`, `locate`, `addtime`, `subtime`, `regexp_replace`, etc.
-5. Registers cross-engine scan infrastructure: `_mdb_scan` table function + replacement scan callback.
+2. `DuckdbManager::CreateInstance()` / `Initialize()` (`runtime/duckdb_manager.cc`) register the statically linked extensions and the `mariadb` dialect, then open `duckdb.db` in the MariaDB datadir.
+3. A temporary connection warms the dialect by calling `parse_mariadb_statement(..., "SELECT 1")` (`runtime/mariadb_dialect.cc`). It restores the base dialect before generated initialization SQL. All per-THD connections reuse the compiled grammar; compilation failure fails initialization.
+4. Registers SQL macros for MySQL compatibility (`adddate`, `datediff`, `curdate`, `convert_tz`, `substring_index`, `strcmp`, etc.) and C++ UDFs via `register_mariadb_compat_functions()` (`runtime/duckdb_mysql_compat.cc`).
+5. Registers cross-engine scan infrastructure: `_mdb_scan` table function + replacement scan callback, then locks the DuckDB configuration with an explicit changeable-setting allowlist. This does not disable external file access; see [security-model.md](security-model.md).
 
 ### Shutdown (`duckdb_deinit_func`)
 
@@ -52,34 +52,39 @@ DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). Ma
 
 ### Path 1: SELECT Pushdown (`select_handler`)
 
-Primary path for analytical queries. MariaDB hands the **entire SELECT** to DuckDB.
+Primary path for analytical queries. MariaDB parses, resolves, and authorizes the query; DuckDB receives the **entire eligible SELECT** as a native AST, not rewritten SQL.
 
-```
-MariaDB parser
-  → optimizer calls hton->create_select / hton->create_unit
-    → factory eligibility checks in ha_duckdb_pushdown.cc
-      → requires at least one DuckDB table and supported query/table metadata
-        → creates ha_duckdb_select_handler
+```text
+MariaDB parse / resolution / authorization
+  → hton->create_select / hton->create_unit
+    → eligibility + lexical preflight in ha_duckdb_pushdown.cc
+      → retain original SELECT/WITH text (or INSERT ... SELECT source tail)
+      → create ha_duckdb_select_handler
         → init_scan():
-           1. Takes original SQL text from THD::query()
-           2. Rewrites MariaDB-specific syntax for DuckDB:
-              • GROUP BY ... WITH ROLLUP  →  GROUP BY ROLLUP(...)
-              • CONVERT(expr, TYPE)       →  CAST(expr AS TYPE)
-              • CURRENT_TIME()            →  current_time
-              • STRAIGHT_JOIN             →  JOIN / CROSS JOIN
-              • REGEXP / RLIKE            →  ~ / !~
-              • LIMIT offset,count        →  LIMIT count OFFSET offset
-              • Strips hints: HIGH_PRIORITY, SQL_NO_CACHE, FORCE INDEX, etc.
-           3. Sends rewritten SQL to duckdb::Connection::Query()
-        → next_row(): reads DataChunk row-by-row, converts Value → Field
-        → end_scan(): releases result
+           1. Register external tables and per-table WHERE fragments, if any
+           2. Configure the per-THD connection under the base DuckDB dialect
+           3. Open the interruptible window
+           4. Select the warmed mariadb dialect in process
+           5. ExtractStatements(source) once; require exactly one SELECT AST
+           6. Restore the base dialect, including on exceptions
+           7. Submit(move(AST)); bind / optimize / execute
+        → next_row(): Fetch() chunks, convert DuckDB Value → MariaDB Field
+        → end_scan(): release stream, clear external registry and interrupt state
 ```
+
+`ha_duckdb_select_handler::init_scan()` calls `duckdb_stream_mariadb_query()` in `runtime/duckdb_query.cc`. That wrapper calls `parse_mariadb_statement()` in `runtime/mariadb_dialect.cc`; its `MariadbDialectScope` uses `CurrentDialectSetting::SetLocal/ResetLocal`, not SQL SET/RESET. The connection-level wrapper then calls `Connection::Submit(unique_ptr<SQLStatement>)` without rendering or reparsing the AST. The destructor also clears the registry and interrupt state if the MariaDB framework skips `end_scan()` after a metadata-send failure.
+
+The fixed-profile dialect extends the base PEG grammar with `CONVERT`, REGEXP/RLIKE, parenthesized current-time forms, comma LIMIT, postfix ROLLUP, conditionless JOIN, and parsed-and-ignored SELECT/index hints. Its rules live in `runtime/mariadb_dialect_expression.cc` and `runtime/mariadb_dialect_select.cc`; no top-level text rewrites or identifier requoting remain in this path. Hint syntax acceptance does not imply enforcement of hints or STRAIGHT_JOIN ordering.
+
+An eligibility refusal returns `nullptr` from the factory and leaves execution to MariaDB. A later dialect parse, bind, or execution error is returned to the client: there is no retry with another SQL interpretation. "One parse" means one successful DuckDB parse of the forwarded top-level source; MariaDB parsing, generated internal SQL, and explicitly enabled debug reparse verification are separate.
 
 #### Pushdown eligibility
 
 Both the single-SELECT and whole-unit factories in `ha_duckdb_pushdown.cc`
 decline pushdown for:
 
+- statement kinds other than SELECT or INSERT ... SELECT, no participating DuckDB table, or an INSERT ... SELECT with a DuckDB target, ON DUPLICATE KEY UPDATE, or RETURNING;
+- a source that fails lexical preflight or cannot be retained as a SELECT/WITH source tail;
 - an explicit `FOR SYSTEM_TIME` clause, because DuckDB does not implement
   MariaDB system-versioning syntax;
 - an explicit reference to an invisible column, including references in the
@@ -116,7 +121,11 @@ top-level `SELECT_LEX` with `UNCACHEABLE_SIDEEFFECT`. MariaDB sets this flag for
 `UNCACHEABLE_RAND` is a separate flag and does not by itself disable DuckDB
 pushdown. This eligibility check currently applies to the single-SELECT factory;
 the whole-unit `UNION`/`EXCEPT`/`INTERSECT` factory does not perform the same
-side-effect check.
+side-effect check. The whole-unit factory also declines at PREPARE time; this migration does not add new prepared-statement eligibility.
+
+Lexical preflight is `mariadb_query_has_lexical_mismatch()` (`runtime/mariadb_dialect.cc` with the THD/charset wrapper in `runtime/duckdb_query.cc`). It uses the actual ANSI_QUOTES/NO_BACKSLASH_ESCAPES flags without compiling per-mode grammars. Refusals include hash/dollar openers, executable/nested or boundary-mismatched comments, unsafe quote boundaries, malformed/NUL input, E-prefixed/charset-introduced literals, and unsupported encoding cases. Double-quoted code tokens require ANSI_QUOTES; eligible quoted UTF-8 text must remain byte-identical under DuckDB normalization. This is not another PEG parse. ASCII scanning is allocation-free; non-ASCII normalization uses an owned string. It does not correct remaining value-semantic differences such as boundary-preserving backslash escapes.
+
+Generated DDL/DML, configuration, appender flushes, internal scans, and `run_in_duckdb()` remain under the base DuckDB dialect. Direct whole-statement UPDATE/DELETE remain text paths with original-source lexical checks before transaction registration/appender flush. Their errors and text execution are not a fallback for SELECT parsing.
 
 ### Path 1a: Cross-Engine Queries
 
@@ -125,7 +134,7 @@ When a SELECT mixes tables from **different engines** (DuckDB + InnoDB, etc.):
 ```
 ha_duckdb_select_handler::init_scan()
   → registers non-DuckDB tables in a thread-local registry
-  → sends SQL to DuckDB
+  → parses the source under mariadb, restores base dialect, submits the AST
     → DuckDB cannot find the table in its catalog
       → replacement scan callback redirects to _mdb_scan('table_name')
         → mdb_scan_function():
@@ -136,7 +145,7 @@ ha_duckdb_select_handler::init_scan()
            • yield() when DataChunk is full, continue() for next chunk
 ```
 
-The fiber runs on the same OS thread as DuckDB. TLS (`current_thd`, `my_thread_var`) is swapped around fiber spawn/continue calls.
+The fiber runs on the same OS thread as DuckDB. TLS (`current_thd`, `my_thread_var`) is swapped around fiber spawn/continue calls. The per-table condition is printed by `COND::print()` in `ha_duckdb_select_handler::init_scan()` (`ha_duckdb_pushdown.cc`); `build_synthetic_select()` / `fiber_scan_func()` (`runtime/fiber_scan.cc`) build and execute the synthetic query through MariaDB. This fragment channel is distinct from the top-level DuckDB AST handoff.
 
 #### Pushdown modes: `duckdb_cross_engine_ryow`
 
@@ -380,10 +389,12 @@ Generate INSERT/UPDATE/DELETE SQL from MariaDB row buffers.
 
 ## Source Code Map
 
+The map uses the server-tree `storage/duckdb/` prefix; in the out-of-tree checkout these files are at the repository root.
+
 ```
 storage/duckdb/
 ├── ha_duckdb.h/cc                — handler class, handlerton, DDL/DML entry points
-├── ha_duckdb_pushdown.h/cc       — select_handler: SELECT/UNION pushdown + SQL rewriting
+├── ha_duckdb_pushdown.h/cc       — SELECT/unit eligibility, source extraction, AST streaming
 ├── duckdb_udf.cc                 — UDF plugin registration
 │
 ├── convertor/
@@ -394,7 +405,11 @@ storage/duckdb/
 ├── runtime/
 │   ├── duckdb_manager.h/cc       — DuckdbManager singleton, DuckDB instance lifecycle
 │   ├── duckdb_context.h/cc       — DuckdbThdContext: per-THD connection + transactions
-│   ├── duckdb_query.h/cc         — duckdb_query() wrappers
+│   ├── duckdb_query.h/cc         — base text wrappers and dedicated MariaDB AST stream
+│   ├── mariadb_dialect.h/cc      — registration, scope, preflight, SELECT AST extraction
+│   ├── mariadb_dialect_expression.cc — expression grammar/transformers
+│   ├── mariadb_dialect_select.cc — SELECT grammar/transformers
+│   ├── mariadb_dialect*_test.cc  — standalone parser/lifecycle/parity tests
 │   ├── duckdb_mysql_compat.h/cc  — C++ UDFs for MySQL function compatibility
 │   ├── cross_engine_scan.h/cc    — _mdb_scan table function + replacement scan
 │   ├── fiber_context.h/c         — stackful coroutine (fiber) primitives

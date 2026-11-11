@@ -30,6 +30,7 @@
 #include "duckdb_manager.h"
 #include "duckdb_log.h"
 #include "mariadb_dialect.h"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace myduck
 {
@@ -215,13 +216,11 @@ duckdb_query(duckdb::Connection &connection, const std::string &query)
 }
 
 duckdb::unique_ptr<DuckdbChunkStream>
-duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
-                    std::string &error)
+duckdb_stream_mariadb_query(duckdb::Connection &connection, const std::string &query,
+                            std::string &error)
 {
-  const std::string q= backticks_to_double_quotes(query);
-
   if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", q.c_str());
+    sql_print_information("DuckDB query: %s", query.c_str());
 
   try
   {
@@ -230,7 +229,8 @@ duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
       produced as the caller fetches them. Connection::Query() would run the
       query to completion and retain the whole result first.
     */
-    auto res= connection.Submit(q);
+    auto statement= parse_mariadb_statement(connection, query);
+    auto res= connection.Submit(std::move(statement));
     if (res->HasError())
       error= res->GetError();
     else
@@ -279,20 +279,14 @@ duckdb_query(THD *thd, const std::string &query, bool need_config)
 }
 
 duckdb::unique_ptr<DuckdbChunkStream>
-duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
-                    bool need_config)
+duckdb_stream_mariadb_query(THD *thd, const std::string &query, std::string &error,
+                            bool need_config)
 {
-  if (mariadb_query_has_lexical_mismatch(thd, query.data(), query.size()))
-  {
-    error= lexical_mismatch_error;
-    return nullptr;
-  }
-
   auto &connection= prepare_thd_connection(thd, need_config);
   auto *ctx= get_thd_context(thd);
   /* Opened after the session setup so a kill cannot fail it. */
   ctx->begin_interruptible();
-  auto stream= duckdb_stream_query(connection, query, error);
+  auto stream= duckdb_stream_mariadb_query(connection, query, error);
   ctx->interrupt_if_killed(thd);
   return stream;
 }

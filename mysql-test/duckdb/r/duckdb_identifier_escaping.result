@@ -63,6 +63,21 @@ SELECT COUNT(*) FROM `x"y`;
 COUNT(*)
 0
 DROP TABLE `x"y`;
+CREATE DATABASE `db"ident_esc`;
+CREATE TABLE `db"ident_esc`.`t"name` (`i"d` INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO `db"ident_esc`.`t"name` VALUES (1), (2);
+SELECT `i"d` FROM `db"ident_esc`.`t"name` ORDER BY `i"d`;
+i"d
+1
+2
+USE `db"ident_esc`;
+SELECT `i"d` FROM `t"name` ORDER BY `i"d`;
+i"d
+1
+2
+USE db_ident_esc;
+DROP TABLE `db"ident_esc`.`t"name`;
+DROP DATABASE `db"ident_esc`;
 #
 # 5) Backslash quote-boundary mismatches disable raw SQL forwarding
 #
