@@ -21,7 +21,7 @@ not implemented yet.
 - **DuckDB-side code stays separate** from the handler: the self-contained
   module `quack_guard/` (no MariaDB headers) talks to MariaDB only through the
   bridge interface `quack_guard/include/quack_guard/authorizer.hpp`; the
-  MariaDB side (*planned*: `bridge/`) implements it.
+  MariaDB side, `bridge/`, implements it.
 
 ## Build and linking
 
@@ -324,6 +324,79 @@ The engine's cross-engine path (`_mdb_scan` and the MariaDB replacement scan
 in `runtime/cross_engine_scan.cc`) refuses Quack sessions explicitly, in
 addition to its thread-local table registry being empty on Quack threads.
 
+## The MariaDB bridge
+
+`bridge/` implements `QuackAuthorizer` on MariaDB accounts, roles, `PUBLIC`
+and grants. It links only `quack_guard_api` (the interface), never
+`quack_guard`'s internals, and calls only exported server functions.
+
+```
+bridge/
+  acl_compat.h            11.4 / 12.x / 13.x signatures of the ACL calls
+  acl_worker.{h,cc}       the ACL worker thread and its background THD
+  mariadb_authorizer.{h,cc}  QuackAuthorizer, MariaDBIdentity
+  bridge.{h,cc}           start/stop inside the plugin
+  bridge_test_udf.cc      QUACK_BRIDGE_TEST() for MTR
+```
+
+- **ACL worker.** MariaDB's ACL functions need a THD, so every bridge call
+  runs on one worker thread that owns a background THD
+  (`create_background_thd()`: invisible in the process list, not counted
+  at shutdown). Calls wait in a queue of at most
+  `duckdb_quack_acl_queue_size` requests and at most
+  `duckdb_quack_acl_timeout_ms`; a full queue, a timeout or a stopped worker
+  deny (`saturated`, `timeout`, `shutdown`). 0 is legal for both and denies
+  everything. Requests carry copies; a request whose caller stopped waiting
+  is skipped if still queued and gives up between objects if running. Each
+  request runs as a statement of its own (`lex_start` / `lex_end`, which
+  also releases the plugin locks `ha_table_exists` takes); afterwards the
+  THD's security context, diagnostics and memory are reset. `Start()`
+  returns only once the worker has its THD. The worker stops in the
+  handlerton's `pre_shutdown` (after client connections are closed) and in
+  plugin deinit. Every public call turns an exception into a denial.
+- **Identity.** `MariaDBIdentity` holds the login user, the peer address,
+  the account host derived from it as a MariaDB login does (`localhost`
+  for loopback unless `skip_name_resolve`, otherwise the address itself),
+  the active role, and the account MariaDB matched at login
+  (`priv_user@priv_host`). The bridge does no name resolution: with
+  `skip_name_resolve` off, only loopback peers are supported (a remote
+  login would be matched by its host name, and an account defined by name
+  could be passed over for a broader one); remote clients need
+  `skip_name_resolve` (`unsupported` otherwise).
+- **Every call re-resolves the account** with `acl_getroot()` from the live
+  ACL cache: an unknown or dropped user, an anonymous account, or a peer
+  that now matches a different account than at login denies; so does any
+  anonymous account matching the peer (`acl_getroot` never picks one, a
+  login might); `--skip-grant-tables` denies everything. A role is applied with `acl_check_setrole()` /
+  `acl_setrole()` only if still granted. Nothing is cached, so `GRANT`,
+  `REVOKE`, `DROP USER` and role changes act on the next statement. The
+  bridge never combines privilege bits itself (13.x `DENY` keeps working).
+- **`check()`.** Each table must exist in MariaDB with the DuckDB engine
+  (`ha_table_exists`), and with `lower_case_table_names=0` must not have a
+  case-variant twin DuckDB could not tell apart. Then
+  `check_table_access(SELECT)`; with only column grants, each requested
+  column through `check_grant_column()`, and for "any column" a
+  `check_grant()` that accepts any privilege on the table or a column. Any
+  failure denies the whole statement.
+- **`filterVisible()`.** A schema is visible with any privilege in it
+  (as `SHOW DATABASES`: database-level, or on something in it; on 11.4 a
+  table granted only to `PUBLIC` does not make its database visible); a
+  table only with table-level (or higher) `SELECT`, since the catalog
+  shows its DDL with every column, and only if it is a DuckDB table.
+- **Names.** Only an all-lowercase case-variant twin is detected with
+  `lower_case_table_names=0` (`Sales` next to `sales`); other twins
+  (`Sales` next to `SALES`) are not, a limitation the engine already has
+  for regular users, since DuckDB's catalog does not tell them apart.
+- **`authenticate()`** refuses everyone until credentials are verified
+  (*planned*: next stage).
+- **`QUACK_BRIDGE_TEST(spec)`** drives `check()` and `filterVisible()` from
+  SQL for MTR, also with an identity kept across account changes (`pin`). It exists only with `--duckdb-quack-bridge-test` (read-only,
+  default OFF), needs SUPER, and never handles credentials.
+
+Residual: a listed table's DDL is passed through as DuckDB stores it. Only
+tables the principal may read entirely are listed, so its columns reveal
+nothing new; its defaults name the table's own autoincrement sequence.
+
 ### Quack client without `httpfs`
 
 Quack's client needs `httpfs` for plain HTTP(S), except when the server
@@ -333,6 +406,20 @@ fingerprint, which is how the in-server loopback client used by MTR tests
 connects.
 
 ### Tests
+
+- `mysql-test/duckdb/t/quack_bridge.test` (`--duckdb-quack-bridge-test`):
+  table, database, global and column grants, "any column" (`count(*)`
+  needs SELECT somewhere: INSERT alone is not enough), only DuckDB and only
+  existing tables, roles only when asked for and granted, `PUBLIC`,
+  host-specific accounts by peer address, anonymous and unknown accounts,
+  live GRANT / REVOKE / DROP USER, an anonymous account shadowing a named
+  one, tables outside the table cache, a kept identity refused once its
+  name matches another account or its role is revoked, remote peers
+  refused with name resolution on, catalog visibility, queue and timeout
+  limits at 0, SUPER only. `quack_bridge_ip.test` (`--skip-name-resolve`):
+  host patterns by peer address, loopback not `localhost`, IPv6.
+  `quack_bridge_disabled.test`: the function is refused without the
+  option, which is read-only.
 
 - `quack_guard/test/guard_test.cpp` (Layer A, plain DuckDB, mock authorizer;
   build with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`):
