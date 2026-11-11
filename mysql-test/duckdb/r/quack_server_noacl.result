@@ -1,0 +1,13 @@
+#
+# MDEV-41383: with --skip-grant-tables there are no grants to check:
+# the Quack listener does not start
+#
+call mtr.add_suppression("DuckDB: Quack is not started with --skip-grant-tables");
+SELECT @@GLOBAL.duckdb_quack_enabled;
+@@GLOBAL.duckdb_quack_enabled
+1
+Found in the error log: Quack is not started with --skip-grant-tables
+SELECT VARIABLE_VALUE FROM information_schema.global_status
+WHERE VARIABLE_NAME = 'DUCKDB_QUACK_RUNNING';
+VARIABLE_VALUE
+OFF
