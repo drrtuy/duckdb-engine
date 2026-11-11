@@ -215,7 +215,7 @@ per guard.
 
 ### What a Quack session may run (milestone 1)
 
-Read-only, autocommit queries over base tables, decided twice, from
+Read-only queries over base tables, decided twice, from
 allowlists (anything not listed is refused, so a new DuckDB statement,
 operator or function is refused until reviewed):
 
@@ -225,9 +225,14 @@ operator or function is refused until reviewed):
   scans and extension autoloading, constant arguments are evaluated, binder
   errors name objects).
   - Exactly one statement: `SELECT` (plain, set operations, non-recursive
-    CTEs, `FROM`-first) or `EXPLAIN` of one (not `ANALYZE`). No transaction
-    statements: a long-open snapshot would outlive grant changes and hold
-    back checkpoints.
+    CTEs, `FROM`-first), `EXPLAIN` of one (not `ANALYZE`), or `BEGIN` /
+    `COMMIT` / `ROLLBACK` (Quack's client wraps work on an attached
+    database in them). A transaction keeps one snapshot of the shared
+    database open, so a session whose transaction stays open longer than
+    `max_transaction_seconds` (1 s .. 7 days) is closed by the reaper,
+    which observes each session's real transaction state rather than
+    predicting it from statements; grants are checked on every statement
+    inside a transaction too.
   - Table references: base tables, joins (not `NEAREST BY`), subqueries,
     `VALUES`; no table functions, `PIVOT`, `SHOW`/`DESCRIBE`, `SAMPLE`,
     `AT`, no nested schema paths. Once the whole form has been checked (so
@@ -280,6 +285,39 @@ operator or function is refused until reviewed):
   and MariaDB databases named `main`, `pg_catalog`, `information_schema` or
   `temp`.
 
+### Catalog discovery
+
+A client that attaches the server (`ATTACH 'quack:host:port' AS r (TOKEN
+'user:password', SSL_FINGERPRINT '...')`) loads the remote catalog with two
+fixed queries, `QuackSchemaSet::GetLoadQuery()` and
+`QuackTableSet::GetLoadQuery()`. The listener recognizes exactly these
+strings (calling Quack's own functions, so a Quack update cannot drift
+silently) and runs `mariadb_quack_catalog('schemas' | 'tables')`
+(`src/catalog_filter.cpp`) instead. That table function runs the original
+query (for tables, the same columns plus the names it needs) on a separate
+connection and returns, with the original columns and types, only:
+
+- top-level schemas of the engine's database: `main` always (every DuckDB
+  has it; its tables are never listed), other non-reserved schemas only if
+  `QuackAuthorizer::filterVisible()` keeps them;
+- tables of listed schemas (so never of a hidden schema), with
+  non-reserved names, that `filterVisible()` keeps. The listed DDL shows
+  every column, so the bridge keeps a table only for a table-level (or
+  higher) privilege, not for column grants alone;
+- no views (unreachable in milestone 1), no other catalogs, no nested
+  schemas.
+
+Only objects that were asked about count, whatever `filterVisible()`
+returns. Schema oids are replaced by dense ordinals (`main` is 1), so the
+gaps between real oids cannot reveal how many objects others created.
+Without a principal or authorizer, or if `filterVisible()` fails or returns
+nothing, only `main` is listed. The function itself is reachable only
+through this rewrite (the statement gate refuses table functions); called
+from any other context it lists only `main`, and in a plan it does not
+lift the check of the other tables. Queries through the attached database
+(`SELECT ... FROM r.shop.items`, sent by the client as `SELECT #1, #2 FROM
+shop.items`) go through both gates like any other.
+
 ### MariaDB tables are out of reach
 
 The engine's cross-engine path (`_mdb_scan` and the MariaDB replacement scan
@@ -306,7 +344,15 @@ connects.
   access requests per query shape (columns, `count(*)`, `rowid`, joins,
   subqueries, CTEs), reserved schemas, refusals without side effects,
   denied/throwing authorizer, prepared-statement API refused, other
-  connections untouched; end to end through the listener: data returned
+  connections untouched; a transaction left open closes its session;
+  `ATTACH` lists only visible schemas and tables (not other catalogs,
+  reserved names, tables of hidden schemas, objects not asked about; only
+  `main` when the filter fails or is empty), listed-but-denied tables are
+  still denied through the attached database, the catalog function has
+  Quack's column types, is not reachable directly and handles more than
+  one chunk; the transaction cap closes only sessions whose transaction is
+  really open too long (not after COMMIT/ROLLBACK, not reset by a failing
+  second BEGIN) and rejects invalid limits; end to end through the listener: data returned
   when allowed, denied tables, missing objects indistinguishable from
   denied ones, file reads and writes refused before binding;
   `ParseAuthString` (escapes, roles, limits, anonymous) and
