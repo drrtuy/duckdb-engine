@@ -1,0 +1,139 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # MDEV-41383: the Quack bridge checks live MariaDB grants
+--echo #
+
+CREATE DATABASE qb;
+CREATE TABLE qb.t (a INT PRIMARY KEY, b INT, c INT) ENGINE=DuckDB;
+CREATE TABLE qb.t2 (x INT PRIMARY KEY) ENGINE=DuckDB;
+CREATE TABLE qb.inno (x INT) ENGINE=InnoDB;
+CREATE DATABASE qb_other;
+CREATE TABLE qb_other.t (a INT PRIMARY KEY) ENGINE=DuckDB;
+
+CREATE USER u_none@localhost;
+CREATE USER u_tbl@localhost;
+GRANT SELECT ON qb.t TO u_tbl@localhost;
+GRANT SELECT ON qb.inno TO u_tbl@localhost;
+CREATE USER u_col@localhost;
+GRANT SELECT (a) ON qb.t TO u_col@localhost;
+CREATE USER u_db@localhost;
+GRANT SELECT ON qb.* TO u_db@localhost;
+CREATE USER u_glob@localhost;
+GRANT SELECT ON *.* TO u_glob@localhost;
+CREATE USER u_ins@localhost;
+GRANT INSERT ON qb.t TO u_ins@localhost;
+CREATE ROLE r_sel;
+GRANT SELECT ON qb.t TO r_sel;
+CREATE USER u_role@localhost;
+GRANT r_sel TO u_role@localhost;
+CREATE USER u_host@'10.0.0.%';
+GRANT SELECT ON qb.t TO u_host@'10.0.0.%';
+
+--echo # Table, database and global grants
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a,b,c') AS r;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:*') AS r;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a;qb.t2:x') AS r;
+SELECT quack_bridge_test('check|u_db|127.0.0.1||qb.t:a;qb.t2:x') AS r;
+SELECT quack_bridge_test('check|u_db|127.0.0.1||qb_other.t:a') AS r;
+SELECT quack_bridge_test('check|u_glob|::1||qb_other.t:a') AS r;
+SELECT quack_bridge_test('check|u_ins|127.0.0.1||qb.t:*') AS r;
+
+--echo # Only ENGINE=DuckDB tables, and only existing ones
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.inno:x') AS r;
+SELECT quack_bridge_test('check|u_glob|127.0.0.1||qb.nosuch:x') AS r;
+
+--echo # Column grants: each column read needs one; any column for count(*)
+SELECT quack_bridge_test('check|u_col|127.0.0.1||qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_col|127.0.0.1||qb.t:a,b') AS r;
+SELECT quack_bridge_test('check|u_col|127.0.0.1||qb.t:*') AS r;
+SELECT quack_bridge_test('check|u_col|127.0.0.1||qb.t:a,*') AS r;
+
+--echo # Roles: only when asked for, and only if granted
+SELECT quack_bridge_test('check|u_role|127.0.0.1||qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_role|127.0.0.1|r_sel|qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1|r_sel|qb.t:a') AS r;
+
+--echo # PUBLIC
+GRANT SELECT ON qb.t2 TO PUBLIC;
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
+REVOKE SELECT ON qb.t2 FROM PUBLIC;
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
+
+--echo # Host-specific accounts match the peer address; with name resolution
+--echo # on, only loopback peers are supported (quack_bridge_ip.test covers
+--echo # remote peers with --skip-name-resolve)
+SELECT quack_bridge_test('check|u_host|127.0.0.1||qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_host|10.0.0.5||qb.t:a') AS r;
+
+--echo # Anonymous and unknown accounts never match
+SELECT quack_bridge_test('check||127.0.0.1||qb.t:a') AS r;
+SELECT quack_bridge_test('check|nobody|127.0.0.1||qb.t:a') AS r;
+
+--echo # An anonymous account that matches the peer could win at login: refused
+CREATE USER ''@localhost;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+DROP USER ''@localhost;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+
+--echo # Tables not in the table cache are found as well
+FLUSH TABLES;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+
+--echo # A session keeps the account it logged in as: if the name now matches
+--echo # another account, it is refused
+SELECT quack_bridge_test('pin|s1|u_glob|127.0.0.1|') AS r;
+SELECT quack_bridge_test('pinned|s1|qb.t:a') AS r;
+DROP USER u_glob@localhost;
+CREATE USER u_glob@'%';
+GRANT SELECT ON *.* TO u_glob@'%';
+SELECT quack_bridge_test('pinned|s1|qb.t:a') AS r;
+SELECT quack_bridge_test('check|u_glob|127.0.0.1||qb.t:a') AS r;
+DROP USER u_glob@'%';
+CREATE USER u_glob@localhost;
+GRANT SELECT ON *.* TO u_glob@localhost;
+--echo # A revoked role refuses the pinned session at its next check
+SELECT quack_bridge_test('pin|s2|u_role|127.0.0.1|r_sel') AS r;
+SELECT quack_bridge_test('pinned|s2|qb.t:a') AS r;
+REVOKE r_sel FROM u_role@localhost;
+SELECT quack_bridge_test('pinned|s2|qb.t:a') AS r;
+
+--echo # GRANT, REVOKE and DROP USER act on the next check
+GRANT SELECT ON qb.t2 TO u_none@localhost;
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
+REVOKE SELECT ON qb.t2 FROM u_none@localhost;
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
+DROP USER u_none@localhost;
+SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
+
+--echo # Catalog visibility: schemas with any privilege, tables with a
+--echo # table-level (or higher) SELECT
+SELECT quack_bridge_test('visible|u_tbl|127.0.0.1||qb;qb_other;qb.t;qb.t2;qb.inno') AS r;
+SELECT quack_bridge_test('visible|u_col|127.0.0.1||qb;qb.t') AS r;
+SELECT quack_bridge_test('visible|u_db|127.0.0.1||qb;qb.t;qb.t2;qb.nosuch') AS r;
+SELECT quack_bridge_test('visible|u_ins|127.0.0.1||qb;qb.t') AS r;
+
+--echo # The worker limits fail closed
+SET @saved_queue= @@GLOBAL.duckdb_quack_acl_queue_size;
+SET @saved_timeout= @@GLOBAL.duckdb_quack_acl_timeout_ms;
+SET GLOBAL duckdb_quack_acl_queue_size= 0;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+SET GLOBAL duckdb_quack_acl_queue_size= @saved_queue;
+SET GLOBAL duckdb_quack_acl_timeout_ms= 0;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+SET GLOBAL duckdb_quack_acl_timeout_ms= @saved_timeout;
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+
+--echo # Only SUPER may call it
+connect (plain, localhost, u_tbl,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SELECT quack_bridge_test('check|u_tbl|127.0.0.1||qb.t:a') AS r;
+disconnect plain;
+connection default;
+
+DROP USER u_tbl@localhost, u_col@localhost, u_db@localhost, u_glob@localhost,
+          u_ins@localhost, u_role@localhost, u_host@'10.0.0.%';
+DROP ROLE r_sel;
+DROP DATABASE qb;
+DROP DATABASE qb_other;

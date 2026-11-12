@@ -1,0 +1,61 @@
+# No have_duckdb.inc: if Quack's lockdown fails, the engine does not load,
+# and this test must fail rather than skip.
+SELECT engine, support FROM information_schema.engines WHERE engine='DUCKDB';
+
+--echo #
+--echo # MDEV-41383: Quack is linked in, but its stock entry points are closed
+--echo #
+
+# run_in_duckdb() prints "header / types / [ Rows: n] / value"; keep the value.
+--let $last_line= SUBSTRING_INDEX(TRIM(TRAILING '\n' FROM x), '\n', -1)
+
+--echo # Both stock callbacks are pinned, fully qualified
+eval SELECT $last_line AS auth_function FROM (SELECT run_in_duckdb(
+  "SELECT current_setting('quack_authentication_function')") AS x) t;
+eval SELECT $last_line AS authz_function FROM (SELECT run_in_duckdb(
+  "SELECT current_setting('quack_authorization_function')") AS x) t;
+
+--echo # They cannot be changed or reset once the configuration is locked
+SELECT run_in_duckdb(
+  "SET GLOBAL quack_authentication_function='quack_check_token'") LIKE
+  '%configuration has been locked%' AS set_auth_denied;
+SELECT run_in_duckdb(
+  "SET GLOBAL quack_authorization_function='quack_nop_authorization'") LIKE
+  '%configuration has been locked%' AS set_authz_denied;
+SELECT run_in_duckdb("RESET GLOBAL quack_authentication_function") LIKE
+  '%configuration has been locked%' AS reset_denied;
+SELECT run_in_duckdb("SET quack_authentication_function='quack_check_token'")
+  LIKE '%configuration has been locked%' AS set_default_scope_denied;
+SELECT run_in_duckdb(
+  "SET SESSION quack_authentication_function='quack_check_token'") LIKE
+  '%configuration has been locked%' AS set_session_denied;
+
+--echo # The callbacks reject everything and cannot be replaced or dropped
+eval SELECT $last_line AS admitted FROM (SELECT run_in_duckdb(
+  "SELECT system.main.mariadb_quack_deny_all('id', 'auth', 'token')") AS x) t;
+eval SELECT $last_line AS query_to_run FROM (SELECT run_in_duckdb(
+  "SELECT system.main.mariadb_quack_deny_query('id', 'SELECT 1')") AS x) t;
+SELECT run_in_duckdb(
+  "CREATE OR REPLACE MACRO system.main.mariadb_quack_deny_all(a, b, c) AS true")
+  LIKE '%Cannot create entry in system catalog%' AS replace_denied;
+SELECT run_in_duckdb("DROP FUNCTION system.main.mariadb_quack_deny_query")
+  LIKE '%Cannot drop internal catalog entry%' AS drop_denied;
+eval SELECT $last_line AS still_denied FROM (SELECT run_in_duckdb(
+  "SELECT system.main.mariadb_quack_deny_all('id', 'auth', 'token')") AS x) t;
+
+--echo # The stock server cannot be started
+SELECT run_in_duckdb("CALL quack_serve('quack:localhost:0', token => 'secret')")
+  LIKE '%quack_serve() is disabled%' AS serve_disabled;
+SELECT run_in_duckdb("SELECT count(*) FROM quack_server_list()") LIKE
+  '%\n0\n%' AS no_server;
+
+--echo # The client cannot leave this host
+SELECT run_in_duckdb("FROM quack_query('quack:example.com:443', 'SELECT 1',
+  token => 'tok', ssl_fingerprint => 'sha256:0000000000000000000000000000000000000000000000000000000000000000')")
+  LIKE '%limited to loopback%' AS remote_denied;
+SELECT run_in_duckdb("ATTACH 'quack:192.0.2.1:9494' AS r (TOKEN 'tok')") LIKE
+  '%limited to loopback%' AS attach_denied;
+--echo # Loopback is still allowed (nothing listens on port 1)
+SELECT run_in_duckdb("FROM quack_query('quack:127.0.0.1:1', 'SELECT 1',
+  token => 'tok', ssl_fingerprint => 'sha256:0000000000000000000000000000000000000000000000000000000000000000')")
+  LIKE '%Could not establish connection%' AS loopback_attempted;

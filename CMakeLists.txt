@@ -39,7 +39,9 @@ SET(CMAKE_CXX_FLAGS_DEBUG
 SET(DUCKDB_PLUGIN_SOURCES
   ha_duckdb.cc
   ha_duckdb_pushdown.cc
+  ha_duckdb_quack.cc
   duckdb_udf.cc
+  bridge/bridge_test_udf.cc
 )
 
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
@@ -54,8 +56,19 @@ engine embeds DuckDB as a pluggable storage engine, enabling fast analytical
 
 IF(TARGET duckdb)
 
+  # Quack (MDEV-41383) serves HTTPS through OpenSSL. Linked dynamically: on
+  # distribution builds this is the same libssl/libcrypto mariadbd loads.
+  FIND_PACKAGE(OpenSSL)
+  IF(NOT OPENSSL_FOUND)
+    MESSAGE(FATAL_ERROR "DuckDB: OpenSSL development files are required "
+            "(libssl-dev / openssl-devel)")
+  ENDIF()
+
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb.cmake)
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_target_setup.cmake)
+
+  # DuckDB-side Quack module; added first so it gets no MariaDB headers.
+  ADD_SUBDIRECTORY(quack_guard)
 
   # Provide MariaDB server include paths to sub-libraries.
   # MARIADB_ADD_PLUGIN does this only for the plugin target itself.
@@ -65,11 +78,12 @@ IF(TARGET duckdb)
   ADD_SUBDIRECTORY(common)
   ADD_SUBDIRECTORY(convertor)
   ADD_SUBDIRECTORY(runtime)
+  ADD_SUBDIRECTORY(bridge)
 
   # atomic: GCC lowers the 16-byte atomic ops of the AUTO_INCREMENT block
   # cache (Duckdb_share::autoinc_range) to libatomic calls.
   target_link_libraries(duckdb duckdb_runtime duckdb_convertor duckdb_common
-    ${DUCKDB_LIBRARY} atomic
+    quack_bridge quack_guard ${DUCKDB_LIBRARY} atomic
   )
   TARGET_SOURCES(duckdb PRIVATE ${DUCKDB_STATIC_EXTENSION_LOADER})
 

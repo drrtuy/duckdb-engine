@@ -112,6 +112,9 @@ user, on the shared instance, a caller can:
 - **Reach the network** via extensions such as `httpfs` if they are already
   installed (auto-install is disabled), enabling SSRF and exfiltration to
   remote endpoints.
+  The statically linked Quack extension (MDEV-41383, see `Quack.MD`) is
+  limited to loopback addresses for its client and cannot start its stock
+  server (`quack_serve()` is disabled), so it adds no network reach.
 - **Attach external databases** (`ATTACH`) and read/modify their contents.
 - **Change global DuckDB settings** listed in `allowed_configs` on the shared
   instance (e.g. `SET GLOBAL memory_limit`/`threads`), enabling

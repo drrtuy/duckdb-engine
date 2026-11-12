@@ -10,3 +10,11 @@ duckdb_extension_load(json)
 duckdb_extension_statically_link(json)
 duckdb_extension_load(parquet)
 duckdb_extension_statically_link(parquet)
+# Quack client/server protocol: third_parties/duckdb-quack (pinned to the
+# commit DuckDB itself pins) plus patches/duckdb-quack, staged by
+# cmake/duckdb.cmake into MARIADB_QUACK_SOURCE_DIR.
+duckdb_extension_load(quack
+    SOURCE_DIR ${MARIADB_QUACK_SOURCE_DIR}
+    INCLUDE_DIR ${MARIADB_QUACK_SOURCE_DIR}/src/include
+)
+duckdb_extension_statically_link(quack)

@@ -1,0 +1,199 @@
+#
+# MDEV-41383: Quack clients log in as MariaDB accounts and read only
+# what their grants allow
+#
+call mtr.add_suppression("DuckDB: Quack login refused");
+call mtr.add_suppression("DuckDB: Quack statement refused");
+SET @saved_log_warnings= @@GLOBAL.log_warnings;
+SET GLOBAL log_warnings= 2;
+listening	fingerprint
+1	1
+CREATE DATABASE qs;
+CREATE TABLE qs.t (id INT PRIMARY KEY, name VARCHAR(10), secret VARCHAR(10)) ENGINE=DuckDB;
+INSERT INTO qs.t VALUES (1, 'apple', 's1'), (2, 'bread', 's2');
+CREATE TABLE qs.hidden (id INT PRIMARY KEY) ENGINE=DuckDB;
+CREATE USER alice@localhost IDENTIFIED BY 'pw';
+GRANT SELECT ON qs.t TO alice@localhost;
+CREATE USER colin@localhost IDENTIFIED BY 'pw';
+GRANT SELECT (id, name) ON qs.t TO colin@localhost;
+CREATE USER locked@localhost IDENTIFIED BY 'pw' ACCOUNT LOCK;
+GRANT SELECT ON qs.t TO locked@localhost;
+CREATE USER expired@localhost IDENTIFIED BY 'pw' PASSWORD EXPIRE;
+GRANT SELECT ON qs.t TO expired@localhost;
+CREATE USER x509@localhost IDENTIFIED BY 'pw' REQUIRE X509;
+GRANT SELECT ON qs.t TO x509@localhost;
+CREATE USER other@localhost IDENTIFIED VIA mysql_native_password USING PASSWORD('pw') OR mysql_native_password USING PASSWORD('pw2');
+GRANT SELECT ON qs.t TO other@localhost;
+CREATE USER sslu@localhost IDENTIFIED BY 'pw' REQUIRE SSL;
+GRANT SELECT ON qs.t TO sslu@localhost;
+CREATE USER nopw@localhost;
+GRANT SELECT ON qs.t TO nopw@localhost;
+CREATE USER aged@localhost IDENTIFIED BY 'pw' PASSWORD EXPIRE INTERVAL 10 DAY;
+GRANT SELECT ON qs.t TO aged@localhost;
+CREATE USER lim@localhost IDENTIFIED BY 'pw' WITH MAX_USER_CONNECTIONS 1;
+GRANT SELECT ON qs.t TO lim@localhost;
+CREATE ROLE reader;
+GRANT SELECT ON qs.t TO reader;
+CREATE USER rolly@localhost IDENTIFIED BY 'pw';
+GRANT reader TO rolly@localhost;
+SET DEFAULT ROLE reader FOR rolly@localhost;
+CREATE USER carol@localhost IDENTIFIED BY 'pw';
+GRANT SELECT ON qs.t TO carol@localhost;
+# Log in: right password, wrong password, unknown user
+r
+bread
+r
+1
+r
+1
+# Locked, expired, REQUIRE X509: refused, and accepted once fixed
+r
+1
+Found in the error log: Quack login refused for 'locked' from 127.0.0.1: account locked
+ALTER USER locked@localhost ACCOUNT UNLOCK;
+r
+2
+r
+1
+ALTER USER expired@localhost IDENTIFIED BY 'pw';
+r
+2
+r
+1
+ALTER USER x509@localhost REQUIRE NONE;
+r
+2
+# REQUIRE SSL is met by the listener's TLS; an empty password works
+r
+2
+r
+2
+r
+1
+# Several authentication methods, and roles, cannot log in
+r
+1
+r
+1
+# A password older than its lifetime is expired
+UPDATE mysql.global_priv SET Priv= JSON_SET(Priv, '$.password_last_changed',
+UNIX_TIMESTAMP() - 20 * 86400) WHERE User = 'aged' AND Host = 'localhost';
+FLUSH PRIVILEGES;
+r
+1
+# Grants: table, columns, nothing
+r
+2
+r
+apple
+r
+1
+r
+1
+# Default role applies; an explicit role must be granted
+r
+apple
+r
+1
+# GRANT and REVOKE act on the next statement
+r
+0
+r
+1
+# max_password_errors: a success resets the count; two wrong passwords
+# in a row block also the right one, until the account is altered
+r
+2
+r
+1
+r
+2
+r
+1
+r
+1
+r
+1
+ALTER USER carol@localhost IDENTIFIED BY 'pw2';
+r
+2
+# The ACL worker's limits refuse logins too
+r
+1
+r
+1
+# Malformed credentials are refused before the bridge is asked
+r
+1
+Found in the error log: Quack login refused for '' from 127.0.0.1: malformed credentials
+r
+2
+# ATTACH lists what the account may see, and reads through it; the
+# open session follows REVOKE and GRANT
+failed
+0
+listed
+qs.t
+r
+apple
+r
+1
+r
+apple
+failed
+0
+# A column-only grantee sees no table
+failed
+0
+listed
+0
+failed
+0
+# MAX_USER_CONNECTIONS counts open Quack sessions
+failed
+0
+r
+1
+failed
+0
+r
+2
+# Sessions and refused statements are not logged by default
+logged: 0
+# duckdb_log_options=DUCKDB_QUACK logs sessions and refused statements
+r
+1
+Found in the error log: Quack session opened for 'alice@localhost' from 127.0.0.1
+Found in the error log: Quack statement refused for 'alice@localhost' from 127.0.0.1: statement PRAGMA_STATEMENT
+Found in the error log: Quack session closed for 'alice@localhost' from 127.0.0.1
+r
+1
+Found in the error log: Quack statement refused for 'colin@localhost' from 127.0.0.1: access to qs.t
+r
+1
+Found in the error log: Quack statement refused for 'colin@localhost' from 127.0.0.1: failed before authorization
+# Counters, as changed by this test
+SELECT LOWER(n.VARIABLE_NAME) AS name,
+IF(n.VARIABLE_NAME = 'DUCKDB_QUACK_STATEMENTS', n.VARIABLE_VALUE - c.value > 20,
+n.VARIABLE_VALUE - c.value) AS delta
+FROM information_schema.global_status n JOIN quack_counters c ON c.name = n.VARIABLE_NAME
+WHERE n.VARIABLE_NAME NOT IN ('DUCKDB_QUACK_RUNNING', 'DUCKDB_QUACK_ENDPOINTS',
+'DUCKDB_QUACK_SSL_FINGERPRINT', 'DUCKDB_QUACK_SESSIONS')
+ORDER BY name;
+name	delta
+duckdb_quack_acl_timeouts	2
+duckdb_quack_connections_refused	0
+duckdb_quack_limit_refusals	1
+duckdb_quack_logins	24
+duckdb_quack_logins_refused	18
+duckdb_quack_sessions_evicted	0
+duckdb_quack_statements	1
+duckdb_quack_statements_refused	7
+DROP TEMPORARY TABLE quack_counters;
+# Every session was closed
+SET GLOBAL log_warnings= @saved_log_warnings;
+DROP USER alice@localhost, colin@localhost, locked@localhost, expired@localhost,
+x509@localhost, other@localhost, rolly@localhost, carol@localhost,
+sslu@localhost, nopw@localhost, aged@localhost, lim@localhost;
+DROP ROLE reader;
+DROP DATABASE qs;

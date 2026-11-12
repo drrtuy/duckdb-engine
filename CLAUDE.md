@@ -66,6 +66,8 @@ All engine code is in the `myduck` namespace (except `ha_duckdb` which is in glo
 
 - **Type mapping** (`duckdb_types.cc/h`) — Converts between MariaDB field types and DuckDB types. `store_duckdb_field_in_mysql_format()` reads DuckDB values back into MariaDB row format.
 
+- **Quack server** (MDEV-41383, `Quack.MD` is the design doc) — serves the DuckDB database over the Quack protocol to MariaDB accounts. `quack_guard/` is a DuckDB-side module (no MariaDB headers): TLS listener, session registry, pre-bind statement gate, post-bind plan gate, catalog filter, counters. `bridge/` implements its `QuackAuthorizer` interface (`quack_guard/include/quack_guard/authorizer.hpp`) on MariaDB accounts, roles and grants, running every ACL call on one worker thread with a background THD. `ha_duckdb_quack.cc` starts and stops it, logs its audit events and exposes its status variables (the `duckdb_quack_*` settings are defined in `ha_duckdb.cc`); `DuckdbManager` owns the guard and the listener. Off by default (`duckdb_quack_enabled`). Unit tests: configure with `-DDUCKDB_UNIT_TESTS=ON`, run `build/quack_guard/quack_guard_test`; MTR: `quack_*.test`.
+
 ### SQL generation conventions
 
 DuckDB follows the SQL standard and delimits identifiers with **double quotes**, not backticks.
@@ -81,7 +83,7 @@ See `docs/mariadb-duckdb-incompatibilities.md` for known function name rewrites 
 
 ### DuckDB source and patches
 
-DuckDB source is at `third_parties/duckdb/` (git submodule, v2.0.0), built without local patches. Statically linked extensions are listed in `cmake/duckdb_extensions.cmake` and in `_DUCKDB_LINKED_EXTENSIONS` in `cmake/duckdb.cmake`, which renders DuckDB's static extension loader template into `duckdb_static_extension_loader.c`; `DuckdbManager::Initialize()` calls `duckdb_register_static_extensions()` before opening the database. Other compatibility is handled at runtime via `duckdb_mysql_compat.cc`. The build produces a static library; `_GLIBCXX_DEBUG` is explicitly undefined in CMakeLists.txt to avoid ABI mismatch with MariaDB's debug build.
+DuckDB source is at `third_parties/duckdb/` (git submodule, v2.0.0), built without local patches. The Quack extension (`third_parties/duckdb-quack/`, MDEV-41383) is built from a staged copy with `patches/duckdb-quack/*` applied; see `Quack.MD`. Statically linked extensions are listed in `cmake/duckdb_extensions.cmake` and in `_DUCKDB_LINKED_EXTENSIONS` in `cmake/duckdb.cmake`, which renders DuckDB's static extension loader template into `duckdb_static_extension_loader.c`; `DuckdbManager::Initialize()` calls `duckdb_register_static_extensions()` before opening the database. Other compatibility is handled at runtime via `duckdb_mysql_compat.cc`. The build produces a static library; `_GLIBCXX_DEBUG` is explicitly undefined in CMakeLists.txt to avoid ABI mismatch with MariaDB's debug build.
 
 ### Configuration
 

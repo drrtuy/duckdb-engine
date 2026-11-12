@@ -1,0 +1,4 @@
+--duckdb-quack-enabled=1
+--duckdb-quack-ssl-cert=$MYSQL_TEST_DIR/std_data/server-cert.pem
+--duckdb-quack-ssl-key=$MYSQL_TEST_DIR/std_data/server-key.pem
+--skip-grant-tables

@@ -25,6 +25,12 @@
 #include <my_global.h>
 #include <mysql/plugin.h>
 #include <mysql/plugin_function.h>
+#include "bridge/bridge.h"
+#include "duckdb_manager.h"
+
+#include <atomic>
+#include <chrono>
+#include <thread>
 #include "sql_class.h"
 #include "sql_table.h"
 
@@ -39,6 +45,7 @@
 #include "dml_convertor.h"
 #include "row_helpers.h"
 #include "ha_duckdb_pushdown.h"
+#include "ha_duckdb_quack.h"
 #include "duckdb_log.h"
 
 /* Global status counters */
@@ -257,6 +264,8 @@ static int duckdb_init_func(void *p)
     DBUG_RETURN(1);
   }
 
+  quack_init(duckdb_hton);
+
   sql_print_information("DuckDB storage engine initialized");
   DBUG_RETURN(0);
 }
@@ -264,6 +273,7 @@ static int duckdb_init_func(void *p)
 static int duckdb_deinit_func(void *p)
 {
   DBUG_ENTER("duckdb_deinit_func");
+  quack_stop();
   myduck::DuckdbManager::Cleanup();
   DBUG_RETURN(0);
 }
@@ -1509,6 +1519,98 @@ static MYSQL_SYSVAR_BOOL(allow_run_in_duckdb, allow_run_in_duckdb,
                          "(requires SUPER privilege)",
                          NULL, NULL, FALSE);
 
+/* ---- Quack (MDEV-41383, see Quack.MD) ---- */
+
+my_bool quack_enabled= FALSE;
+static MYSQL_SYSVAR_BOOL(quack_enabled, quack_enabled,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Serve DuckDB tables over the Quack protocol, with "
+                         "MariaDB accounts and grants (TLS only)",
+                         NULL, NULL, FALSE);
+char *quack_bind_address= NULL;
+static MYSQL_SYSVAR_STR(quack_bind_address, quack_bind_address,
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                        "Comma-separated addresses the Quack listener binds "
+                        "(one socket each)",
+                        NULL, NULL, "127.0.0.1");
+uint quack_port= 0;
+static MYSQL_SYSVAR_UINT(quack_port, quack_port,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Quack listener port (0: any free port, see "
+                         "Duckdb_quack_endpoints)",
+                         NULL, NULL, 0, 0, 65535, 0);
+char *quack_ssl_cert= NULL;
+static MYSQL_SYSVAR_STR(quack_ssl_cert, quack_ssl_cert,
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                        "PEM certificate of the Quack listener (required)",
+                        NULL, NULL, NULL);
+char *quack_ssl_key= NULL;
+static MYSQL_SYSVAR_STR(quack_ssl_key, quack_ssl_key,
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                        "PEM private key of the Quack listener (required, "
+                        "unencrypted)",
+                        NULL, NULL, NULL);
+uint quack_max_connections= 64;
+static MYSQL_SYSVAR_UINT(quack_max_connections, quack_max_connections,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Concurrent Quack client connections; more are "
+                         "refused",
+                         NULL, NULL, 64, 1, 65536, 0);
+uint quack_max_sessions= 256;
+static MYSQL_SYSVAR_UINT(quack_max_sessions, quack_max_sessions,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Open Quack sessions; more logins are refused",
+                         NULL, NULL, 256, 1, 1048576, 0);
+uint quack_max_transaction_seconds= 300;
+static MYSQL_SYSVAR_UINT(quack_max_transaction_seconds,
+                         quack_max_transaction_seconds,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "A Quack session whose transaction stays open "
+                         "longer is closed",
+                         NULL, NULL, 300, 1, 604800, 0);
+uint quack_max_heartbeat_seconds= 300;
+static MYSQL_SYSVAR_UINT(quack_max_heartbeat_seconds,
+                         quack_max_heartbeat_seconds,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Longest heartbeat lease a Quack client may ask for",
+                         NULL, NULL, 300, 1, 604800, 0);
+
+my_bool quack_bridge_test= FALSE;
+static MYSQL_SYSVAR_BOOL(quack_bridge_test, quack_bridge_test,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_RQCMDARG,
+                         "Enable QUACK_BRIDGE_TEST(), which checks MariaDB "
+                         "grants through the Quack bridge (for tests; "
+                         "requires SUPER)",
+                         NULL, NULL, FALSE);
+
+ulong quack_acl_queue_size= 64;
+static void update_quack_acl_queue_size(THD *, struct st_mysql_sys_var *,
+                                        void *var, const void *save)
+{
+  *(ulong *) var= *(const ulong *) save;
+  quack_bridge::acl_queue_size= *(const ulong *) save;
+}
+static MYSQL_SYSVAR_ULONG(quack_acl_queue_size, quack_acl_queue_size,
+                          PLUGIN_VAR_RQCMDARG,
+                          "Quack authorization requests that may wait for "
+                          "the ACL worker; more are denied (0 denies all)",
+                          NULL, update_quack_acl_queue_size, 64, 0, 65536, 0);
+
+ulong quack_acl_timeout_ms= 5000;
+static void update_quack_acl_timeout_ms(THD *, struct st_mysql_sys_var *,
+                                        void *var, const void *save)
+{
+  *(ulong *) var= *(const ulong *) save;
+  quack_bridge::acl_timeout_ms= *(const ulong *) save;
+}
+static MYSQL_SYSVAR_ULONG(quack_acl_timeout_ms, quack_acl_timeout_ms,
+                          PLUGIN_VAR_RQCMDARG,
+                          "How long a Quack authorization request may wait, "
+                          "in milliseconds; longer ones are denied (0 denies "
+                          "all)",
+                          NULL, update_quack_acl_timeout_ms, 5000, 0,
+                          3600000, 0);
+
 static MYSQL_SYSVAR_BOOL(copy_ddl_in_batch, copy_ddl_in_batch,
                          PLUGIN_VAR_RQCMDARG,
                          "Use batch insert to speed up copy ddl", NULL, NULL,
@@ -1660,6 +1762,14 @@ my_bool get_thd_cross_engine_ryow(THD *thd)
 
 static struct st_mysql_sys_var *duckdb_system_variables[]= {
     MYSQL_SYSVAR(allow_run_in_duckdb),
+    MYSQL_SYSVAR(quack_enabled), MYSQL_SYSVAR(quack_bind_address),
+    MYSQL_SYSVAR(quack_port), MYSQL_SYSVAR(quack_ssl_cert),
+    MYSQL_SYSVAR(quack_ssl_key), MYSQL_SYSVAR(quack_max_connections),
+    MYSQL_SYSVAR(quack_max_sessions),
+    MYSQL_SYSVAR(quack_max_transaction_seconds),
+    MYSQL_SYSVAR(quack_max_heartbeat_seconds),
+    MYSQL_SYSVAR(quack_bridge_test), MYSQL_SYSVAR(quack_acl_queue_size),
+    MYSQL_SYSVAR(quack_acl_timeout_ms),
     MYSQL_SYSVAR(copy_ddl_in_batch), MYSQL_SYSVAR(dml_in_batch),
     MYSQL_SYSVAR(update_modified_column_only),
     MYSQL_SYSVAR(autoinc_cache_size),
@@ -1687,6 +1797,7 @@ static int show_duckdb_version(MYSQL_THD, struct st_mysql_show_var *var,
 
 static struct st_mysql_show_var duckdb_status_variables[]= {
     {"Duckdb_version", (char *) show_duckdb_version, SHOW_SIMPLE_FUNC},
+    {"Duckdb_quack", (char *) quack_status_variables, SHOW_ARRAY},
     {"Duckdb_rows_insert", (char *) &srv_duckdb_status.duckdb_rows_insert,
      SHOW_LONGLONG},
     {"Duckdb_rows_update", (char *) &srv_duckdb_status.duckdb_rows_update,
@@ -1709,6 +1820,7 @@ static struct st_mysql_storage_engine duckdb_storage_engine= {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
 extern Plugin_function plugin_descriptor_function_run_in_duckdb;
+extern Plugin_function plugin_descriptor_function_quack_bridge_test;
 
 maria_declare_plugin(duckdb)
 {
@@ -1732,6 +1844,21 @@ maria_declare_plugin(duckdb)
     "RUN_IN_DUCKDB",
     "drrtuy,lfedorov",
     "Execute a SQL query in DuckDB and return the result as a string",
+    PLUGIN_LICENSE_GPL,
+    NULL,                          /* Plugin Init */
+    NULL,                          /* Plugin Deinit */
+    0x0200,                        /* version number (2.0) */
+    NULL,                          /* status variables */
+    NULL,                          /* system variables */
+    "1.0",                         /* string version */
+    MariaDB_PLUGIN_MATURITY_GAMMA  /* maturity */
+},
+{
+    MariaDB_FUNCTION_PLUGIN,
+    &plugin_descriptor_function_quack_bridge_test,
+    "QUACK_BRIDGE_TEST",
+    "drrtuy,lfedorov",
+    "Check MariaDB grants through the Quack bridge (tests only)",
     PLUGIN_LICENSE_GPL,
     NULL,                          /* Plugin Init */
     NULL,                          /* Plugin Deinit */

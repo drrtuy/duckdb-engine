@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include "quack_guard/quack_guard.hpp"
+
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/appender.hpp"
@@ -42,6 +44,17 @@ public:
   static inline DuckdbManager &Get();
   static std::shared_ptr<duckdb::Connection> CreateConnection();
 
+  /* Quack (MDEV-41383): start the listener with `authorizer`; false and a
+     logged reason on failure (nothing listens then). */
+  static bool StartQuack(const quack_guard::ListenerOptions &options,
+                         std::shared_ptr<quack_guard::QuackAuthorizer> authorizer,
+                         quack_guard::AuditLog audit);
+  /* Stop the listener and close every Quack session. Idempotent. */
+  static void StopQuack();
+  static quack_guard::ListenerStatus QuackStatus();
+  static size_t QuackSessions();
+  static quack_guard::GuardCounters QuackCounters();
+
 private:
   static DuckdbManager *m_instance;
 
@@ -49,9 +62,15 @@ private:
   ~DuckdbManager();
 
   bool Initialize();
+  void StopQuackListener();
 
   duckdb::DuckDB *m_database= nullptr;
   std::mutex m_mutex;
+  /* The database's Quack guard, and the listener while it runs; the
+     listener is stopped before the database is destroyed */
+  std::shared_ptr<quack_guard::Guard> m_quack_guard;
+  std::mutex m_quack_mutex;
+  std::unique_ptr<quack_guard::Listener> m_quack_listener;
 };
 
 } // namespace myduck

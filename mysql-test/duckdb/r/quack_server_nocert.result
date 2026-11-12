@@ -1,0 +1,16 @@
+#
+# MDEV-41383: without a TLS certificate and key the Quack listener does
+# not start; the engine works as before
+#
+call mtr.add_suppression("DuckDB: the Quack listener did not start");
+Found in the error log: the Quack listener did not start: Quack: a TLS certificate and key are required
+SELECT VARIABLE_VALUE FROM information_schema.global_status
+WHERE VARIABLE_NAME = 'DUCKDB_QUACK_RUNNING';
+VARIABLE_VALUE
+OFF
+CREATE TABLE t (a INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t VALUES (1);
+SELECT * FROM t;
+a
+1
+DROP TABLE t;
