@@ -63,6 +63,21 @@ SELECT COUNT(*) FROM `x"y`;
 COUNT(*)
 0
 DROP TABLE `x"y`;
+CREATE DATABASE `db"ident_esc`;
+CREATE TABLE `db"ident_esc`.`t"name` (`i"d` INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO `db"ident_esc`.`t"name` VALUES (1), (2);
+SELECT `i"d` FROM `db"ident_esc`.`t"name` ORDER BY `i"d`;
+i"d
+1
+2
+USE `db"ident_esc`;
+SELECT `i"d` FROM `t"name` ORDER BY `i"d`;
+i"d
+1
+2
+USE db_ident_esc;
+DROP TABLE `db"ident_esc`.`t"name`;
+DROP DATABASE `db"ident_esc`;
 #
 # 5) Backslash quote-boundary mismatches disable raw SQL forwarding
 #
@@ -73,24 +88,24 @@ WHERE v = 'missing\' OR true -- ';
 COUNT(*)
 0
 UPDATE lexical_guard SET v = 'changed\' WHERE true -- ' WHERE id = 999;
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe
 DELETE FROM lexical_guard WHERE v = 'missing\' OR true -- ';
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT COUNT(*) FROM lexical_guard;
 COUNT(*)
 1
 UPDATE lexical_guard SET v = 'safe\'';
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe
 UPDATE /* user's \' comment */ lexical_guard SET v = 'unchanged' WHERE id = 999;
 UPDATE lexical_guard SET v = 'unchanged\n' WHERE id = 999;
 UPDATE lexical_guard SET v = "changed\" WHERE true -- " WHERE id = 999;
-ERROR HY000: Got error 168 'Unsafe MariaDB backslash quote escape in forwarded SQL' from DuckDB
+ERROR HY000: Got error 168 'Unsafe MariaDB lexical mismatch in forwarded SQL' from DuckDB
 SELECT * FROM lexical_guard;
 id	v
 1	safe

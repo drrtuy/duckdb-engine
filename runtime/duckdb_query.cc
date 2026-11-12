@@ -29,8 +29,8 @@
 #include "duckdb_context.h"
 #include "duckdb_manager.h"
 #include "duckdb_log.h"
-
-#include <cctype>
+#include "mariadb_dialect.h"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace myduck
 {
@@ -58,7 +58,7 @@ SqlRegionType scan_sql_region(const std::string &sql, size_t start,
   if (c == '#' ||
       (c == '-' && start + 1 < sql.size() && sql[start + 1] == '-' &&
        (start + 2 == sql.size() ||
-        isspace(static_cast<unsigned char>(sql[start + 2])))))
+        static_cast<unsigned char>(sql[start + 2]) <= ' ')))
   {
     size_t newline= sql.find('\n', start + (c == '#' ? 1 : 2));
     end= newline == std::string::npos ? sql.size() : newline + 1;
@@ -90,45 +90,21 @@ SqlRegionType scan_sql_region(const std::string &sql, size_t start,
   return SqlRegionType::UNTERMINATED;
 }
 
-bool mariadb_query_has_unsafe_quote_escape(THD *thd, const char *query,
-                                            size_t length)
+bool mariadb_query_has_lexical_mismatch(THD *thd, const char *query, size_t length)
 {
-  if (!thd->backslash_escapes() || length == 0)
-    return false;
-
-  const std::string sql(query, length);
-  const bool ansi_quotes= thd->variables.sql_mode & MODE_ANSI_QUOTES;
-  for (size_t i= 0; i < sql.size();)
-  {
-    size_t duckdb_end;
-    SqlRegionType duckdb_region= scan_sql_region(sql, i, false, duckdb_end);
-    if (duckdb_region == SqlRegionType::COMMENT)
-    {
-      i= duckdb_end;
-      continue;
-    }
-
-    const bool string_literal=
-        sql[i] == '\'' || (sql[i] == '"' && !ansi_quotes);
-    if (string_literal)
-    {
-      size_t mariadb_end;
-      SqlRegionType mariadb_region=
-          scan_sql_region(sql, i, true, mariadb_end);
-      if (mariadb_region != duckdb_region || mariadb_end != duckdb_end)
+  const std::string_view sql(query, length);
+  const CHARSET_INFO *charset= thd->charset();
+  const std::string_view charset_name(charset->cs_name.str, charset->cs_name.length);
+  if (charset->mbminlen > 1)
+    return true;
+  if (charset_name != "utf8mb4" && charset_name != "utf8mb3" &&
+      charset_name != "utf8")
+    for (unsigned char c : sql)
+      if (c >= 0x80)
         return true;
-      i= mariadb_end;
-      continue;
-    }
-
-    if (duckdb_region == SqlRegionType::QUOTED)
-      i= duckdb_end;
-    else if (duckdb_region == SqlRegionType::UNTERMINATED)
-      return true;
-    else
-      i++;
-  }
-  return false;
+  return mariadb_query_has_lexical_mismatch(
+      sql, thd->backslash_escapes(),
+      thd->variables.sql_mode & MODE_ANSI_QUOTES);
 }
 
 /*
@@ -240,13 +216,11 @@ duckdb_query(duckdb::Connection &connection, const std::string &query)
 }
 
 duckdb::unique_ptr<DuckdbChunkStream>
-duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
-                    std::string &error)
+duckdb_stream_mariadb_query(duckdb::Connection &connection, const std::string &query,
+                            std::string &error)
 {
-  const std::string q= backticks_to_double_quotes(query);
-
   if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY)
-    sql_print_information("DuckDB query: %s", q.c_str());
+    sql_print_information("DuckDB query: %s", query.c_str());
 
   try
   {
@@ -255,7 +229,8 @@ duckdb_stream_query(duckdb::Connection &connection, const std::string &query,
       produced as the caller fetches them. Connection::Query() would run the
       query to completion and retain the whole result first.
     */
-    auto res= connection.Submit(q);
+    auto statement= parse_mariadb_statement(connection, query);
+    auto res= connection.Submit(std::move(statement));
     if (res->HasError())
       error= res->GetError();
     else
@@ -278,8 +253,8 @@ static std::string get_thd_schema(THD *thd)
   return {};
 }
 
-static const char unsafe_quote_escape_error[]=
-    "Unsafe MariaDB backslash quote escape in forwarded SQL";
+static const char lexical_mismatch_error[]=
+    "Unsafe MariaDB lexical mismatch in forwarded SQL";
 
 static duckdb::Connection &prepare_thd_connection(THD *thd, bool need_config)
 {
@@ -296,28 +271,22 @@ static duckdb::Connection &prepare_thd_connection(THD *thd, bool need_config)
 duckdb::unique_ptr<duckdb::QueryResult>
 duckdb_query(THD *thd, const std::string &query, bool need_config)
 {
-  if (mariadb_query_has_unsafe_quote_escape(thd, query.data(), query.size()))
+  if (mariadb_query_has_lexical_mismatch(thd, query.data(), query.size()))
     return duckdb::make_uniq<duckdb::QueryResult>(
-        duckdb::ErrorData(unsafe_quote_escape_error));
+        duckdb::ErrorData(lexical_mismatch_error));
 
   return duckdb_query(prepare_thd_connection(thd, need_config), query);
 }
 
 duckdb::unique_ptr<DuckdbChunkStream>
-duckdb_stream_query(THD *thd, const std::string &query, std::string &error,
-                    bool need_config)
+duckdb_stream_mariadb_query(THD *thd, const std::string &query, std::string &error,
+                            bool need_config)
 {
-  if (mariadb_query_has_unsafe_quote_escape(thd, query.data(), query.size()))
-  {
-    error= unsafe_quote_escape_error;
-    return nullptr;
-  }
-
   auto &connection= prepare_thd_connection(thd, need_config);
   auto *ctx= get_thd_context(thd);
   /* Opened after the session setup so a kill cannot fail it. */
   ctx->begin_interruptible();
-  auto stream= duckdb_stream_query(connection, query, error);
+  auto stream= duckdb_stream_mariadb_query(connection, query, error);
   ctx->interrupt_if_killed(thd);
   return stream;
 }

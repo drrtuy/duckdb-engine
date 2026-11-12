@@ -6,10 +6,16 @@
 # generated DuckDB literal and the rest was parsed as DuckDB SQL. The gate
 # below fails while the injection works and passes once literals are escaped.
 SET NAMES utf8mb4;
+CREATE USER default_injection_user@localhost;
+GRANT CREATE ON injdb.* TO default_injection_user@localhost;
+connect  default_injection, localhost, default_injection_user,,injdb;
+SET NAMES utf8mb4;
 # The crafted DEFAULT closes the generated literal and appends a DuckDB COPY
 # that would write a file in the data directory. With the literal escaped the
 # payload is stored as data and no statement is injected.
 CREATE TABLE t (id INT PRIMARY KEY, c VARCHAR(200) DEFAULT 'a'');COPY(SELECT 2)TO ''zz_def.csv'';--') ENGINE=DuckDB CHARSET=utf8mb4|
+disconnect default_injection;
+connection default;
 # No injected COPY ran: zz_def.csv must not exist anywhere under the vardir.
 # The default round-trips through MariaDB as plain data.
 INSERT INTO t (id) VALUES (1);
@@ -23,3 +29,4 @@ SELECT d FROM t WHERE id = 2;
 d
 a'b
 DROP TABLE t;
+DROP USER default_injection_user@localhost;
