@@ -26,21 +26,19 @@ static std::atomic<size_t> parser_entries{0};
 static std::atomic<size_t> grammar_compilations{0};
 
 duckdb::unique_ptr<duckdb::SQLStatement> real_parse(
-    duckdb::TokenIterator &, duckdb::ParserOptions &, const duckdb::CompiledGrammar &,
-    duckdb::optional_idx &)
-    __asm__("__real__ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarERNS_12optional_idxE");
+    duckdb::TokenIterator &, duckdb::ParserOptions &, const duckdb::CompiledGrammar &)
+    __asm__("__real__ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarE");
 
 duckdb::unique_ptr<duckdb::SQLStatement> counted_parse(
-    duckdb::TokenIterator &, duckdb::ParserOptions &, const duckdb::CompiledGrammar &,
-    duckdb::optional_idx &)
-    __asm__("__wrap__ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarERNS_12optional_idxE");
+    duckdb::TokenIterator &, duckdb::ParserOptions &, const duckdb::CompiledGrammar &)
+    __asm__("__wrap__ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarE");
 
 duckdb::unique_ptr<duckdb::SQLStatement> counted_parse(
     duckdb::TokenIterator &tokens, duckdb::ParserOptions &options,
-    const duckdb::CompiledGrammar &grammar, duckdb::optional_idx &failure_index)
+    const duckdb::CompiledGrammar &grammar)
 {
   parser_entries++;
-  return real_parse(tokens, options, grammar, failure_index);
+  return real_parse(tokens, options, grammar);
 }
 
 class CountingDialect : public duckdb::DialectExtension
