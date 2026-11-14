@@ -31,7 +31,7 @@ TARGET_INCLUDE_DIRECTORIES(mariadb_dialect_test PRIVATE
   ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include)
 TARGET_LINK_LIBRARIES(mariadb_dialect_test PRIVATE duckdb_runtime ${DUCKDB_LIBRARY}
   pthread dl
-  -Wl,--wrap=_ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarERNS_12optional_idxE)
+  -Wl,--wrap=_ZN6duckdb21PEGTransformerFactory26TransformTopLevelStatementERNS_13TokenIteratorERNS_13ParserOptionsERKNS_15CompiledGrammarE)
 
 IF(DUCKDB_UNIT_TESTS)
   ADD_EXECUTABLE(fiber_context_test fiber_context_test.cc fiber_context.c)
