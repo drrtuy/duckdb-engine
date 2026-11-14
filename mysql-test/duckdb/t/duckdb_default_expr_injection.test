@@ -1,0 +1,59 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # An expression DEFAULT must not inject DuckDB SQL (companion to
+--echo # MDEV-40610, which only covers literal defaults).
+--echo #
+--echo # A literal default is escaped by get_field_default_for_duckdb()
+--echo # (doubling the quote). An expression default is forwarded verbatim from
+--echo # TABLE_SHARE::vcol_defs, which stores MariaDB's Item::print() output.
+--echo # Item::print() backslash-escapes a quote inside a function-argument
+--echo # string literal (\'), but the DuckDB tokenizer does not honor backslash
+--echo # escapes: it would close the generated literal early and parse the
+--echo # remainder as DuckDB SQL. Unsafe expression text is now refused and the
+--echo # default is omitted from DuckDB (MariaDB still supplies the value).
+
+--disable_query_log
+CREATE DATABASE IF NOT EXISTS injexpr CHARACTER SET utf8mb4;
+USE injexpr;
+--enable_query_log
+SET NAMES utf8mb4;
+
+# Remove any marker left by a previous run.
+SELECT run_in_duckdb('DROP TABLE IF EXISTS injexpr.injected_marker');
+
+CREATE USER expr_injection_user@localhost;
+GRANT CREATE ON injexpr.* TO expr_injection_user@localhost;
+connect (expr_injection, localhost, expr_injection_user,,injexpr);
+SET NAMES utf8mb4;
+SET sql_mode='';
+
+--echo # The crafted expression DEFAULT would append a DuckDB COPY (dollar-quoted
+--echo # path so Item::print does not mangle the filename) and a CREATE TABLE
+--echo # marker. The unsafe default is omitted, so no statement is injected.
+--delimiter |
+CREATE TABLE t (id INT PRIMARY KEY,
+  c VARCHAR(200) DEFAULT (concat('a'')));COPY(SELECT 1)TO $$zz_expr_inj.csv$$;CREATE TABLE injected_marker(x INTEGER)--', ''))
+) ENGINE=DuckDB CHARSET=utf8mb4|
+--delimiter ;
+
+disconnect expr_injection;
+connection default;
+
+--echo # No injected COPY ran: zz_expr_inj.csv must not exist anywhere under the vardir.
+perl;
+  use File::Find;
+  my $found= 0;
+  find(sub { $found= 1 if $_ eq 'zz_expr_inj.csv' }, $ENV{MYSQLTEST_VARDIR});
+  die "Expression DEFAULT injected a COPY (zz_expr_inj.csv written)\n" if $found;
+EOF
+
+--echo # No injected CREATE ran: injected_marker must not exist in DuckDB.
+SELECT run_in_duckdb('SELECT count(*) AS injected_marker_count FROM information_schema.tables WHERE table_name=''injected_marker''');
+
+DROP TABLE t;
+DROP USER expr_injection_user@localhost;
+
+--disable_query_log
+DROP DATABASE injexpr;
+--enable_query_log
