@@ -1,6 +1,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -98,8 +98,24 @@ duckdb::arena_ptr<duckdb::TransformResultValue> finalize_current_time(
       throw duckdb::ParserException(number.GetLocation(),
                                     "Fractional seconds precision must be an integer from 0 to 6");
   }
-  auto result= duckdb::make_uniq<duckdb::ColumnRefExpression>(
-      duckdb::Identifier(duckdb::StringUtil::Lower(keyword.keyword)));
+  /*
+    MariaDB CURRENT_DATE()/CURRENT_TIME(n)/CURRENT_TIMESTAMP(n) are unambiguously
+    functions. Emit the corresponding DuckDB SQL-value function directly — the
+    same FunctionExpression DuckDB's binder builds for the bare keyword in
+    Binder::GetSQLValueFunction() — rather than a ColumnRefExpression that a user
+    column of the same name would shadow and expose without a grant check.
+  */
+  duckdb::Identifier keyword_id(keyword.keyword);
+  const char *function_name;
+  if (keyword_id == "CURRENT_DATE")
+    function_name= "current_date";
+  else if (keyword_id == "CURRENT_TIME")
+    function_name= "get_current_time";
+  else
+    function_name= "get_current_timestamp";
+  duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
+  auto result= duckdb::make_uniq<duckdb::FunctionExpression>(
+      function_name, std::move(children));
   return transformer.MakeResult<duckdb::unique_ptr<duckdb::ParsedExpression>>(
       std::move(result));
 }

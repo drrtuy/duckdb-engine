@@ -1,0 +1,52 @@
+--source ../include/have_duckdb.inc
+
+--echo #
+--echo # CURRENT_DATE()/CURRENT_TIME()/CURRENT_TIMESTAMP() must resolve to the
+--echo # SQL-value function, never to a user column of the same name.
+--echo #
+--echo # finalize_current_time() used to build a ColumnRefExpression named
+--echo # current_date/current_time/current_timestamp, which DuckDB's binder
+--echo # resolves to a same-named column if one exists (shadowing the function)
+--echo # and returns it without a column grant. It now emits the SQL-value
+--echo # FunctionExpression directly, so a shadow column is never read.
+
+--disable_query_log
+CREATE DATABASE IF NOT EXISTS curtime CHARACTER SET utf8mb4;
+USE curtime;
+--enable_query_log
+SET NAMES utf8mb4;
+
+CREATE TABLE shadow (id INT PRIMARY KEY,
+  `current_date` INT, `current_time` INT, `current_timestamp` INT)
+  ENGINE=DuckDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO shadow VALUES (1, 111, 222, 333);
+
+--echo # Each form returns its date/time type (a bound INT shadow column would
+--echo # fail these type comparisons), never the 111/222/333 column values.
+SELECT CURRENT_DATE() >= DATE '2000-01-01' AS date_ok,
+       CURRENT_TIME() IS NOT NULL AS time_ok,
+       CURRENT_TIMESTAMP() >= TIMESTAMP '2000-01-01 00:00:00' AS ts_ok
+FROM shadow;
+
+--echo # Low-privilege user with SELECT only on id (no grant on current_date).
+CREATE USER curtime_user@localhost;
+GRANT SELECT(id) ON curtime.shadow TO curtime_user@localhost;
+connect (curtime_con, localhost, curtime_user,,curtime);
+SET NAMES utf8mb4;
+
+--echo # CURRENT_DATE() works: it is a function, not the ungranted column.
+SELECT CURRENT_DATE() >= DATE '2000-01-01' AS date_ok FROM shadow;
+
+--echo # Direct access to the ungranted column is still denied.
+--error ER_COLUMNACCESS_DENIED_ERROR
+SELECT `current_date` FROM shadow;
+
+disconnect curtime_con;
+connection default;
+
+DROP TABLE shadow;
+DROP USER curtime_user@localhost;
+
+--disable_query_log
+DROP DATABASE curtime;
+--enable_query_log

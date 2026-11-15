@@ -172,21 +172,21 @@ void test_current_time_expressions(duckdb::Connection &connection)
 {
   require_mariadb_query_parity(connection,
       "SELECT CURRENT_DATE(), CuRrEnT_Time(3), current_timestamp()",
-      "SELECT current_date, current_time, current_timestamp");
+      "SELECT current_date(), get_current_time(), get_current_timestamp()");
   require_mariadb_query_parity(
       connection,
       "SELECT CURRENT_DATE() AS d, CURRENT_TIME() AS t, CURRENT_TIMESTAMP() AS ts",
-      "SELECT CURRENT_DATE AS d, CURRENT_TIME AS t, CURRENT_TIMESTAMP AS ts");
+      "SELECT current_date() AS d, get_current_time() AS t, get_current_timestamp() AS ts");
   require_mariadb_query_parity(
       connection,
       "SELECT CURRENT_TIME /* empty */ ( ) AS t, current_timestamp( /* empty */ ) AS ts",
-      "SELECT CURRENT_TIME AS t, CURRENT_TIMESTAMP AS ts");
+      "SELECT get_current_time() AS t, get_current_timestamp() AS ts");
   require_mariadb_query_parity(
       connection,
       "SELECT CONVERT(CURRENT_TIMESTAMP(), DATE) AS d, "
       "CURRENT_TIME() IS NOT NULL AND CURRENT_DATE() IS NOT NULL AS present",
-      "SELECT CAST(CURRENT_TIMESTAMP AS DATE) AS d, "
-      "CURRENT_TIME IS NOT NULL AND CURRENT_DATE IS NOT NULL AS present");
+      "SELECT CAST(get_current_timestamp() AS DATE) AS d, "
+      "get_current_time() IS NOT NULL AND current_date() IS NOT NULL AS present");
   for (const char *precision : {"0", "1", "2", "3", "4", "5", "6"})
   {
     std::string source= "SELECT CURRENT_TIME(";
@@ -195,18 +195,19 @@ void test_current_time_expressions(duckdb::Connection &connection)
     source+= precision;
     source+= ") AS ts";
     require_mariadb_query_parity(
-        connection, source.c_str(), "SELECT CURRENT_TIME AS t, CURRENT_TIMESTAMP AS ts");
+        connection, source.c_str(),
+        "SELECT get_current_time() AS t, get_current_timestamp() AS ts");
   }
   require_mariadb_query_parity(
       connection,
       "SELECT CURRENT_DATE /* empty */ ( ) AS d, "
       "CURRENT_TIME( /* precision */ 3) AS t, CURRENT_TIMESTAMP(6 /* precision */) AS ts",
-      "SELECT CURRENT_DATE AS d, CURRENT_TIME AS t, CURRENT_TIMESTAMP AS ts");
+      "SELECT current_date() AS d, get_current_time() AS t, get_current_timestamp() AS ts");
   require_mariadb_query_parity(
       connection,
       "SELECT CURRENT_DATE() AS d, CURRENT_TIME(3) AS t, CURRENT_TIMESTAMP(6) AS ts "
       "FROM (VALUES (11, 22, 33)) AS t(\"current_date\", \"current_time\", \"current_timestamp\")",
-      "SELECT CURRENT_DATE AS d, CURRENT_TIME AS t, CURRENT_TIMESTAMP AS ts "
+      "SELECT current_date() AS d, get_current_time() AS t, get_current_timestamp() AS ts "
       "FROM (VALUES (11, 22, 33)) AS t(\"current_date\", \"current_time\", \"current_timestamp\")");
   auto base_shadow= connection.Query(
       "SELECT CURRENT_DATE() AS d FROM (VALUES (11)) AS t(\"current_date\")");
@@ -222,8 +223,8 @@ void test_expression_parameter_order(duckdb::Connection &connection)
       "? REGEXP ? AS matched, CURRENT_TIMESTAMP(6) AS ts, "
       "CONVERT(CONVERT(?, CHAR), CHAR) NOT RLIKE ? AS rejected, ? AS last";
   const char *normalized=
-      "SELECT CAST(? + ? AS DECIMAL(12,2)) AS amount, CURRENT_TIME AS t, "
-      "? ~ ? AS matched, CURRENT_TIMESTAMP AS ts, "
+      "SELECT CAST(? + ? AS DECIMAL(12,2)) AS amount, get_current_time() AS t, "
+      "? ~ ? AS matched, get_current_timestamp() AS ts, "
       "CAST(CAST(? AS VARCHAR) AS VARCHAR) !~ ? AS rejected, ? AS last";
   require_expression_ast_parity(connection, source, normalized);
   auto statement= myduck::parse_mariadb_statement(connection, source);

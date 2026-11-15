@@ -88,7 +88,7 @@ MariaDB function semantics differ from DuckDB in several areas. These are handle
 |---|---|
 | `GROUP BY ... WITH ROLLUP` | Native grouping-set expansion, matching `GROUP BY ROLLUP(...)` |
 | `CONVERT(expr, TYPE)` | Native `CastExpression`; SIGNED remains INTEGER, unsupported UNSIGNED retains the baseline error; no added CONVERT USING support |
-| `CURRENT_TIME()` / `CURRENT_DATE()` / `CURRENT_TIMESTAMP()` | Bare keyword-equivalent column-reference AST with canonical lowercase metadata names; TIME/TIMESTAMP precision 0–6 accepted but ignored |
+| `CURRENT_TIME()` / `CURRENT_DATE()` / `CURRENT_TIMESTAMP()` | No-arg SQL-value function AST (`get_current_time` / `current_date` / `get_current_timestamp`), not shadowable by a same-named column; TIME/TIMESTAMP precision 0–6 accepted but ignored |
 | `STRAIGHT_JOIN` | Regular qualified join or conditionless CROSS JOIN; SELECT modifier ignored, join ordering not enforced |
 | Conditionless plain `JOIN` (no ON/USING) | Native CROSS JOIN; not a general extension to conditionless outer/qualified joins |
 | `REGEXP` / `NOT REGEXP` / `RLIKE` / `NOT RLIKE` | Native regex operator AST and NOT handling, preserving the baseline engine behavior rather than promising full MariaDB regex equivalence |

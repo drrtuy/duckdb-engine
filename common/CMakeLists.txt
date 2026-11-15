@@ -5,6 +5,7 @@ SET(DUCKDB_COMMON_SOURCES
   duckdb_log.cc
   duckdb_charset_collation.cc
   duckdb_timezone.cc
+  mariadb_lexical_guard.cc
 )
 
 ADD_LIBRARY(duckdb_common STATIC ${DUCKDB_COMMON_SOURCES})
