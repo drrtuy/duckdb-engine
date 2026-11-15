@@ -23,27 +23,16 @@
 #include <cassert>
 #include <iomanip>
 #include <sstream>
-#include <string_view>
 #include <unordered_set>
 
 #include <my_global.h>
 #undef UNKNOWN
 #include "duckdb_charset_collation.h"
 #include "duckdb_config.h"
+#include "mariadb_lexical_guard.h" /* myduck::mariadb_query_has_lexical_mismatch */
 #include "sql_class.h"
 #include "sql_alter.h"
 #include "sql_table.h" /* primary_key_name */
-
-/*
-  Defined in runtime/mariadb_dialect.cc. Forward-declared here to avoid a
-  convertor->runtime include-path dependency (runtime already links the
-  convertor); the symbol resolves at the plugin's final link.
-*/
-namespace myduck
-{
-bool mariadb_query_has_lexical_mismatch(std::string_view query,
-                                        bool backslash_escapes, bool ansi_quotes);
-}
 
 /* ----- Helpers ----- */
 

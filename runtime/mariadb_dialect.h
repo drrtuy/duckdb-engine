@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/common/unique_ptr.hpp"
+#include "mariadb_lexical_guard.h" /* mariadb_query_has_lexical_mismatch */
 
 #include <string>
-#include <string_view>
 
 namespace duckdb
 {
@@ -14,9 +14,6 @@ struct DBConfig;
 
 namespace myduck
 {
-
-bool mariadb_query_has_lexical_mismatch(std::string_view query,
-                                      bool backslash_escapes, bool ansi_quotes);
 
 void register_mariadb_dialect(duckdb::DBConfig &config);
 
