@@ -71,7 +71,7 @@ private:
   bool error_;
 };
 
-duckdb::Value item_to_duckdb_value(Item *item,
+duckdb::Value item_to_duckdb_value(THD *thd, Item *item,
                                    const duckdb::LogicalType &type);
 
 /**

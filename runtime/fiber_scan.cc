@@ -26,6 +26,8 @@
 
 #include "fiber_scan.h"
 #include "duckdb_log.h"
+#include "duckdb_timezone.h"
+#include "tztime.h"
 #include "duckdb/common/error_data.hpp"
 
 MYSQL_THD create_background_thd();
@@ -38,7 +40,37 @@ namespace myduck
    Item → duckdb::Value conversion
    ---------------------------------------------------------------- */
 
-duckdb::Value item_to_duckdb_value(Item *item, const duckdb::LogicalType &type)
+/*
+  A MariaDB TIMESTAMP (or any temporal item) as a TIMESTAMPTZ instant. A
+  string would be cast as UTC, not in the session time zone. The scan's
+  columns are TIMESTAMP fields, so the field path is the one used; the
+  fallback reads local time in thd's time_zone, copied from the user's
+  session in FiberScanState::init().
+*/
+static duckdb::Value item_to_timestamptz(THD *thd, Item *item)
+{
+  Item *real= item->real_item();
+  if (real->type() == Item::FIELD_ITEM &&
+      static_cast<Item_field *>(real)->field->type() == MYSQL_TYPE_TIMESTAMP)
+    return duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(
+        get_timestamp_epoch_us(static_cast<Item_field *>(real)->field)));
+
+  MYSQL_TIME tm;
+  if (item->get_date(thd, &tm, date_mode_t((ulonglong) TIME_FUZZY_DATES)))
+    return duckdb::Value();
+  if (!tm.year && !tm.month && !tm.day)
+    return duckdb::Value::TIMESTAMPTZ(
+        duckdb::timestamp_tz_t(zero_timestamp_epoch_us));
+  uint error= 0;
+  my_time_t sec= thd->variables.time_zone->TIME_to_gmt_sec(&tm, &error);
+  if (!sec && error)
+    return duckdb::Value();
+  return duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(
+      (int64_t) sec * 1000000LL + (int64_t) tm.second_part));
+}
+
+duckdb::Value item_to_duckdb_value(THD *thd, Item *item,
+                                   const duckdb::LogicalType &type)
 {
   if (item->is_null())
     return duckdb::Value();
@@ -65,6 +97,8 @@ duckdb::Value item_to_duckdb_value(Item *item, const duckdb::LogicalType &type)
     return duckdb::Value::FLOAT(static_cast<float>(item->val_real()));
   case duckdb::LogicalTypeId::DOUBLE:
     return duckdb::Value::DOUBLE(item->val_real());
+  case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+    return item_to_timestamptz(thd, item);
   case duckdb::LogicalTypeId::BLOB: {
     String buf;
     String *s= item->val_str(&buf);
@@ -111,7 +145,7 @@ int select_to_duckdb::send_data(List<Item> &items)
     {
       if (col < types_->size())
       {
-        duckdb::Value val= item_to_duckdb_value(item, (*types_)[col]);
+        duckdb::Value val= item_to_duckdb_value(thd, item, (*types_)[col]);
         buffer_->data[col].SetValue(row_count_, val);
       }
       col++;
@@ -196,6 +230,13 @@ int FiberScanState::init(TABLE *tbl,
 
   /* Disable query cache — fiber queries are internal, not cacheable */
   fiber_thd->query_cache_is_applicable= 0;
+
+  /*
+    The synthetic SELECT's WHERE text holds the user's temporal literals;
+    read them in the user's time_zone, not the global default.
+  */
+  if (tbl->in_use)
+    fiber_thd->variables.time_zone= tbl->in_use->variables.time_zone;
 
   return 0;
 }

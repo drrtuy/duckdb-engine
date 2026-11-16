@@ -22,136 +22,204 @@
 #include "sql_class.h"
 #include "tztime.h"
 #include "my_time.h"
+#include "log.h"
 
 #include "duckdb_timezone.h"
 
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
 #include <ctime>
-#include <sstream>
+#include <fstream>
 
 namespace myduck
 {
 
-std::map<int64_t, std::string> TimeZoneOffsetHelper::timezone_offset_map;
-
-void TimeZoneOffsetHelper::init_timezone()
+/** Format a UTC offset as an ICU custom zone id; ICU's sign is the
+  usual one (GMT+05:30 is east of Greenwich). */
+static std::string offset_zone_name(long offset)
 {
-  add_timezone(50400, "Etc/GMT-14");
-  add_timezone(46800, "Etc/GMT-13");
-  add_timezone(43200, "Etc/GMT-12");
-  add_timezone(39600, "Etc/GMT-11");
-  add_timezone(36000, "Etc/GMT-10");
-  add_timezone(32400, "Etc/GMT-9");
-  add_timezone(28800, "Etc/GMT-8");
-  add_timezone(25200, "Etc/GMT-7");
-  add_timezone(21600, "Etc/GMT-6");
-  add_timezone(18000, "Etc/GMT-5");
-  add_timezone(14400, "Etc/GMT-4");
-  add_timezone(10800, "Etc/GMT-3");
-  add_timezone(7200, "Etc/GMT-2");
-  add_timezone(3600, "Etc/GMT-1");
-  add_timezone(0, "Etc/GMT");
-  add_timezone(-3600, "Etc/GMT+1");
-  add_timezone(-7200, "Etc/GMT+2");
-  add_timezone(-10800, "Etc/GMT+3");
-  add_timezone(-14400, "Etc/GMT+4");
-  add_timezone(-18000, "Etc/GMT+5");
-  add_timezone(-21600, "Etc/GMT+6");
-  add_timezone(-25200, "Etc/GMT+7");
-  add_timezone(-28800, "Etc/GMT+8");
-  add_timezone(-32400, "Etc/GMT+9");
-  add_timezone(-36000, "Etc/GMT+10");
-  add_timezone(-39600, "Etc/GMT+11");
-  add_timezone(-43200, "Etc/GMT+12");
-}
-
-std::string TimeZoneOffsetHelper::get_name_by_offset(int64_t offset,
-                                                     std::string &warn_msg)
-{
-  auto it= timezone_offset_map.find(offset);
-  if (it != timezone_offset_map.end())
-  {
-    return it->second;
-  }
+  char sign= offset < 0 ? '-' : '+';
+  long abs_offset= offset < 0 ? -offset : offset;
+  long hours= abs_offset / 3600, minutes= abs_offset / 60 % 60,
+       seconds= abs_offset % 60;
+  char buf[32];
+  if (seconds)
+    snprintf(buf, sizeof(buf), "GMT%c%02ld:%02ld:%02ld", sign, hours, minutes,
+             seconds);
   else
-  {
-    std::ostringstream osst;
-    osst << "Can't find corresponding duckdb time_zone, using Etc/GMT.";
-    warn_msg= osst.str();
-    return "Etc/GMT";
-  }
+    snprintf(buf, sizeof(buf), "GMT%c%02ld:%02ld", sign, hours, minutes);
+  return buf;
 }
 
-void TimeZoneOffsetHelper::add_timezone(int64_t offset,
-                                        const std::string &name)
+/** UTC offset of a MariaDB time zone at the current moment, in seconds. */
+static long current_offset(const Time_zone *tz)
 {
-  timezone_offset_map[offset]= name;
+  my_time_t now= (my_time_t) time(nullptr);
+  MYSQL_TIME lt;
+  tz->gmt_sec_to_TIME(&lt, now);
+  longlong days=
+      (longlong) calc_daynr(lt.year, lt.month, lt.day) - days_at_timestart;
+  longlong local= days * SECONDS_IN_24H + lt.hour * 3600LL +
+                  lt.minute * 60LL + lt.second;
+  return (long) (local - (longlong) now);
 }
 
 /**
-  Compute system timezone offset in seconds using localtime.
+  Bare "GMT-3" style zoneinfo names carry the POSIX sign (GMT-3 is
+  UTC+3), while ICU reads them as custom ids with the opposite sign.
+  ICU's Etc/GMT-3 keeps the POSIX meaning.
 */
-static my_time_t get_system_timezone_offset()
+static std::string posix_signed_name(const std::string &name)
 {
-  time_t now= time(nullptr);
-  struct tm l_time;
-  localtime_r(&now, &l_time);
-
-  MYSQL_TIME t;
-  t.year= (uint) l_time.tm_year + 1900;
-  t.month= (uint) l_time.tm_mon + 1;
-  t.day= (uint) l_time.tm_mday;
-  t.hour= (uint) l_time.tm_hour;
-  t.minute= (uint) l_time.tm_min;
-  t.second= (uint) l_time.tm_sec;
-  t.time_type= MYSQL_TIMESTAMP_DATETIME;
-  t.neg= false;
-  t.second_part= 0;
-
-  /* Compute seconds since 1970-01-01 00:00:00 */
-  my_time_t days= calc_daynr((uint) t.year, (uint) t.month, (uint) t.day) -
-                  (my_time_t) days_at_timestart;
-  my_time_t seconds=
-      days * SECONDS_IN_24H +
-      ((int64_t) t.hour * 3600 + (int64_t) (t.minute * 60 + t.second));
-
-  /* Get my_time_t via system time zone. */
-  long not_used_tz;
-  uint not_used_err;
-  my_system_gmt_sec(&t, &not_used_tz, &not_used_err);
-
-  return (seconds - now);
+  if (name.size() > 3 &&
+      (name.compare(0, 3, "GMT") == 0 || name.compare(0, 3, "UTC") == 0 ||
+       name.compare(0, 3, "UCT") == 0) &&
+      (name[3] == '+' || name[3] == '-'))
+    return "Etc/GMT" + name.substr(3);
+  return name;
 }
 
-std::string get_timezone_according_thd(THD *thd, std::string &warn_msg)
+/** Zone name for a zoneinfo path, or "" when ICU cannot use it. */
+static std::string zone_name_from_path(const std::string &path)
+{
+  char buf[PATH_MAX];
+  if (!realpath(path.c_str(), buf))
+    return "";
+  std::string real(buf);
+  size_t pos= real.rfind("/zoneinfo/");
+  if (pos == std::string::npos)
+    return "";
+  std::string name= real.substr(pos + sizeof("/zoneinfo/") - 1);
+  if (name.compare(0, 6, "posix/") == 0)
+    name.erase(0, 6);
+  else if (name.compare(0, 6, "right/") == 0)
+    return ""; /* leap-second zones: ICU has no equivalent */
+  return posix_signed_name(name);
+}
+
+/**
+  IANA name of the zone the server process runs in, as libc resolves it:
+  TZ if set, otherwise /etc/localtime (or /etc/timezone when
+  /etc/localtime is a copy rather than a link). Returns "" for POSIX
+  rule strings such as "UTC0" or "EST5EDT,M3.2.0,M11.1.0" that name no
+  zoneinfo file.
+*/
+static std::string resolve_system_zone()
+{
+  const char *tz= getenv("TZ");
+  if (tz)
+  {
+    if (*tz == ':')
+      tz++;
+    if (!*tz)
+      return "UTC";
+    if (*tz == '/')
+      return zone_name_from_path(tz);
+    const char *dir= getenv("TZDIR");
+    std::string base= dir && *dir ? dir : "/usr/share/zoneinfo";
+    return zone_name_from_path(base + "/" + tz);
+  }
+  std::string name= zone_name_from_path("/etc/localtime");
+  if (name.empty())
+  {
+    std::ifstream f("/etc/timezone");
+    std::string line;
+    if (f && std::getline(f, line) && !line.empty())
+      name= zone_name_from_path("/usr/share/zoneinfo/" + line);
+  }
+  return name;
+}
+
+bool is_system_timezone(THD *thd)
+{
+  return thd->variables.time_zone == my_tz_SYSTEM;
+}
+
+std::string get_fixed_offset_timezone(THD *thd)
+{
+  return offset_zone_name(current_offset(thd->variables.time_zone));
+}
+
+std::string get_timezone_according_thd(THD *thd)
 {
   Time_zone *tz= thd->variables.time_zone;
+
+  if (tz == my_tz_SYSTEM)
+  {
+    /* The server's zone cannot change while it runs. */
+    static const std::string system_zone= [] {
+      std::string name= resolve_system_zone();
+      if (name.empty())
+        sql_print_warning("DuckDB: cannot resolve the system time zone to "
+                          "a zone name; time_zone=SYSTEM uses the current "
+                          "UTC offset, without daylight saving changes");
+      return name;
+    }();
+    return system_zone.empty() ? get_fixed_offset_timezone(thd) : system_zone;
+  }
+
   const String *tz_name= tz->get_name();
   std::string name_str(tz_name->ptr(), tz_name->length());
 
-  /* SYSTEM timezone */
-  if (tz == my_tz_SYSTEM || name_str == "SYSTEM")
+  /* Offset zone like +08:00: exact as an ICU custom id */
+  if (!name_str.empty() && (name_str[0] == '+' || name_str[0] == '-'))
+    return get_fixed_offset_timezone(thd);
+
+  /* Named time zone: pass through to DuckDB. mysql_tzinfo_to_sql also
+     loads posix/ copies of the zones, which ICU knows without the prefix. */
+  if (name_str.compare(0, 6, "posix/") == 0)
+    name_str.erase(0, 6);
+  return posix_signed_name(name_str);
+}
+
+long long get_timestamp_epoch_us(Field *field)
+{
+  ulong sec_part;
+  my_time_t sec= field->get_timestamp(&sec_part);
+  if (sec == 0 && sec_part == 0)
+    return zero_timestamp_epoch_us;
+  return (long long) sec * 1000000LL + (long long) sec_part;
+}
+
+void store_epoch_us(THD *thd, Field *field, long long epoch_us)
+{
+  long long sec= epoch_us / 1000000LL;
+  long long usec= epoch_us % 1000000LL;
+  if (usec < 0)
   {
-    my_time_t offset= get_system_timezone_offset();
-    return TimeZoneOffsetHelper::get_name_by_offset(offset, warn_msg);
+    sec--;
+    usec+= 1000000LL;
   }
 
-  /* Offset timezone like +08:00 */
-  if (name_str.size() >= 3 && (name_str[0] == '+' || name_str[0] == '-'))
+  if (field->type() == MYSQL_TYPE_TIMESTAMP)
   {
-    /* Parse offset from "+HH:MM" format */
-    int hours= 0, minutes= 0;
-    char sign= name_str[0];
-    if (sscanf(name_str.c_str() + 1, "%d:%d", &hours, &minutes) >= 1)
+    if (sec <= 0 || sec > (long long) TIMESTAMP_MAX_VALUE)
     {
-      int64_t offset= (int64_t) hours * 3600 + (int64_t) minutes * 60;
-      if (sign == '-')
-        offset= -offset;
-      return TimeZoneOffsetHelper::get_name_by_offset(offset, warn_msg);
+      field->reset(); /* zero timestamp */
+      return;
     }
+    my_timeval tv= {sec, (ulong) usec};
+    field->store_timestamp_dec(tv, field->decimals());
+    return;
   }
 
-  /* Named timezone — pass through directly to DuckDB */
-  return name_str;
+  MYSQL_TIME tm;
+  if (epoch_us == zero_timestamp_epoch_us)
+  {
+    set_zero_time(&tm, MYSQL_TIMESTAMP_DATETIME);
+    field->store_time(&tm);
+    return;
+  }
+  thd->variables.time_zone->gmt_sec_to_TIME(&tm, (my_time_t) sec);
+  tm.second_part= (ulong) usec;
+  if (field->type() == MYSQL_TYPE_DATE || field->type() == MYSQL_TYPE_NEWDATE)
+  {
+    tm.hour= tm.minute= tm.second= 0;
+    tm.second_part= 0;
+    tm.time_type= MYSQL_TIMESTAMP_DATE;
+  }
+  field->store_time(&tm);
 }
 
 } // namespace myduck

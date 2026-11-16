@@ -27,6 +27,8 @@
 #include "sql_table.h" /* primary_key_name */
 #include "sql_time.h"
 #include "my_decimal.h"
+#include "tztime.h"
+#include "duckdb_timezone.h"
 
 namespace myduck { extern my_bool use_double_for_decimal; }
 
@@ -142,10 +144,27 @@ void append_field_value_to_sql(String &target_str, Field *field)
   }
   case MYSQL_TYPE_TIMESTAMP:
   case MYSQL_TYPE_TIMESTAMP2: {
+    /*
+      Write the instant in UTC with an explicit offset: a session
+      wall-clock string is ambiguous when clocks go back.
+    */
+    long long epoch_us= myduck::get_timestamp_epoch_us(field);
+    if (epoch_us == myduck::zero_timestamp_epoch_us)
+    {
+      char buf[64];
+      int len= snprintf(buf, sizeof(buf), "to_timestamp(%lld)",
+                        epoch_us / 1000000LL);
+      target_str.append(buf, len);
+      break;
+    }
+    MYSQL_TIME tm;
+    my_tz_OFFSET0->gmt_sec_to_TIME(&tm, (my_time_t) (epoch_us / 1000000LL));
+    tm.second_part= (ulong) (epoch_us % 1000000LL);
+    char buf[MAX_DATE_STRING_REP_LENGTH];
+    int len= my_datetime_to_str(&tm, buf, TIME_SECOND_PART_DIGITS);
     target_str.append(STRING_WITH_LEN("'"));
-    field->val_str(&field_value);
-    target_str.append(field_value);
-    target_str.append(STRING_WITH_LEN("'"));
+    target_str.append(buf, len);
+    target_str.append(STRING_WITH_LEN("+00'::TIMESTAMPTZ"));
     break;
   }
   case MYSQL_TYPE_SET:

@@ -1,0 +1,23 @@
+CREATE DATABASE test_duckdb;
+USE test_duckdb;
+CREATE TABLE t (id INT PRIMARY KEY, dt DATETIME) ENGINE = DuckDB;
+INSERT INTO t VALUES (1, '2024-01-01 00:00:00'), (2, '2024-07-01 00:00:00');
+SET time_zone = SYSTEM;
+SELECT @@system_time_zone;
+@@system_time_zone
+MET
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704063600
+2	1719784800
+# DST gap and repeated hour: MariaDB first, then pushed down
+SELECT UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice;
+gap	twice
+1711846800	1729992600
+SELECT UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice FROM t WHERE id = 1;
+gap	twice
+1711846800	1729992600
+SET time_zone = DEFAULT;
+DROP DATABASE test_duckdb;

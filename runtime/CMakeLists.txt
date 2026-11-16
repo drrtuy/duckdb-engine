@@ -20,7 +20,8 @@ duckdb_setup_target(duckdb_runtime)
 
 TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 TARGET_INCLUDE_DIRECTORIES(duckdb_runtime PRIVATE
-  ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include)
+  ${DUCKDB_SUBMODULE_DIR}/third_party/utf8proc/include
+  ${DUCKDB_SUBMODULE_DIR}/extension/icu/datetime/include)
 TARGET_LINK_LIBRARIES(duckdb_runtime PUBLIC duckdb_convertor duckdb_common)
 
 ADD_EXECUTABLE(mariadb_dialect_test EXCLUDE_FROM_ALL

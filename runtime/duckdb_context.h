@@ -124,6 +124,9 @@ public:
   /** Set DuckDB current schema (CREATE SCHEMA IF NOT EXISTS + USE). */
   void config_duckdb_env(const std::string &schema);
 
+  /** Set DuckDB's TimeZone from the THD's time_zone. */
+  void config_duckdb_timezone(THD *thd);
+
   /** Configure DuckDB session variables (timezone, optimizer flags) from THD.
    */
   void config_duckdb_session(THD *thd);
@@ -192,7 +195,9 @@ private:
   ulonglong m_disabled_optimizers= 0;
   std::string m_explain_output_str;
   std::string m_current_schema;
-  std::string m_current_timezone;
+  std::string m_current_timezone; /* zone DuckDB currently has */
+  std::string m_unknown_timezone; /* last zone DuckDB rejected */
+  int m_repeated_later= -1;       /* value of MARIADB_TZ_REPEATED_LATER_VAR */
   std::string m_collation;
 };
 

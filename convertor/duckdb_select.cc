@@ -29,6 +29,7 @@
 #include "tztime.h"
 
 #include "ddl_convertor.h"
+#include "duckdb_timezone.h"
 
 /**
   Store a temporal value, used for temporal type field like DATE, DATETIME,
@@ -202,6 +203,12 @@ void store_duckdb_field_in_mysql_format(Field *field, duckdb::Value &value,
     }
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_NEWDATE: {
+      if (value.type().id() == duckdb::LogicalTypeId::TIMESTAMP_TZ)
+      {
+        myduck::store_epoch_us(
+            thd, field, value.GetValueUnsafe<duckdb::timestamp_tz_t>().value);
+        break;
+      }
       /*
         DuckDB date_t stores days since 1970-01-01.
         Convert to MYSQL_TIME via val_str and store_time.
@@ -216,6 +223,12 @@ void store_duckdb_field_in_mysql_format(Field *field, duckdb::Value &value,
     }
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_DATETIME2: {
+      if (value.type().id() == duckdb::LogicalTypeId::TIMESTAMP_TZ)
+      {
+        myduck::store_epoch_us(
+            thd, field, value.GetValueUnsafe<duckdb::timestamp_tz_t>().value);
+        break;
+      }
       auto str= duckdb_value_as_string(value);
       MYSQL_TIME tm;
       MYSQL_TIME_STATUS status;
@@ -226,6 +239,16 @@ void store_duckdb_field_in_mysql_format(Field *field, duckdb::Value &value,
     }
     case MYSQL_TYPE_TIMESTAMP:
     case MYSQL_TYPE_TIMESTAMP2: {
+      /*
+        A TIMESTAMPTZ is an instant; its string form is in UTC, which
+        str_to_datetime would take as session wall-clock time.
+      */
+      if (value.type().id() == duckdb::LogicalTypeId::TIMESTAMP_TZ)
+      {
+        myduck::store_epoch_us(
+            thd, field, value.GetValueUnsafe<duckdb::timestamp_tz_t>().value);
+        break;
+      }
       auto str= duckdb_value_as_string(value);
       MYSQL_TIME tm;
       MYSQL_TIME_STATUS status;

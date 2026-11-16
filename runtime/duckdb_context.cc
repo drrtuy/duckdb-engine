@@ -122,22 +122,115 @@ void DuckdbThdContext::config_duckdb_env(const std::string &schema)
   }
 }
 
+static std::string quote_sql_string(const std::string &str)
+{
+  std::string quoted= "'";
+  for (char c : str)
+  {
+    quoted+= c;
+    if (c == '\'')
+      quoted+= c;
+  }
+  return quoted + "'";
+}
+
+enum class ZoneCheck
+{
+  KNOWN,
+  UNKNOWN,
+  FAILED
+};
+
+/**
+  Whether DuckDB's ICU accepts a zone name. Checked with a query rather
+  than by trying SET TimeZone: a failing statement aborts an open DuckDB
+  transaction. GMT+hh:mm ids come from get_fixed_offset_timezone() and
+  are always valid, but pg_timezone_names() does not list them.
+*/
+static ZoneCheck duckdb_knows_timezone(duckdb::Connection &con,
+                                       const std::string &zone)
+{
+  if (zone.compare(0, 4, "GMT+") == 0 || zone.compare(0, 4, "GMT-") == 0)
+    return ZoneCheck::KNOWN;
+  auto res= duckdb_query(con, "SELECT count(*) FROM pg_timezone_names() "
+                              "WHERE lower(name) = lower(" +
+                                  quote_sql_string(zone) + ")");
+  if (!res || res->HasError())
+    return ZoneCheck::FAILED;
+  auto chunk= res->Fetch();
+  if (!chunk || chunk->size() == 0)
+    return ZoneCheck::FAILED;
+  return chunk->GetValue(0, 0).GetValue<int64_t>() > 0 ? ZoneCheck::KNOWN
+                                                        : ZoneCheck::UNKNOWN;
+}
+
+static bool set_duckdb_timezone(duckdb::Connection &con,
+                                const std::string &zone)
+{
+  std::string sql= "SET TimeZone = " + quote_sql_string(zone);
+  auto res= duckdb_query(con, sql);
+  if (!res || res->HasError())
+  {
+    sql_print_warning("DuckDB: config_duckdb_session failed: %s (sql=%s)",
+                      res ? res->GetError().c_str() : "no result",
+                      sql.c_str());
+    return false;
+  }
+  return true;
+}
+
+void DuckdbThdContext::config_duckdb_timezone(THD *thd)
+{
+  /* Read by mariadb_unix_timestamp() (duckdb_mysql_compat.cc) */
+  int repeated_later= is_system_timezone(thd) ? 1 : 0;
+  if (repeated_later != m_repeated_later)
+  {
+    std::string sql= std::string("SET VARIABLE ") +
+                     MARIADB_TZ_REPEATED_LATER_VAR + " = " +
+                     (repeated_later ? "true" : "false");
+    auto res= duckdb_query(get_connection(), sql);
+    if (res && !res->HasError())
+      m_repeated_later= repeated_later;
+  }
+
+  std::string zone= get_timezone_according_thd(thd);
+  if (zone == m_current_timezone)
+    return;
+
+  if (zone != m_unknown_timezone)
+  {
+    switch (duckdb_knows_timezone(get_connection(), zone))
+    {
+    case ZoneCheck::KNOWN:
+      if (set_duckdb_timezone(get_connection(), zone))
+        m_current_timezone= zone;
+      return;
+    case ZoneCheck::FAILED:
+      return; /* retried on the next statement */
+    case ZoneCheck::UNKNOWN:
+      m_unknown_timezone= zone;
+      break;
+    }
+  }
+
+  std::string fixed= get_fixed_offset_timezone(thd);
+  push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                      "DuckDB: unknown time zone '%s', using its current "
+                      "offset %s",
+                      zone.c_str(), fixed.c_str());
+  if (fixed != m_current_timezone &&
+      set_duckdb_timezone(get_connection(), fixed))
+    m_current_timezone= fixed;
+}
+
 void DuckdbThdContext::config_duckdb_session(THD *thd)
 {
   std::vector<std::string> config_sql;
 
-  /* Timezone */
-  std::string warn_msg;
-  std::string tz_name= get_timezone_according_thd(thd, warn_msg);
-  if (tz_name != m_current_timezone)
-  {
-    config_sql.push_back("SET TimeZone = '" + tz_name + "'");
-    push_duckdb_warning(thd, warn_msg);
-    m_current_timezone= tz_name;
-  }
+  config_duckdb_timezone(thd);
 
   /* Collation: force_no_collation overrides to binary (POSIX) */
-  warn_msg.clear();
+  std::string warn_msg;
   std::string collation;
   if (get_thd_force_no_collation(thd))
     collation= COLLATION_BINARY;
