@@ -1,0 +1,56 @@
+--source ../include/have_duckdb.inc
+
+SET @saved_sql_mode= @@SESSION.sql_mode;
+SET SESSION sql_mode='';
+SET NAMES utf8mb4;
+CREATE TABLE concat_i (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), c VARCHAR(100)) ENGINE=InnoDB CHARSET=utf8mb4;
+CREATE TABLE concat_d (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), c VARCHAR(100)) ENGINE=DuckDB CHARSET=utf8mb4;
+INSERT INTO concat_i VALUES (1,'a','b','c'),(2,NULL,'b','c'),(3,'a',NULL,'c'),(4,'a','b',NULL),(5,NULL,NULL,NULL),(6,'','',''),(7,'x','','z'),(8,'é','字','');
+INSERT INTO concat_d SELECT * FROM concat_i;
+
+--let $assert_cond= `SELECT CONCAT(a,'x') IS NULL FROM concat_d WHERE id=2`
+--let $assert_text= CONCAT must propagate a column NULL
+--source include/assert.inc
+
+SELECT id, CONCAT(a,b,c) IS NULL AS is_null, HEX(CONCAT(a,b,c)) AS bytes, OCTET_LENGTH(CONCAT(a,b,c)) AS nbytes FROM concat_i ORDER BY id;
+SELECT id, CONCAT(a,b,c) IS NULL AS is_null, HEX(CONCAT(a,b,c)) AS bytes, OCTET_LENGTH(CONCAT(a,b,c)) AS nbytes FROM concat_d ORDER BY id;
+SELECT id, HEX(CONCAT(a)) AS single_arg, HEX(CONCAT('pre',a)) AS prefix, HEX(CONCAT(a,'post')) AS suffix, HEX(CONCAT(CONCAT(a,b),c)) AS nested FROM concat_i ORDER BY id;
+SELECT id, HEX(CONCAT(a)) AS single_arg, HEX(CONCAT('pre',a)) AS prefix, HEX(CONCAT(a,'post')) AS suffix, HEX(CONCAT(CONCAT(a,b),c)) AS nested FROM concat_d ORDER BY id;
+SELECT id FROM concat_i WHERE CONCAT(a,b) IS NULL ORDER BY id;
+SELECT id FROM concat_d WHERE CONCAT(a,b) IS NULL ORDER BY id;
+SELECT id, CONCAT('a',NULL) AS last_null, CONCAT(NULL,'b') AS first_null, CONCAT('a',NULL,'b') AS middle_null, CONCAT(NULL,NULL) AS all_null, HEX(CONCAT('','')) AS empty_value, CONCAT(12,34) AS numbers FROM concat_d WHERE id=1;
+SELECT id, LENGTH(CONCAT(a,NULL)) AS len, OCTET_LENGTH(CONCAT(a,NULL)) AS nbytes FROM concat_i ORDER BY id;
+SELECT id, LENGTH(CONCAT(a,NULL)) AS len, OCTET_LENGTH(CONCAT(a,NULL)) AS nbytes FROM concat_d ORDER BY id;
+SELECT id, HEX(CONCAT_WS(':',a,b,c)) AS with_separator FROM concat_i ORDER BY id;
+SELECT id, HEX(CONCAT_WS(':',a,b,c)) AS with_separator FROM concat_d ORDER BY id;
+
+PREPARE concat_stmt FROM 'SELECT id, HEX(CONCAT(a,b,c)) AS bytes FROM concat_d ORDER BY id';
+EXECUTE concat_stmt;
+EXECUTE concat_stmt;
+DEALLOCATE PREPARE concat_stmt;
+
+CREATE TABLE concat_out (id INT PRIMARY KEY, s VARCHAR(300)) ENGINE=InnoDB CHARSET=utf8mb4;
+INSERT INTO concat_out SELECT id, CONCAT(a,b,c) FROM concat_d;
+SELECT id, HEX(s) AS bytes FROM concat_out ORDER BY id;
+UPDATE concat_i SET c=CONCAT(a,b);
+UPDATE concat_d SET c=CONCAT(a,b);
+SELECT id, HEX(c) AS bytes FROM concat_i ORDER BY id;
+SELECT id, HEX(c) AS bytes FROM concat_d ORDER BY id;
+DELETE FROM concat_i WHERE CONCAT(a,b) IS NULL;
+DELETE FROM concat_d WHERE CONCAT(a,b) IS NULL;
+SELECT id FROM concat_i ORDER BY id;
+SELECT id FROM concat_d ORDER BY id;
+
+CREATE TABLE concat_chunks (id INT PRIMARY KEY, a VARCHAR(20), b VARCHAR(20)) ENGINE=DuckDB CHARSET=utf8mb4;
+SELECT run_in_duckdb('INSERT INTO test.concat_chunks SELECT i, CASE WHEN i%2=0 THEN NULL ELSE lpad(i::VARCHAR,4,''0'') END, CASE WHEN i%3=0 THEN NULL ELSE ''s'' END FROM range(1,5001) t(i)');
+SELECT COUNT(*) AS rows_total, SUM(CONCAT(a,b) IS NULL) AS null_rows, SUM((a IS NULL OR b IS NULL) <> (CONCAT(a,b) IS NULL)) AS wrong_nulls FROM concat_chunks;
+SELECT COUNT(*) AS rows_filtered, SUM((a IS NULL OR b IS NULL) <> (CONCAT(a,b) IS NULL)) AS wrong_nulls FROM concat_chunks WHERE id%5=0;
+SELECT SUM((a IS NULL) <> (CONCAT(a,'suffix') IS NULL)) AS wrong_suffix, SUM((a IS NULL) <> (CONCAT('prefix',a) IS NULL)) AS wrong_prefix, SUM((a IS NULL OR b IS NULL) <> (CONCAT('prefix',a,b,'suffix') IS NULL)) AS wrong_multiple FROM concat_chunks;
+SELECT SUM(a IS NULL) AS input_nulls, SUM(CONCAT(a,'x') IS NULL) AS concat_nulls, SUM(a IS NULL) AS input_nulls_after FROM concat_chunks;
+
+SELECT run_in_duckdb('SELECT concat(''a'',NULL) IS NULL AS strict_null, concat(NULL,NULL) IS NULL AS all_null, concat('''','''') = '''' AS empty_preserved, concat_ws('':'',''a'',NULL,''b'') AS ws_unchanged');
+SELECT run_in_duckdb('SELECT typeof(concat(''a'',NULL)) AS null_literal_type');
+SELECT run_in_duckdb('SELECT sum((a IS NULL) <> (concat(a,''x'') IS NULL)) AS wrong_nulls FROM (VALUES (NULL::VARCHAR),(''a''),('''')) t(a)');
+
+DROP TABLE concat_i, concat_d, concat_out, concat_chunks;
+SET SESSION sql_mode= @saved_sql_mode;
