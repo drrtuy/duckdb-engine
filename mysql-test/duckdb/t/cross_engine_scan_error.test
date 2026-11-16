@@ -1,0 +1,52 @@
+--source include/have_debug.inc
+--source ../include/have_duckdb.inc
+
+#
+# A read error in the direct (RYOW) cross-engine scan of a non-DuckDB
+# table must fail the query with the handler's own error, not end the
+# scan early with the rows read so far.  The injection points return a
+# lock wait timeout without reporting it, as InnoDB does: one at the 51st
+# row, one from ha_rnd_init().  They fire only on threads the server set
+# up, so DuckDB runs with one thread: the scan then runs on the
+# connection's own thread.
+#
+
+SET @old_max_threads= @@GLOBAL.duckdb_max_threads;
+SET GLOBAL duckdb_max_threads= 1;
+
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+--disable_query_log
+let $i= 100;
+while ($i)
+{
+  eval INSERT INTO t1 VALUES ($i);
+  dec $i;
+}
+--enable_query_log
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (0);
+SET SESSION duckdb_cross_engine_ryow=1;
+
+--echo # The direct scan reads every row
+--sorted_result
+SELECT COUNT(*) FROM t2 UNION ALL SELECT COUNT(*) FROM t1;
+
+--echo # A read error at the 51st row
+SET SESSION debug_dbug= '+d,duckdb_mdb_scan_read_error';
+--error ER_LOCK_WAIT_TIMEOUT
+SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+SET SESSION debug_dbug= '';
+
+--echo # An error from ha_rnd_init()
+SET SESSION debug_dbug= '+d,duckdb_mdb_scan_init_error';
+--error ER_LOCK_WAIT_TIMEOUT
+SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+SET SESSION debug_dbug= '';
+
+--echo # No scan was left open
+--sorted_result
+SELECT COUNT(*) FROM t2 UNION ALL SELECT COUNT(*) FROM t1;
+
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
+SET GLOBAL duckdb_max_threads= @old_max_threads;
+DROP TABLE t1, t2;

@@ -1,0 +1,29 @@
+SET @old_max_threads= @@GLOBAL.duckdb_max_threads;
+SET GLOBAL duckdb_max_threads= 1;
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (0);
+SET SESSION duckdb_cross_engine_ryow=1;
+# The direct scan reads every row
+SELECT COUNT(*) FROM t2 UNION ALL SELECT COUNT(*) FROM t1;
+COUNT(*)
+1
+100
+# A read error at the 51st row
+SET SESSION debug_dbug= '+d,duckdb_mdb_scan_read_error';
+SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET SESSION debug_dbug= '';
+# An error from ha_rnd_init()
+SET SESSION debug_dbug= '+d,duckdb_mdb_scan_init_error';
+SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET SESSION debug_dbug= '';
+# No scan was left open
+SELECT COUNT(*) FROM t2 UNION ALL SELECT COUNT(*) FROM t1;
+COUNT(*)
+1
+100
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
+SET GLOBAL duckdb_max_threads= @old_max_threads;
+DROP TABLE t1, t2;

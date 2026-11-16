@@ -1,0 +1,36 @@
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (0);
+CREATE TABLE t3 (a INT) ENGINE=InnoDB;
+connect  con1,localhost,root,,;
+BEGIN;
+UPDATE t1 SET a= a WHERE a= 60;
+connection default;
+SET SESSION duckdb_cross_engine_ryow=1;
+SET SESSION innodb_lock_wait_timeout= 1;
+INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SELECT COUNT(*) FROM t3;
+COUNT(*)
+0
+# KILL QUERY while the scan waits for the lock
+SET SESSION innodb_lock_wait_timeout= 100;
+INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+connection con1;
+connection default;
+ERROR 70100: Query execution was interrupted
+SELECT COUNT(*) FROM t3;
+COUNT(*)
+0
+connection con1;
+ROLLBACK;
+disconnect con1;
+connection default;
+# Once the lock is gone the statement copies every row
+INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+SELECT COUNT(*) FROM t3;
+COUNT(*)
+101
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
+SET SESSION innodb_lock_wait_timeout=DEFAULT;
+DROP TABLE t1, t2, t3;

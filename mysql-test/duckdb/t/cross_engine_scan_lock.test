@@ -1,0 +1,64 @@
+--source include/have_innodb.inc
+--source ../include/have_duckdb.inc
+
+#
+# A lock wait in the direct (RYOW) cross-engine scan of an InnoDB table,
+# on DuckDB's own worker threads: a timeout fails the statement with
+# ER_LOCK_WAIT_TIMEOUT and writes nothing, and KILL QUERY interrupts it.
+# (The source of INSERT ... SELECT is read with shared locks.)
+#
+
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+--disable_query_log
+let $i= 100;
+while ($i)
+{
+  eval INSERT INTO t1 VALUES ($i);
+  dec $i;
+}
+--enable_query_log
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (0);
+CREATE TABLE t3 (a INT) ENGINE=InnoDB;
+
+--connect (con1,localhost,root,,)
+BEGIN;
+UPDATE t1 SET a= a WHERE a= 60;
+
+--connection default
+SET SESSION duckdb_cross_engine_ryow=1;
+SET SESSION innodb_lock_wait_timeout= 1;
+--error ER_LOCK_WAIT_TIMEOUT
+INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+SELECT COUNT(*) FROM t3;
+
+--echo # KILL QUERY while the scan waits for the lock
+SET SESSION innodb_lock_wait_timeout= 100;
+let $id= `SELECT CONNECTION_ID()`;
+--send INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1
+
+--connection con1
+let $wait_condition= SELECT COUNT(*) = 1 FROM information_schema.innodb_trx
+  WHERE trx_state = 'LOCK WAIT';
+--source include/wait_condition.inc
+--disable_query_log
+eval KILL QUERY $id;
+--enable_query_log
+
+--connection default
+--error ER_QUERY_INTERRUPTED
+--reap
+SELECT COUNT(*) FROM t3;
+
+--connection con1
+ROLLBACK;
+--disconnect con1
+
+--connection default
+--echo # Once the lock is gone the statement copies every row
+INSERT INTO t3 SELECT a FROM t2 UNION ALL SELECT a FROM t1;
+SELECT COUNT(*) FROM t3;
+
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
+SET SESSION innodb_lock_wait_timeout=DEFAULT;
+DROP TABLE t1, t2, t3;

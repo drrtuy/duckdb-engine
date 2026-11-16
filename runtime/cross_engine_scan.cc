@@ -311,6 +311,34 @@ struct MdbScanGlobalState : duckdb::GlobalTableFunctionState
   ~MdbScanGlobalState() override { end_rnd_scan(); }
 };
 
+/*
+  Fails the scan with handler error `err`.  The handler reports it first,
+  on the connection's THD, as the server would for its own read: the
+  client then gets that error's own code (a lock wait timeout as 1205, a
+  deadlock as 1213, after which InnoDB has rolled the transaction back,
+  KILL as "interrupted"), since the first error raised wins over the
+  generic one the select handler raises for this exception.
+*/
+[[noreturn]] static void throw_handler_error(TABLE *tbl, int err)
+{
+  THD *thd= tbl->in_use;
+  THD *prev_thd= _current_thd();
+  if (thd && thd != prev_thd)
+    set_current_thd(thd);
+  tbl->file->print_error(err, MYF(0));
+  const char *fallback= my_get_err_msg(err);
+  std::string text= thd && thd->get_stmt_da()->is_error()
+                        ? std::string(thd->get_stmt_da()->message())
+                        : std::string(fallback ? fallback : "unknown error");
+  if (_current_thd() != prev_thd)
+    set_current_thd(prev_thd);
+  throw duckdb::InvalidInputException(
+      "_mdb_scan of `%s`.`%s` failed: %s (handler error %d)",
+      std::string(tbl->s->db.str, tbl->s->db.length),
+      std::string(tbl->s->table_name.str, tbl->s->table_name.length),
+      text, err);
+}
+
 static duckdb::unique_ptr<duckdb::FunctionData>
 mdb_scan_bind(duckdb::ClientContext &context,
               duckdb::TableFunctionBindInput &input,
@@ -509,13 +537,17 @@ static void mdb_scan_function(duckdb::ClientContext &context,
         bitmap_set_bit(tbl->read_set, static_cast<uint>(col_idx));
     }
 
-    if (tbl->file->ha_rnd_init(true))
+    int err= 0;
+    DBUG_EXECUTE_IF("duckdb_mdb_scan_init_error",
+                    err= HA_ERR_LOCK_WAIT_TIMEOUT;);
+    if (!err)
+      err= tbl->file->ha_rnd_init(true);
+    if (err)
     {
       state.finished= true;
-      output.SetChildCardinality(0);
       if (_current_thd() != prev_thd)
         set_current_thd(prev_thd);
-      return;
+      throw_handler_error(tbl, err);
     }
     state.rnd_inited= true;
   }
@@ -529,12 +561,19 @@ static void mdb_scan_function(duckdb::ClientContext &context,
     while (count < STANDARD_VECTOR_SIZE)
     {
       int err= tbl->file->ha_rnd_next(tbl->record[0]);
-      if (err)
+      /* A read error the handler returns without reporting it itself */
+      DBUG_EXECUTE_IF("duckdb_mdb_scan_read_error",
+                      if (!err && count == 50) err= HA_ERR_LOCK_WAIT_TIMEOUT;);
+      if (err == HA_ERR_END_OF_FILE)
       {
         state.end_rnd_scan();
         state.finished= true;
         break;
       }
+      /* Anything else (a lock wait timeout, a deadlock, KILL, an I/O
+         error) must fail the query, not end it with the rows so far */
+      if (err)
+        throw_handler_error(tbl, err);
 
       for (duckdb::idx_t i= 0; i < ncols; i++)
       {
