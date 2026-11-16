@@ -215,6 +215,17 @@ long long get_timestamp_epoch_us(Field *field)
   return (long long) sec * 1000000LL + (long long) sec_part;
 }
 
+/* Field::store_timestamp_dec() takes a struct timeval before MariaDB 11.5
+   and a my_timeval after; both have tv_sec and tv_usec. */
+template <typename T> struct timeval_arg;
+template <typename C, typename R, typename A, typename B>
+struct timeval_arg<R (C::*)(const A &, B)>
+{
+  using type= A;
+};
+using field_timeval=
+    timeval_arg<decltype(&Field::store_timestamp_dec)>::type;
+
 void store_epoch_us(THD *thd, Field *field, long long epoch_us)
 {
   long long sec= epoch_us / 1000000LL;
@@ -232,7 +243,9 @@ void store_epoch_us(THD *thd, Field *field, long long epoch_us)
       field->reset(); /* zero timestamp */
       return;
     }
-    my_timeval tv= {sec, (ulong) usec};
+    field_timeval tv;
+    tv.tv_sec= sec;
+    tv.tv_usec= (ulong) usec;
     field->store_timestamp_dec(tv, field->decimals());
     return;
   }
