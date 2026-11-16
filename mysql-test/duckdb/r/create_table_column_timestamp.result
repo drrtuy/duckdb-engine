@@ -14,7 +14,7 @@ c	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_datetime begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_datetime ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 3]
@@ -24,21 +24,21 @@ c	3	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_datetime ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_datetime ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_datetime'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_datetime ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_datetime%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -46,25 +46,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_datetime end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_datetime
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_datetime
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_datetime' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_DATETIME2	1	0	0	0	
-b	MYSQL_TYPE_DATETIME2	1	0	0	0	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1969-01-01 12:00:00	2020-01-01 12:00:00
 duckdb_result_1: 2020-01-01 12:00:00	1969-01-01 12:00:00	2020-01-01 12:00:00
@@ -98,7 +79,7 @@ e	timestamp	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_timestamp begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_timestamp ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -110,21 +91,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_timestamp ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_timestamp ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_timestamp'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_timestamp ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_timestamp%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -132,27 +113,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_timestamp end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_timestamp
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_timestamp
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_timestamp' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-c	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-d	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00	1970-01-01 12:00:00	2025-02-21 05:51:01	2025-02-21 05:51:01
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00	1970-01-01 12:00:00	2025-02-21 05:51:01	2025-02-21 05:51:01
@@ -190,8 +150,6 @@ SET time_zone = '+02:30';
 SELECT a FROM t_time_zone_unsupported;
 a
 2025-02-21 08:21:01
-Warnings:
-Warning	7508	[DuckDB] Exception when setting duckdb session variables. Can't find corresponding duckdb time_zone, using Etc/GMT.
 SET time_zone = '+03:00';
 SELECT a FROM t_time_zone_unsupported;
 a
@@ -218,7 +176,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -230,21 +188,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -252,27 +210,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 05:51:01.123400
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 05:51:01.123400
@@ -304,7 +241,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -316,21 +253,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -338,27 +275,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 08:51:01.000000	2025-02-21 08:51:01.123400
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 08:51:01.000000	2025-02-21 08:51:01.123400
@@ -390,7 +306,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -402,21 +318,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -424,27 +340,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 05:51:01.123400
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 05:51:01.123400
@@ -476,7 +371,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -488,21 +383,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -510,27 +405,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 15:51:01.000000	2025-02-21 15:51:01.123400
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00.000000	1969-01-01 12:00:00	2025-02-21 15:51:01.000000	2025-02-21 15:51:01.123400
@@ -566,7 +440,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -578,21 +452,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -600,27 +474,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 11:00:00	1970-01-01 11:00:00.000000	1969-01-01 12:00:00	2025-02-21 15:51:01.000000	2025-02-21 14:51:01.123400
 duckdb_result_1: 2020-01-01 11:00:00	1970-01-01 11:00:00.000000	1969-01-01 12:00:00	2025-02-21 15:51:01.000000	2025-02-21 14:51:01.123400
@@ -653,7 +506,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -665,21 +518,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -687,27 +540,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 15:00:00	1970-01-01 15:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 08:51:01.123400
 duckdb_result_1: 2020-01-01 15:00:00	1970-01-01 15:00:00.000000	1969-01-01 12:00:00	2025-02-21 05:51:01.000000	2025-02-21 08:51:01.123400
@@ -740,7 +572,7 @@ e	timestamp(6)	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 5]
@@ -752,21 +584,21 @@ e	5	TIMESTAMP WITH TIME ZONE	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -774,27 +606,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-c	MYSQL_TYPE_DATETIME2	1	0	0	0	
-d	MYSQL_TYPE_DATETIME2	1	0	0	6	
-e	MYSQL_TYPE_TIMESTAMP2	1	0	0	6	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 19:00:00	1970-01-01 19:00:00.000000	1969-01-01 12:00:00	2025-02-21 07:51:01.000000	2025-02-21 14:51:01.123400
 duckdb_result_1: 2020-01-01 19:00:00	1970-01-01 19:00:00.000000	1969-01-01 12:00:00	2025-02-21 07:51:01.000000	2025-02-21 14:51:01.123400
@@ -825,7 +636,7 @@ b	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -834,21 +645,21 @@ b	2	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -856,24 +667,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_DATETIME2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 12:00:00	1970-01-01 12:00:00
 duckdb_result_1: 2020-01-01 12:00:00	1970-01-01 12:00:00
@@ -900,7 +693,7 @@ b	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -909,21 +702,21 @@ b	2	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -931,24 +724,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_DATETIME2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 04:00:00	1970-01-01 12:00:00
 duckdb_result_1: 2020-01-01 04:00:00	1970-01-01 12:00:00
@@ -975,7 +750,7 @@ b	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -984,21 +759,21 @@ b	2	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1006,24 +781,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_DATETIME2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 06:00:00	1970-01-01 12:00:00
 duckdb_result_1: 2020-01-01 06:00:00	1970-01-01 12:00:00
@@ -1050,7 +807,7 @@ b	datetime	YES		NULL
 ------------------------------------------------------------------------
 ## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_time_zone begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
 # ① Print columns of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT column_name, column_index, data_type, numeric_precision FROM duckdb_columns() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 2]
@@ -1059,21 +816,21 @@ b	2	TIMESTAMP	NULL
 
 
 # ② Print CONSTRAINTs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 0]
 
 
 # ③ Print INDEXs of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT index_name, comment, tags, is_unique, is_primary, expressions FROM duckdb_indexes()  WHERE schema_name = 'duckdb_db' AND table_name = 't_time_zone'")
 index_name	comment	tags	is_unique	is_primary	expressions	
 VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
 [ Rows: 0]
 
 
 # ④ Print SEQUENCE of t_time_zone ##
-RESULT
+run_in_duckdb("SELECT sequence_name, min_value, increment_by, last_value FROM duckdb_sequences() WHERE schema_name='duckdb_db' AND sequence_name LIKE 'seq_t_time_zone%'")
 sequence_name	min_value	increment_by	last_value	
 VARCHAR	BIGINT	BIGINT	BIGINT	
 [ Rows: 0]
@@ -1081,24 +838,6 @@ VARCHAR	BIGINT	BIGINT	BIGINT
 
 ## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_time_zone end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
 ------------------------------------------------------------------------
-SET DEBUG='+d,skip_dd_table_access_check';
-#
-# =======================================================================
-# Show mysql dd structure of duckdb_db.t_time_zone
-# =======================================================================
-#
-include/assert.inc [table is not duckdb, which is DUCKDB]
-include/assert.inc [duckdb not support partition_expression, which is ]
-# Show colunmn info of t_time_zone
-SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_time_zone' ORDER BY t.schema_id, t.name, c.name;
-name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
-a	MYSQL_TYPE_TIMESTAMP2	1	0	0	0	
-b	MYSQL_TYPE_DATETIME2	1	0	0	0	
-include/assert.inc [duckdb do not support auto increment]
-include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
-include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
-include/assert.inc [duckdb do not support se_private_data, but it is ]
-SET DEBUG='-d,skip_dd_table_access_check';
 # check inserted data
 innodb_result  : 2020-01-01 18:00:00	1970-01-01 12:00:00
 duckdb_result_1: 2020-01-01 18:00:00	1970-01-01 12:00:00
@@ -1292,13 +1031,6 @@ a	b
 SELECT * FROM t_duckdb WHERE a < '2020-01-01 13:00:01' and a > '2020-01-01 12:59:59' and b < '1970-01-01 12:00:01' and b > '1969-12-31 23:59:00';
 a	b
 2020-01-01 13:00:00	1970-01-01 00:00:00
-SET time_zone='+14:00';
-SELECT * FROM t_innodb WHERE a < '2020-01-01 14:00:01' and a > '2020-01-01 13:59:59' and b < '1970-01-01 12:00:01' and b > '1969-12-31 23:59:00';
-a	b
-2020-01-01 14:00:00	1970-01-01 00:00:00
-SELECT * FROM t_duckdb WHERE a < '2020-01-01 14:00:01' and a > '2020-01-01 13:59:59' and b < '1970-01-01 12:00:01' and b > '1969-12-31 23:59:00';
-a	b
-2020-01-01 14:00:00	1970-01-01 00:00:00
 DROP TABLE t_innodb;
 DROP TABLE t_duckdb;
 SET time_zone=default;
