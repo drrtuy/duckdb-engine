@@ -1,0 +1,35 @@
+--source ../include/have_duckdb.inc
+
+# UNIX_TIMESTAMP() reads its argument as wall-clock time in the session
+# time_zone, so the same DATETIME gives a different epoch under each zone.
+# The pushed-down DuckDB macro must agree with MariaDB.
+
+CREATE DATABASE test_duckdb;
+USE test_duckdb;
+CREATE TABLE t (id INT PRIMARY KEY, dt DATETIME) ENGINE = DuckDB;
+INSERT INTO t VALUES (1, '2024-01-01 00:00:00'), (2, '1970-01-02 00:00:00');
+
+SET time_zone = '+00:00';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+
+SET time_zone = '+02:00';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+SELECT id, UNIX_TIMESTAMP('2024-01-01 00:00:00') FROM t ORDER BY id;
+SELECT id, UNIX_TIMESTAMP(CAST(dt AS DATE)) FROM t ORDER BY id;
+
+SET time_zone = '-05:00';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+
+# TIMESTAMP columns: the suite inserts through the SQL path
+# (duckdb_dml_in_batch=OFF), which stores the true instant. The batch
+# appender stores wall-clock time instead and still gives a wrong epoch.
+SET time_zone = '+02:00';
+CREATE TABLE ts (id INT PRIMARY KEY, ts TIMESTAMP NULL) ENGINE = DuckDB;
+INSERT INTO ts VALUES (1, '2024-01-01 00:00:00'), (2, NULL);
+SELECT id, UNIX_TIMESTAMP(ts) FROM ts ORDER BY id;
+
+# No argument: the macro must still bind and return the current time.
+SELECT ABS(UNIX_TIMESTAMP() - (SELECT UNIX_TIMESTAMP() FROM t LIMIT 1)) < 5 AS now_ok;
+
+SET time_zone = DEFAULT;
+DROP DATABASE test_duckdb;
