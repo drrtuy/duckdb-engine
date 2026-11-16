@@ -12,6 +12,8 @@ let $heavy= SELECT COUNT(*) FROM t1 a, t1 b, t1 c WHERE (a.a * 7 + b.a * 13 + c.
 
 --echo # max_statement_time
 SET max_statement_time= 0.5;
+# The message text differs between server versions; the error code does not.
+--replace_regex /Query (execution )?was interrupted.*/Query execution was interrupted (max_statement_time exceeded)/
 --error ER_STATEMENT_TIMEOUT
 eval $heavy;
 SET max_statement_time= 0;
