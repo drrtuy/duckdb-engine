@@ -255,9 +255,15 @@ bool DuckdbManager::Initialize()
                "timezone('UTC', now())::TIME");
     init_query("CREATE OR REPLACE MACRO utc_date() AS "
                "timezone('UTC', now())::DATE");
-    /* unix_timestamp([ts]) — epoch seconds; no arg = now() */
+    /* unix_timestamp([ts]) — epoch seconds; no arg = now().
+       MariaDB reads its argument as wall-clock time in the session
+       time_zone. DATETIME columns are stored as naive TIMESTAMP, which
+       epoch() would read as UTC, so cast to TIMESTAMPTZ first: that cast
+       applies the session TimeZone set in DuckdbThdContext, and is a
+       no-op for TIMESTAMP columns (already timestamptz). It also lets
+       string and DATE arguments bind. */
     init_query("CREATE OR REPLACE MACRO unix_timestamp(ts := now()) AS "
-               "epoch(ts)::BIGINT");
+               "epoch(ts::TIMESTAMPTZ)::BIGINT");
     /* time_to_sec(t) — seconds since midnight */
     init_query("CREATE OR REPLACE MACRO time_to_sec(t) AS "
                "(date_part('hour', t)*3600 + date_part('minute', t)*60 "
