@@ -31,6 +31,7 @@
 
 #include "cross_engine_scan.h"
 #include "duckdb_mysql_compat.h"
+#include "duckdb_mariadb_tz.h"
 #include "mariadb_dialect.h"
 #include "duckdb/parser/sql_statement.hpp"
 
@@ -259,9 +260,6 @@ bool DuckdbManager::Initialize()
     init_query("CREATE OR REPLACE MACRO time_to_sec(t) AS "
                "(date_part('hour', t)*3600 + date_part('minute', t)*60 "
                "+ date_part('second', t))::BIGINT");
-    /* convert_tz(ts, from_tz, to_tz) */
-    init_query("CREATE OR REPLACE MACRO convert_tz(ts, from_tz, to_tz) AS "
-               "timezone(to_tz, timezone(from_tz, ts))");
     init_query("CREATE OR REPLACE MACRO subdate(d, i) AS d - i");
     init_query("CREATE OR REPLACE MACRO insert(str, pos, len, newstr) AS "
                "CASE WHEN pos < 1 OR pos > length(str) THEN str "
@@ -285,17 +283,24 @@ bool DuckdbManager::Initialize()
        in register_mariadb_compat_functions() -- no SQL macros needed. */
     /* Register MySQL-compatible function overloads */
     register_mariadb_compat_functions(*m_database->instance);
+    register_mariadb_time_zone_functions(*m_database->instance);
     /* unix_timestamp([ts]) — epoch seconds; no arg = now().
        mariadb_datetime() (duckdb_mysql_compat.cc) turns numbers,
        strings, TIME and DATE into a naive TIMESTAMP the way MariaDB
        does; TIMESTAMP columns and now() stay TIMESTAMPTZ.
-       mariadb_unix_timestamp() reads a naive TIMESTAMP as wall-clock
+       mariadb_unix_timestamp() (duckdb_mariadb_tz.cc) reads a naive
+       TIMESTAMP as wall-clock
        time in the session TimeZone (set by
        DuckdbThdContext::config_duckdb_timezone()) with MariaDB's DST
        rules, and returns NULL outside the TIMESTAMP range.
        Created after both are registered: macros bind here. */
     init_query("CREATE OR REPLACE MACRO unix_timestamp(ts := now()) AS "
                "mariadb_unix_timestamp(mariadb_datetime(ts, current_date))");
+    /* convert_tz(ts, from_tz, to_tz) — MariaDB zone names and DST rules,
+       see mariadb_convert_tz() in duckdb_mariadb_tz.cc */
+    init_query("CREATE OR REPLACE MACRO convert_tz(ts, from_tz, to_tz) AS "
+               "mariadb_convert_tz(mariadb_datetime(ts, current_date), "
+               "from_tz, to_tz)");
 
     /* Register cross-engine scan support (_mdb_scan + replacement scan) */
     register_cross_engine_scan(*m_database->instance);

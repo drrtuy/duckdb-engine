@@ -198,6 +198,8 @@ private:
   std::string m_current_timezone; /* zone DuckDB currently has */
   std::string m_unknown_timezone; /* last zone DuckDB rejected */
   int m_repeated_later= -1;       /* value of MARIADB_TZ_REPEATED_LATER_VAR */
+  std::string m_system_timezone;  /* value of MARIADB_SYSTEM_TZ_VAR */
+  bool m_tz_rules_set= false;     /* MARIADB_TZ_RULES_VAR is set */
   std::string m_collation;
 };
 

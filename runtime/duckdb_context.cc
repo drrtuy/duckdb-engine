@@ -179,19 +179,30 @@ static bool set_duckdb_timezone(duckdb::Connection &con,
   return true;
 }
 
+static bool set_duckdb_variable(duckdb::Connection &con, const char *name,
+                                const std::string &sql_value)
+{
+  auto res= duckdb_query(con, std::string("SET VARIABLE ") + name + " = " +
+                                  sql_value);
+  return res && !res->HasError();
+}
+
 void DuckdbThdContext::config_duckdb_timezone(THD *thd)
 {
-  /* Read by mariadb_unix_timestamp() (duckdb_mysql_compat.cc) */
+  /* Variables read by runtime/duckdb_mariadb_tz.cc */
+  if (!m_tz_rules_set &&
+      set_duckdb_variable(get_connection(), MARIADB_TZ_RULES_VAR, "true"))
+    m_tz_rules_set= true;
   int repeated_later= is_system_timezone(thd) ? 1 : 0;
-  if (repeated_later != m_repeated_later)
-  {
-    std::string sql= std::string("SET VARIABLE ") +
-                     MARIADB_TZ_REPEATED_LATER_VAR + " = " +
-                     (repeated_later ? "true" : "false");
-    auto res= duckdb_query(get_connection(), sql);
-    if (res && !res->HasError())
-      m_repeated_later= repeated_later;
-  }
+  if (repeated_later != m_repeated_later &&
+      set_duckdb_variable(get_connection(), MARIADB_TZ_REPEATED_LATER_VAR,
+                          repeated_later ? "true" : "false"))
+    m_repeated_later= repeated_later;
+  std::string system_zone= get_system_timezone(thd);
+  if (system_zone != m_system_timezone &&
+      set_duckdb_variable(get_connection(), MARIADB_SYSTEM_TZ_VAR,
+                          quote_sql_string(system_zone)))
+    m_system_timezone= system_zone;
 
   std::string zone= get_timezone_according_thd(thd);
   if (zone == m_current_timezone)

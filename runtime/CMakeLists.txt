@@ -11,6 +11,7 @@ SET(DUCKDB_RUNTIME_SOURCES
   delta_appender.cc
   cross_engine_scan.cc
   duckdb_mysql_compat.cc
+  duckdb_mariadb_tz.cc
   fiber_context.cpp
   fiber_scan.cc
 )

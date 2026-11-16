@@ -39,7 +39,7 @@ DuckDB is embedded into MariaDB as a **storage engine plugin** (`ha_duckdb`). Ma
 1. Registers handlerton callbacks: `create`, `commit`, `rollback`, `close_connection`, `drop_database`, `create_select`, `create_unit`.
 2. `DuckdbManager::CreateInstance()` / `Initialize()` (`runtime/duckdb_manager.cc`) register the statically linked extensions and the `mariadb` dialect, then open `duckdb.db` in the MariaDB datadir.
 3. A temporary connection warms the dialect by calling `parse_mariadb_statement(..., "SELECT 1")` (`runtime/mariadb_dialect.cc`). It restores the base dialect before generated initialization SQL. All per-THD connections reuse the compiled grammar; compilation failure fails initialization.
-4. Registers SQL macros for MySQL compatibility (`adddate`, `datediff`, `curdate`, `convert_tz`, `substring_index`, `strcmp`, etc.) and C++ UDFs via `register_mariadb_compat_functions()` (`runtime/duckdb_mysql_compat.cc`).
+4. Registers SQL macros for MySQL compatibility (`adddate`, `datediff`, `curdate`, `convert_tz`, `substring_index`, `strcmp`, etc.) and C++ UDFs via `register_mariadb_compat_functions()` (`runtime/duckdb_mysql_compat.cc`) and `register_mariadb_time_zone_functions()` (`runtime/duckdb_mariadb_tz.cc`).
 5. Registers cross-engine scan infrastructure: `_mdb_scan` table function + replacement scan callback, then locks the DuckDB configuration with an explicit changeable-setting allowlist. This does not disable external file access; see [security-model.md](security-model.md).
 
 ### Shutdown (`duckdb_deinit_func`)
@@ -411,6 +411,7 @@ storage/duckdb/
 │   ├── mariadb_dialect_select.cc — SELECT grammar/transformers
 │   ├── mariadb_dialect*_test.cc  — standalone parser/lifecycle/parity tests
 │   ├── duckdb_mysql_compat.h/cc  — C++ UDFs for MySQL function compatibility
+│   ├── duckdb_mariadb_tz.h/cc    — MariaDB time zone rules: UNIX_TIMESTAMP, CONVERT_TZ, casts to TIMESTAMPTZ
 │   ├── cross_engine_scan.h/cc    — _mdb_scan table function + replacement scan
 │   ├── fiber_context.h/c         — stackful coroutine (fiber) primitives
 │   ├── fiber_scan.h/cc           — fiber-based MariaDB scan for cross-engine queries

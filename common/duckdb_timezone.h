@@ -29,9 +29,16 @@ namespace myduck
 {
 constexpr long days_at_timestart= 719528;
 
-/** DuckDB session variable: true when a repeated local time resolves to
-  the later instant (see is_system_timezone()). */
+/** DuckDB session variables set by DuckdbThdContext::config_duckdb_timezone()
+  for MariaDB sessions and read by runtime/duckdb_mariadb_tz.cc. Quack
+  sessions never set them and keep DuckDB's own rules. */
+/* true: apply MariaDB's time zone rules to casts in this session */
+#define MARIADB_TZ_RULES_VAR "mariadb_tz_rules"
+/* true when a repeated local time resolves to the later instant (see
+   is_system_timezone()) */
 #define MARIADB_TZ_REPEATED_LATER_VAR "mariadb_tz_repeated_later"
+/* ICU zone id standing for MariaDB's SYSTEM zone */
+#define MARIADB_SYSTEM_TZ_VAR "mariadb_system_tz"
 
 /** TIMESTAMPTZ value standing for MariaDB's zero TIMESTAMP, which has no
   instant: 0000-00-00 encoded as days since 1970 (calc_daynr(0,0,0) - 719528
@@ -51,6 +58,17 @@ std::string get_timezone_according_thd(THD *thd);
   local time (clocks going back) to the later instant under SYSTEM (libc)
   and to the earlier one under named zones. */
 bool is_system_timezone(THD *thd);
+
+/** ICU zone id for a MariaDB time zone name other than SYSTEM: "+05:30"
+  offsets become "GMT+05:30", posix/ copies lose the prefix, and bare
+  "GMT-3" style names keep their POSIX sign as "Etc/GMT-3". Returns "" for
+  a malformed offset. Other names pass through unchanged.
+*/
+std::string mariadb_zone_name_to_icu(const std::string &name);
+
+/** ICU zone id for MariaDB's SYSTEM zone: the IANA zone of the server
+  process, or its current fixed offset when that cannot be resolved. */
+std::string get_system_timezone(THD *thd);
 
 /** ICU custom id for the THD's time_zone offset at the current moment.
   Used when DuckDB does not know the zone name; correct only until the
