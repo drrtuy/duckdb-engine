@@ -141,23 +141,60 @@ std::string get_fixed_offset_timezone(THD *thd)
   return offset_zone_name(current_offset(thd->variables.time_zone));
 }
 
+std::string mariadb_zone_name_to_icu(const std::string &name)
+{
+  if (!name.empty() && (name[0] == '+' || name[0] == '-'))
+  {
+    /* As MariaDB's str_to_offset(): [+-]digits:digits, minutes <= 59,
+       from -12:59 to +13:00 */
+    size_t colon= name.find(':');
+    if (name.size() < 4 || colon == std::string::npos || colon == 1 ||
+        colon + 1 >= name.size())
+      return "";
+    long hours= 0, minutes= 0;
+    for (size_t i= 1; i < name.size(); i++)
+    {
+      if (i == colon)
+        continue;
+      if (name[i] < '0' || name[i] > '9' || hours > 100 || minutes > 100)
+        return "";
+      long &part= i < colon ? hours : minutes;
+      part= part * 10 + (name[i] - '0');
+    }
+    long offset= hours * 3600 + minutes * 60;
+    if (name[0] == '-')
+      offset= -offset;
+    if (minutes > 59 || offset < -13 * 3600 + 1 || offset > 13 * 3600)
+      return "";
+    return offset_zone_name(offset);
+  }
+  std::string icu= name;
+  if (icu.compare(0, 6, "posix/") == 0)
+    icu.erase(0, 6);
+  return posix_signed_name(icu);
+}
+
+std::string get_system_timezone(THD *thd)
+{
+  /* The server's zone cannot change while it runs. */
+  static const std::string system_zone= [] {
+    std::string name= resolve_system_zone();
+    if (name.empty())
+      sql_print_warning("DuckDB: cannot resolve the system time zone to "
+                        "a zone name; time_zone=SYSTEM uses the current "
+                        "UTC offset, without daylight saving changes");
+    return name;
+  }();
+  if (!system_zone.empty())
+    return system_zone;
+  return offset_zone_name(current_offset(my_tz_SYSTEM));
+}
+
 std::string get_timezone_according_thd(THD *thd)
 {
   Time_zone *tz= thd->variables.time_zone;
-
   if (tz == my_tz_SYSTEM)
-  {
-    /* The server's zone cannot change while it runs. */
-    static const std::string system_zone= [] {
-      std::string name= resolve_system_zone();
-      if (name.empty())
-        sql_print_warning("DuckDB: cannot resolve the system time zone to "
-                          "a zone name; time_zone=SYSTEM uses the current "
-                          "UTC offset, without daylight saving changes");
-      return name;
-    }();
-    return system_zone.empty() ? get_fixed_offset_timezone(thd) : system_zone;
-  }
+    return get_system_timezone(thd);
 
   const String *tz_name= tz->get_name();
   std::string name_str(tz_name->ptr(), tz_name->length());
@@ -166,11 +203,7 @@ std::string get_timezone_according_thd(THD *thd)
   if (!name_str.empty() && (name_str[0] == '+' || name_str[0] == '-'))
     return get_fixed_offset_timezone(thd);
 
-  /* Named time zone: pass through to DuckDB. mysql_tzinfo_to_sql also
-     loads posix/ copies of the zones, which ICU knows without the prefix. */
-  if (name_str.compare(0, 6, "posix/") == 0)
-    name_str.erase(0, 6);
-  return posix_signed_name(name_str);
+  return mariadb_zone_name_to_icu(name_str);
 }
 
 long long get_timestamp_epoch_us(Field *field)

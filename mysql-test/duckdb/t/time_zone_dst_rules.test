@@ -1,0 +1,145 @@
+--source ../include/have_duckdb.inc
+
+# Around DST changes a local time can be skipped or occur twice. MariaDB
+# takes the start of a skipped hour and the earlier instant of a repeated
+# one (the later one under time_zone=SYSTEM). DuckDB's casts resolve them
+# differently, so for MariaDB sessions casts to TIMESTAMPTZ and
+# CONVERT_TZ() use MariaDB's rules. Each DuckDB query must match the
+# InnoDB reference table r.
+
+CREATE DATABASE test_duckdb;
+USE test_duckdb;
+CREATE TABLE t (id INT PRIMARY KEY, ts TIMESTAMP NULL, dt DATETIME) ENGINE = DuckDB;
+CREATE TABLE r (id INT PRIMARY KEY, ts TIMESTAMP NULL, dt DATETIME) ENGINE = InnoDB;
+SET time_zone = 'MET';
+let $rows = (1, '2024-10-27 02:30:00', '2024-10-27 02:30:00'),
+  (2, '2024-03-31 03:00:00', '2024-03-31 02:30:00'),
+  (3, '2024-10-27 01:30:00', '2024-10-27 03:00:00');
+eval INSERT INTO t VALUES $rows;
+eval INSERT INTO r VALUES $rows;
+
+--echo # String literal in the repeated hour
+SELECT id FROM t WHERE ts = '2024-10-27 02:30:00';
+SELECT id FROM r WHERE ts = '2024-10-27 02:30:00';
+SELECT id FROM t WHERE ts BETWEEN '2024-10-27 02:00:00' AND '2024-10-27 02:59:59' ORDER BY id;
+SELECT id FROM r WHERE ts BETWEEN '2024-10-27 02:00:00' AND '2024-10-27 02:59:59' ORDER BY id;
+
+--echo # TIMESTAMP literal
+SELECT id FROM t WHERE ts = TIMESTAMP'2024-10-27 02:30:00' ORDER BY id;
+SELECT id FROM r WHERE ts = TIMESTAMP'2024-10-27 02:30:00' ORDER BY id;
+SELECT id FROM t WHERE ts = CAST('2024-10-27 02:30:00' AS DATETIME) ORDER BY id;
+SELECT id FROM r WHERE ts = CAST('2024-10-27 02:30:00' AS DATETIME) ORDER BY id;
+
+--echo # TIMESTAMP compared with DATETIME
+SELECT id FROM t WHERE ts = dt ORDER BY id;
+SELECT id FROM r WHERE ts = dt ORDER BY id;
+SELECT id FROM t WHERE ts < dt ORDER BY id;
+SELECT id FROM r WHERE ts < dt ORDER BY id;
+
+--echo # An explicit offset in the string is kept
+SELECT id FROM t WHERE ts = '2024-10-27 00:30:00+00:00';
+
+--echo # CONVERT_TZ: MariaDB names, offsets, skipped and repeated hours
+let $q = SELECT id, CONVERT_TZ(dt, 'MET', 'UTC') AS a, CONVERT_TZ(dt, 'MET', '+05:30') AS b,
+  CONVERT_TZ(dt, 'UTC', 'MET') AS c, CONVERT_TZ(dt, 'MET', 'No/Such_Zone') AS d;
+eval $q FROM t ORDER BY id;
+eval $q FROM r ORDER BY id;
+let $q = SELECT id, CONVERT_TZ('1970-01-01 00:30:00', 'MET', 'UTC') AS out_of_range,
+  CONVERT_TZ(ts, 'MET', 'UTC') AS from_ts,
+  CONVERT_TZ('2024-03-31 02:30:00.25', 'MET', 'UTC') AS skipped_fraction,
+  CONVERT_TZ(dt, '+13:00', 'UTC') AS max_offset, CONVERT_TZ(dt, '+13:01', 'UTC') AS bad_offset,
+  CONVERT_TZ(dt, '+ 5:30', 'UTC') AS bad_format;
+eval $q FROM t ORDER BY id;
+eval $q FROM r ORDER BY id;
+
+--echo # Repeated local time vs DATETIME: MariaDB compares as DATETIME, so
+--echo # both instants that show as 02:30 match
+SET time_zone = '+00:00';
+INSERT INTO t VALUES (4, '2024-10-27 01:30:00', '2024-10-27 02:30:00');
+INSERT INTO r VALUES (4, '2024-10-27 01:30:00', '2024-10-27 02:30:00');
+SET time_zone = 'MET';
+SELECT id FROM t WHERE ts = dt ORDER BY id;
+SELECT id FROM r WHERE ts = dt ORDER BY id;
+SELECT id FROM t WHERE ts BETWEEN dt AND dt ORDER BY id;
+SELECT id FROM r WHERE ts BETWEEN dt AND dt ORDER BY id;
+SELECT id FROM t WHERE ts = TIMESTAMP'2024-10-27 02:30:00' ORDER BY id;
+SELECT id FROM r WHERE ts = TIMESTAMP'2024-10-27 02:30:00' ORDER BY id;
+--echo # IN, = and the other comparisons with a string compare as DATETIME
+SELECT id FROM t WHERE ts IN (dt, '2024-01-01 00:00:00') ORDER BY id;
+SELECT id FROM r WHERE ts IN (dt, '2024-01-01 00:00:00') ORDER BY id;
+SELECT id FROM t WHERE ts IN ('2024-10-27 02:30:00', '2024-01-01 00:00:00') ORDER BY id;
+SELECT id FROM r WHERE ts IN ('2024-10-27 02:30:00', '2024-01-01 00:00:00') ORDER BY id;
+SELECT id FROM t WHERE ts NOT IN ('2024-10-27 02:30:00') ORDER BY id;
+SELECT id FROM r WHERE ts NOT IN ('2024-10-27 02:30:00') ORDER BY id;
+SELECT id FROM t WHERE ts = '2024-10-27 02:30:00' ORDER BY id;
+SELECT id FROM r WHERE ts = '2024-10-27 02:30:00' ORDER BY id;
+SELECT id FROM t WHERE dt IN (ts) ORDER BY id;
+SELECT id FROM r WHERE dt IN (ts) ORDER BY id;
+SELECT id FROM t WHERE dt NOT IN (ts) ORDER BY id;
+SELECT id FROM r WHERE dt NOT IN (ts) ORDER BY id;
+SELECT id FROM t WHERE '2024-10-27 02:30:00' IN (ts) ORDER BY id;
+SELECT id FROM r WHERE '2024-10-27 02:30:00' IN (ts) ORDER BY id;
+SELECT t.id FROM t JOIN r ON t.ts = r.dt ORDER BY t.id;
+SELECT a.id FROM r a JOIN r b ON a.ts = b.dt ORDER BY a.id;
+
+--echo # Every comparison operator against a constant in the repeated hour:
+--echo # rows 1-3 and 4-6 show the same local times 02:00, 02:30, 02:45
+CREATE TABLE tr (id INT PRIMARY KEY, ts TIMESTAMP NULL) ENGINE = DuckDB;
+CREATE TABLE rr (id INT PRIMARY KEY, ts TIMESTAMP NULL) ENGINE = InnoDB;
+SET time_zone = '+00:00';
+let $rows = (1, '2024-10-27 00:00:00'), (2, '2024-10-27 00:30:00'),
+  (3, '2024-10-27 00:45:00'), (4, '2024-10-27 01:00:00'), (5, '2024-10-27 01:30:00'),
+  (6, '2024-10-27 01:45:00'), (7, '2024-10-27 02:00:00'), (8, NULL);
+eval INSERT INTO tr VALUES $rows;
+eval INSERT INTO rr VALUES $rows;
+SET time_zone = 'MET';
+--echo # Rows: = <> < <= > >= BETWEEN DATETIME-literal IN NOT-IN >=fraction
+SELECT GROUP_CONCAT(id ORDER BY id) AS r FROM tr WHERE ts = '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts <> '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts < '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts <= '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE '2024-10-27 02:30:00' < ts
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts >= '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts BETWEEN '2024-10-27 02:15:00' AND '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts = TIMESTAMP'2024-10-27 02:45:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts IN ('2024-10-27 02:30:00', '2024-10-27 03:00:00')
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts NOT IN ('2024-10-27 02:30:00')
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts >= '2024-10-27 02:30:00.000001';
+SELECT GROUP_CONCAT(id ORDER BY id) AS r FROM rr WHERE ts = '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts <> '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts < '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts <= '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE '2024-10-27 02:30:00' < ts
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts >= '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts BETWEEN '2024-10-27 02:15:00' AND '2024-10-27 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts = TIMESTAMP'2024-10-27 02:45:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts IN ('2024-10-27 02:30:00', '2024-10-27 03:00:00')
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts NOT IN ('2024-10-27 02:30:00')
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts >= '2024-10-27 02:30:00.000001';
+
+--echo # A constant in the skipped hour
+SET time_zone = '+00:00';
+INSERT INTO tr VALUES (9, '2024-03-31 00:59:59'), (10, '2024-03-31 01:00:00');
+INSERT INTO rr VALUES (9, '2024-03-31 00:59:59'), (10, '2024-03-31 01:00:00');
+SET time_zone = 'MET';
+--echo # Rows: = <> < >= IN
+SELECT GROUP_CONCAT(id ORDER BY id) AS r FROM tr WHERE ts = '2024-03-31 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts <> '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts < '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts >= '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM tr WHERE ts IN ('2024-03-31 02:30:00');
+SELECT GROUP_CONCAT(id ORDER BY id) AS r FROM rr WHERE ts = '2024-03-31 02:30:00'
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts <> '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts < '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts >= '2024-03-31 02:30:00' AND id > 8
+  UNION ALL SELECT GROUP_CONCAT(id ORDER BY id) FROM rr WHERE ts IN ('2024-03-31 02:30:00');
+
+--echo # Sessions that are not MariaDB's (run_in_duckdb opens its own
+--echo # connection, like a Quack client) keep DuckDB's cast: 02:30 in the
+--echo # skipped hour is 01:30 UTC there, 01:00 UTC under MariaDB's rules
+let $q = SELECT epoch(x::TIMESTAMPTZ)::BIGINT AS e FROM (VALUES (TIMESTAMP '2024-03-31 02:30:00')) v(x);
+eval SELECT run_in_duckdb("SET TimeZone = 'MET'; $q") AS duckdb_rules;
+eval SELECT run_in_duckdb("SET TimeZone = 'MET'; SET VARIABLE mariadb_tz_rules = true; $q") AS mariadb_rules;
+
+SET time_zone = DEFAULT;
+DROP DATABASE test_duckdb;

@@ -29,7 +29,6 @@
 #include <my_global.h>
 #include "log.h"
 #include "my_time.h"
-#include "duckdb_timezone.h"
 
 #undef UNKNOWN
 
@@ -41,7 +40,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include <cerrno>
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include "duckdb/common/string_util.hpp"
@@ -57,13 +55,11 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/client_config.hpp"
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "timezone.hpp" /* DuckDB ICU extension: datetime::TimeZone */
 #include "re2/re2.h"
 
 namespace myduck
@@ -1322,7 +1318,8 @@ static void weekday_ts_func(duckdb::DataChunk &args,
    as in MariaDB), and TIME values (taken on `today`). Invalid input
    gives NULL. TIMESTAMPTZ passes through unchanged; DATE and TIMESTAMP
    are widened. The result is naive wall-clock time that
-   mariadb_unix_timestamp() reads in the session time zone.
+   mariadb_unix_timestamp() (duckdb_mariadb_tz.cc) reads in the session
+   time zone.
    ================================================================ */
 
 static bool mysql_time_to_timestamp(const MYSQL_TIME &tm,
@@ -1443,150 +1440,6 @@ static void mariadb_datetime_identity_func(duckdb::DataChunk &args,
   result.Reference(args.data[0]);
 }
 
-/* ================================================================
-   MARIADB_UNIX_TIMESTAMP(TIMESTAMP | TIMESTAMPTZ) -> BIGINT
-   Epoch seconds as MariaDB's UNIX_TIMESTAMP() computes them:
-   - a naive TIMESTAMP is wall-clock time in the session TimeZone; a
-     time in a spring-forward gap maps to the start of the gap, and a
-     time that occurs twice maps to the earlier instant for named zones
-     (tztime.cc Time_zone_db::TIME_to_gmt_sec) and to the later one
-     under time_zone=SYSTEM (libc). DuckDB's own cast differs;
-   - fractions are truncated;
-   - NULL outside MariaDB's TIMESTAMP range, i.e. at or before the
-     epoch and after TIMESTAMP_MAX_VALUE.
-   ================================================================ */
-
-struct MariadbTimeZoneBindData : public duckdb::FunctionData
-{
-  std::string zone_name;
-  bool repeated_later;
-  duckdb::unique_ptr<duckdb::datetime::TimeZone> zone;
-
-  MariadbTimeZoneBindData(std::string name, bool later)
-      : zone_name(std::move(name)), repeated_later(later),
-        zone(duckdb::datetime::TimeZone::TryCreate(zone_name))
-  {
-    if (!zone)
-      zone= duckdb::datetime::TimeZone::TryCreate("UTC");
-  }
-  duckdb::unique_ptr<duckdb::FunctionData> Copy() const override
-  {
-    return duckdb::make_uniq<MariadbTimeZoneBindData>(zone_name,
-                                                      repeated_later);
-  }
-  bool Equals(const duckdb::FunctionData &other) const override
-  {
-    auto &o= other.Cast<MariadbTimeZoneBindData>();
-    return zone_name == o.zone_name && repeated_later == o.repeated_later;
-  }
-};
-
-static duckdb::unique_ptr<duckdb::FunctionData>
-mariadb_time_zone_bind(duckdb::BindScalarFunctionInput &input)
-{
-  auto &context= input.GetClientContext();
-  duckdb::Value setting;
-  std::string name= "UTC";
-  if (context.TryGetCurrentSetting("TimeZone", setting) && !setting.IsNull())
-    name= setting.ToString();
-  duckdb::Value later;
-  bool repeated_later=
-      duckdb::ClientConfig::GetConfig(context).GetUserVariable(
-          std::string(MARIADB_TZ_REPEATED_LATER_VAR), later) &&
-      !later.IsNull() && later.GetValue<bool>();
-  return duckdb::make_uniq<MariadbTimeZoneBindData>(name, repeated_later);
-}
-
-static int32_t zone_offset_ms(const duckdb::datetime::TimeZone &zone,
-                              int64_t utc_ms)
-{
-  int32_t raw, dst;
-  zone.GetOffset(utc_ms, raw, dst);
-  return raw + dst;
-}
-
-/* Epoch milliseconds of a local time, resolved the MariaDB way. */
-static int64_t local_ms_to_epoch_ms(const duckdb::datetime::TimeZone &zone,
-                                    int64_t local_ms, bool repeated_later)
-{
-  using duckdb::datetime::LocalOption;
-  int32_t raw, dst;
-  zone.GetOffsetFromLocal(local_ms, LocalOption::FORMER, LocalOption::FORMER,
-                          raw, dst);
-  int64_t a= local_ms - (raw + dst);
-  zone.GetOffsetFromLocal(local_ms, LocalOption::LATTER, LocalOption::LATTER,
-                          raw, dst);
-  int64_t b= local_ms - (raw + dst);
-
-  bool a_ok= a + zone_offset_ms(zone, a) == local_ms;
-  bool b_ok= b + zone_offset_ms(zone, b) == local_ms;
-  if (a_ok && b_ok) /* repeated time */
-    return repeated_later ? std::max(a, b) : std::min(a, b);
-  if (a_ok)
-    return a;
-  if (b_ok)
-    return b;
-
-  /* Skipped time: the transition instant, found between the two
-     candidates as the first millisecond with the later offset. */
-  int64_t lo= std::min(a, b), hi= std::max(a, b);
-  int32_t before= zone_offset_ms(zone, lo);
-  while (lo < hi)
-  {
-    int64_t mid= lo + (hi - lo) / 2;
-    if (zone_offset_ms(zone, mid) == before)
-      lo= mid + 1;
-    else
-      hi= mid;
-  }
-  return lo;
-}
-
-static duckdb::optional<int64_t> epoch_us_to_unix_timestamp(int64_t us)
-{
-  if (us <= 0 || us / 1000000 > (int64_t) TIMESTAMP_MAX_VALUE)
-    return {};
-  return us / 1000000;
-}
-
-static void mariadb_unix_timestamp_tz_func(duckdb::DataChunk &args,
-                                           duckdb::ExpressionState &,
-                                           duckdb::Vector &result)
-{
-  duckdb::UnaryExecutor::Execute<duckdb::timestamp_tz_t, int64_t>(
-      args.data[0], result, args.size(),
-      [](duckdb::timestamp_tz_t ts) -> duckdb::optional<int64_t> {
-        /* MariaDB returns 0 for a zero TIMESTAMP column */
-        if (ts.value == zero_timestamp_epoch_us)
-          return 0;
-        return epoch_us_to_unix_timestamp(ts.value);
-      });
-}
-
-static void mariadb_unix_timestamp_local_func(duckdb::DataChunk &args,
-                                              duckdb::ExpressionState &state,
-                                              duckdb::Vector &result)
-{
-  auto &func_expr= state.expr.Cast<duckdb::BoundFunctionExpression>();
-  auto &info= func_expr.BindInfo()->Cast<MariadbTimeZoneBindData>();
-  auto &zone= *info.zone;
-  duckdb::UnaryExecutor::Execute<duckdb::timestamp_t, int64_t>(
-      args.data[0], result, args.size(),
-      [&](duckdb::timestamp_t ts) -> duckdb::optional<int64_t> {
-        if (!ts.IsFinite())
-          return {};
-        int64_t local_ms= ts.value / 1000, rem_us= ts.value % 1000;
-        if (rem_us < 0)
-        {
-          local_ms--;
-          rem_us+= 1000;
-        }
-        int64_t epoch_ms=
-            local_ms_to_epoch_ms(zone, local_ms, info.repeated_later);
-        return epoch_us_to_unix_timestamp(epoch_ms * 1000 + rem_us);
-      });
-}
-
 static void register_mariadb_datetime_function(
     duckdb::Catalog &catalog, duckdb::CatalogTransaction transaction)
 {
@@ -1617,16 +1470,6 @@ static void register_mariadb_datetime_function(
   info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
   catalog.CreateFunction(transaction, info);
 
-  duckdb::ScalarFunctionSet unix_set("mariadb_unix_timestamp");
-  unix_set.AddFunction(duckdb::ScalarFunction(
-      {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
-      mariadb_unix_timestamp_tz_func));
-  unix_set.AddFunction(duckdb::ScalarFunction(
-      {LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-      mariadb_unix_timestamp_local_func, mariadb_time_zone_bind));
-  duckdb::CreateScalarFunctionInfo unix_info(std::move(unix_set));
-  unix_info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
-  catalog.CreateFunction(transaction, unix_info);
 }
 
 /* ================================================================
@@ -2179,7 +2022,7 @@ void register_mariadb_compat_functions(duckdb::DatabaseInstance &db)
       "(octet_length, length, ascii, ord, hex, oct, bin, locate, mid, "
       "rtrim, ltrim, regexp_instr, regexp_replace, regexp_substr, "
       "json_unquote, json_contains, week, yearweek, to_days, dayofweek, "
-      "weekday, mariadb_datetime, mariadb_unix_timestamp)");
+      "weekday, mariadb_datetime)");
 }
 
 } /* namespace myduck */
