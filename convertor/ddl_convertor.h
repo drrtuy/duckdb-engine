@@ -59,6 +59,36 @@ std::string autoinc_sequence_name(const std::string &table_name);
 /** The AUTO_INCREMENT field of a table, or nullptr if there is none. */
 Field *find_autoinc_field(const TABLE *table);
 
+/**
+  DuckDB checks PRIMARY KEY uniqueness on the stored bytes and ignores the
+  column collation. A primary key with a case- or accent-insensitive string
+  column is therefore enforced by a unique index over the expressions DuckDB
+  compares for that collation, named after the table. DuckDB refuses most
+  ALTER TABLE operations while an index depends on the table, so the index
+  is dropped and created again around them.
+
+  Comma-separated key expressions of the primary key of a table, or "" if it
+  has none.
+  @param[out] collated  set if a key column needs the index
+*/
+std::string pk_index_exprs(const TABLE *table, bool *collated= nullptr);
+
+/**
+  Statements creating the index. The expressions are also stored as the
+  index comment, for callers that have no TABLE (see pk_index_lookup_stmt()).
+*/
+std::string pk_index_create_stmt(const std::string &schema_name,
+                                 const std::string &table_name,
+                                 const std::string &exprs);
+
+/** Statement dropping the index. */
+std::string pk_index_drop_stmt(const std::string &schema_name,
+                               const std::string &table_name);
+
+/** Query returning the expressions of the index; no row if there is none. */
+std::string pk_index_lookup_stmt(const std::string &schema_name,
+                                 const std::string &table_name);
+
 class BaseConvertor
 {
 public:

@@ -13,8 +13,8 @@ PRIMARY KEY (id)
 # Test 2: INSERT rows
 INSERT INTO t1 VALUES (1, '1');
 INSERT INTO t1 VALUES (1, '1');
+ERROR HY000: Got error 168 'Constraint Error: Duplicate key "id: 1" violates primary key constraint.' from DuckDB
 # Test 3: Verify inserted data
 SELECT * FROM t1;
 id	v
-1	1
 1	1

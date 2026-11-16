@@ -296,8 +296,18 @@ eval ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = $algorithm;
 # 'c INT AUTO_INCREMENT KEY' would be rejected by the parser instead (bare KEY
 # means PRIMARY KEY and t already has one), and AUTO_INCREMENT without any key
 # is rejected by the server, so neither would reach the engine.
+# Changing a primary key column needs a table rebuild, so in place the server
+# refuses the statement before the engine sees the AUTO_INCREMENT.
+if ($copy_ddl == 0)
+{
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+eval ALTER TABLE t MODIFY COLUMN id INT AUTO_INCREMENT, ALGORITHM = $algorithm;
+}
+if ($copy_ddl == 1)
+{
 --error ER_TABLE_CANT_HANDLE_AUTO_INCREMENT
 eval ALTER TABLE t MODIFY COLUMN id INT AUTO_INCREMENT, ALGORITHM = $algorithm;
+}
 --error ER_TABLE_CANT_HANDLE_AUTO_INCREMENT
 eval ALTER TABLE t ADD COLUMN d INT AUTO_INCREMENT UNIQUE, ALGORITHM = $algorithm;
 
@@ -354,8 +364,17 @@ SHOW CREATE TABLE t;
 DROP TABLE t;
 CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT) ENGINE = DuckDB;
 
+# Dropping the primary key needs a table rebuild.
+if ($copy_ddl == 0)
+{
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+eval ALTER TABLE t DROP COLUMN a, ALGORITHM = $algorithm;
+}
+if ($copy_ddl == 1)
+{
 --error ER_REQUIRES_PRIMARY_KEY
 eval ALTER TABLE t DROP COLUMN a, ALGORITHM = $algorithm;
+}
 
 
 --echo #
@@ -392,8 +411,19 @@ DROP TABLE t;
 --echo # 14) DROP COLUMN BEFORE PRIMARY KEY
 --echo #
 CREATE TABLE t(a INT, b INT, c INT, d INT, PRIMARY KEY(d, b)) ENGINE = DuckDB;
+# DuckDB cannot drop a column standing before a key column in place.
+if ($copy_ddl == 0)
+{
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+eval ALTER TABLE t DROP COLUMN a, ALGORITHM = $algorithm;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+eval ALTER TABLE t DROP COLUMN c, ALGORITHM = $algorithm;
+}
+if ($copy_ddl == 1)
+{
 eval ALTER TABLE t DROP COLUMN a, ALGORITHM = $algorithm;
 eval ALTER TABLE t DROP COLUMN c, ALGORITHM = $algorithm;
+}
 SHOW CREATE TABLE t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 DROP TABLE t;
@@ -403,7 +433,16 @@ DROP TABLE t;
 --echo # 15) CHANGE COLUMN TYPE WITH INDEX
 --echo #
 CREATE TABLE t(a INT PRIMARY KEY, b INT) ENGINE = DuckDB;
+# Changing the type of a primary key column needs a table rebuild.
+if ($copy_ddl == 0)
+{
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
 eval ALTER TABLE t MODIFY COLUMN a VARCHAR(10), ALGORITHM = $algorithm;
+}
+if ($copy_ddl == 1)
+{
+eval ALTER TABLE t MODIFY COLUMN a VARCHAR(10), ALGORITHM = $algorithm;
+}
 SHOW CREATE TABLE t;
 --source $MYSQL_TMP_DIR/duckdb_column_meta.inc
 DROP TABLE t;

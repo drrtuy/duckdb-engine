@@ -1282,6 +1282,31 @@ int ha_duckdb::delete_table(const char *name)
   DBUG_RETURN(0);
 }
 
+/**
+  Key expressions of the unique index that stands in for the primary key of
+  a table (see pk_index_exprs() in ddl_convertor.h); left empty if the table
+  has no such index.
+  @return true on error, which is reported
+*/
+static bool get_pk_index_exprs(duckdb::Connection &con,
+                               const std::string &schema_name,
+                               const std::string &table_name,
+                               std::string &exprs)
+{
+  auto result= myduck::duckdb_query(
+      con, pk_index_lookup_stmt(schema_name, table_name));
+  if (result->HasError())
+  {
+    my_error(ER_GET_ERRMSG, MYF(0), HA_ERR_GENERIC,
+             result->GetError().c_str(), "DuckDB");
+    return true;
+  }
+  auto chunk= result->Fetch();
+  if (chunk && chunk->size())
+    exprs= chunk->GetValue(0, 0).GetValue<std::string>();
+  return false;
+}
+
 int ha_duckdb::rename_table(const char *from, const char *to)
 {
   DBUG_ENTER("ha_duckdb::rename_table");
@@ -1307,6 +1332,14 @@ int ha_duckdb::rename_table(const char *from, const char *to)
   ret= ctx->flush_appenders(error_msg);
   if (ret)
     DBUG_RETURN(ret);
+
+  std::string pk_exprs;
+  if (get_pk_index_exprs(ctx->get_connection(), old_t.db_name,
+                         old_t.table_name, pk_exprs))
+    DBUG_RETURN(HA_DUCKDB_RENAME_ERROR);
+  if (!pk_exprs.empty())
+    query= pk_index_drop_stmt(old_t.db_name, old_t.table_name) + query +
+           pk_index_create_stmt(new_t.db_name, new_t.table_name, pk_exprs);
 
   auto query_result= myduck::duckdb_query(ctx->get_connection(), query);
 
@@ -1367,6 +1400,32 @@ ha_duckdb::check_if_supported_inplace_alter(TABLE *altered_table,
 
   if (ha_alter_info->error_if_not_empty)
     DBUG_RETURN(HA_ALTER_INPLACE_NOT_SUPPORTED);
+
+  if (ha_alter_info->handler_flags &
+      (ALTER_ADD_PK_INDEX | ALTER_DROP_PK_INDEX))
+    DBUG_RETURN(HA_ALTER_INPLACE_NOT_SUPPORTED);
+
+  /*
+    DuckDB indexes address table columns by position and are not rebuilt by
+    ALTER TABLE, so DuckDB refuses to drop a column that stands before an
+    indexed one. The only index of a table is the one enforcing its primary
+    key; rebuild the table when such a column is dropped.
+  */
+  if ((ha_alter_info->handler_flags & ALTER_DROP_COLUMN) &&
+      table->s->primary_key != MAX_KEY)
+  {
+    const KEY &pk= table->key_info[table->s->primary_key];
+    uint last_key_field= 0;
+    for (uint i= 0; i < pk.user_defined_key_parts; i++)
+      last_key_field= std::max<uint>(last_key_field,
+                                     pk.key_part[i].field->field_index);
+    for (Field **field= table->field; *field; field++)
+    {
+      if (((*field)->flags & FIELD_IS_DROPPED) &&
+          (*field)->field_index < last_key_field)
+        DBUG_RETURN(HA_ALTER_INPLACE_NOT_SUPPORTED);
+    }
+  }
 
   /* Reject ALTER on tables without PK when require_primary_key is ON */
   if (myduck::require_primary_key && table->s->primary_key == MAX_KEY)
@@ -1464,6 +1523,18 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
   /* A single MariaDB ALTER TABLE can produce multiple DuckDB statements.
      Execute the generated operations atomically on a dedicated connection. */
   auto con= myduck::DuckdbManager::CreateConnection();
+
+  std::string pk_exprs;
+  if (get_pk_index_exprs(*con, schema_name, table_name, pk_exprs))
+    DBUG_RETURN(true);
+  if (!pk_exprs.empty())
+  {
+    statements.insert(statements.begin(),
+                      pk_index_drop_stmt(schema_name, table_name));
+    statements.push_back(pk_index_create_stmt(schema_name, table_name,
+                                              pk_index_exprs(altered_table)));
+  }
+
   auto query_result= myduck::duckdb_query(*con, "BEGIN");
   if (query_result->HasError())
   {
@@ -1607,6 +1678,10 @@ static MYSQL_SYSVAR_BOOL(require_primary_key, myduck::require_primary_key,
                          "Require primary key for DuckDB tables", NULL, NULL,
                          TRUE);
 
+static MYSQL_SYSVAR_BOOL(ignore_pk, myduck::ignore_pk, PLUGIN_VAR_RQCMDARG,
+                         "Omit PRIMARY KEY constraints from generated DuckDB DDL",
+                         NULL, NULL, FALSE);
+
 static MYSQL_SYSVAR_ULONGLONG(appender_allocator_flush_threshold,
                               myduck::appender_allocator_flush_threshold,
                               PLUGIN_VAR_RQCMDARG,
@@ -1687,7 +1762,7 @@ static struct st_mysql_sys_var *duckdb_system_variables[]= {
     MYSQL_SYSVAR(async_threads),
     MYSQL_SYSVAR(use_direct_io), MYSQL_SYSVAR(scheduler_process_partial),
     MYSQL_SYSVAR(checkpoint_threshold), MYSQL_SYSVAR(use_double_for_decimal),
-    MYSQL_SYSVAR(require_primary_key),
+    MYSQL_SYSVAR(require_primary_key), MYSQL_SYSVAR(ignore_pk),
     MYSQL_SYSVAR(appender_allocator_flush_threshold),
     MYSQL_SYSVAR(log_options),
     /* Session proxy */

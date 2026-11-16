@@ -719,7 +719,7 @@ ERROR HY000: Got error 168 'INVISIBLE column is not supported. Try removing INVI
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INSTANT;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INSTANT' at line 1
 ALTER TABLE t MODIFY COLUMN id INT AUTO_INCREMENT, ALGORITHM = INSTANT;
-ERROR 42000: Storage engine DUCKDB doesn't support AUTO_INCREMENT columns
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY
 ALTER TABLE t ADD COLUMN d INT AUTO_INCREMENT UNIQUE, ALGORITHM = INSTANT;
 ERROR 42000: Storage engine DUCKDB doesn't support AUTO_INCREMENT columns
 CREATE TABLE t1(id INT PRIMARY KEY, a INT) ENGINE = DuckDB ENGINE_ATTRIBUTE='{"KEY":"VALUE"}';
@@ -772,7 +772,7 @@ t	CREATE TABLE `t` (
 DROP TABLE t;
 CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT) ENGINE = DuckDB;
 ALTER TABLE t DROP COLUMN a, ALGORITHM = INSTANT;
-ERROR 42000: This table type requires a primary key
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY
 #
 # 12) BUG#117725
 #
@@ -823,11 +823,15 @@ DROP TABLE t;
 #
 CREATE TABLE t(a INT, b INT, c INT, d INT, PRIMARY KEY(d, b)) ENGINE = DuckDB;
 ALTER TABLE t DROP COLUMN a, ALGORITHM = INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY
 ALTER TABLE t DROP COLUMN c, ALGORITHM = INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
+  `a` int(11) DEFAULT NULL,
   `b` int(11) NOT NULL,
+  `c` int(11) DEFAULT NULL,
   `d` int(11) NOT NULL,
   PRIMARY KEY (`d`,`b`)
 ) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
@@ -835,14 +839,18 @@ SELECT run_in_duckdb("SELECT table_schema, table_name, column_name, column_defau
 run_in_duckdb("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 2]
+[ Rows: 4]
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
 db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 db_alter_col	t	d	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
+db_alter_col	t	a	NULL	YES	int	
 db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	c	NULL	YES	int	
 db_alter_col	t	d	NULL	NO	int	
 
 DROP TABLE t;
@@ -851,10 +859,11 @@ DROP TABLE t;
 #
 CREATE TABLE t(a INT PRIMARY KEY, b INT) ENGINE = DuckDB;
 ALTER TABLE t MODIFY COLUMN a VARCHAR(10), ALGORITHM = INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
-  `a` varchar(10) NOT NULL,
+  `a` int(11) NOT NULL,
   `b` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`)
 ) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
@@ -869,7 +878,7 @@ db_alter_col	t	b	NULL	YES	INTEGER	NULL
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-db_alter_col	t	a	NULL	NO	varchar	
+db_alter_col	t	a	NULL	NO	int	
 db_alter_col	t	b	NULL	YES	int	
 
 DROP TABLE t;
@@ -1597,7 +1606,7 @@ ERROR HY000: Got error 168 'INVISIBLE column is not supported. Try removing INVI
 ALTER TABLE t ALTER COLUMN b SET INVISIBLE, ALGORITHM = INPLACE;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'INVISIBLE, ALGORITHM = INPLACE' at line 1
 ALTER TABLE t MODIFY COLUMN id INT AUTO_INCREMENT, ALGORITHM = INPLACE;
-ERROR 42000: Storage engine DUCKDB doesn't support AUTO_INCREMENT columns
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY
 ALTER TABLE t ADD COLUMN d INT AUTO_INCREMENT UNIQUE, ALGORITHM = INPLACE;
 ERROR 42000: Storage engine DUCKDB doesn't support AUTO_INCREMENT columns
 CREATE TABLE t1(id INT PRIMARY KEY, a INT) ENGINE = DuckDB ENGINE_ATTRIBUTE='{"KEY":"VALUE"}';
@@ -1650,7 +1659,7 @@ t	CREATE TABLE `t` (
 DROP TABLE t;
 CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT) ENGINE = DuckDB;
 ALTER TABLE t DROP COLUMN a, ALGORITHM = INPLACE;
-ERROR 42000: This table type requires a primary key
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY
 #
 # 12) BUG#117725
 #
@@ -1701,11 +1710,15 @@ DROP TABLE t;
 #
 CREATE TABLE t(a INT, b INT, c INT, d INT, PRIMARY KEY(d, b)) ENGINE = DuckDB;
 ALTER TABLE t DROP COLUMN a, ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY
 ALTER TABLE t DROP COLUMN c, ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
+  `a` int(11) DEFAULT NULL,
   `b` int(11) NOT NULL,
+  `c` int(11) DEFAULT NULL,
   `d` int(11) NOT NULL,
   PRIMARY KEY (`d`,`b`)
 ) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
@@ -1713,14 +1726,18 @@ SELECT run_in_duckdb("SELECT table_schema, table_name, column_name, column_defau
 run_in_duckdb("SELECT table_schema, table_name, column_name, column_default, is_nullable, data_type, COLUMN_COMMENT FROM information_schema.columns WHERE table_name = 't'")
 table_schema	table_name	column_name	column_default	is_nullable	data_type	COLUMN_COMMENT	
 VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 2]
+[ Rows: 4]
+db_alter_col	t	a	NULL	YES	INTEGER	NULL
 db_alter_col	t	b	NULL	NO	INTEGER	NULL
+db_alter_col	t	c	NULL	YES	INTEGER	NULL
 db_alter_col	t	d	NULL	NO	INTEGER	NULL
 
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
+db_alter_col	t	a	NULL	YES	int	
 db_alter_col	t	b	NULL	NO	int	
+db_alter_col	t	c	NULL	YES	int	
 db_alter_col	t	d	NULL	NO	int	
 
 DROP TABLE t;
@@ -1729,10 +1746,11 @@ DROP TABLE t;
 #
 CREATE TABLE t(a INT PRIMARY KEY, b INT) ENGINE = DuckDB;
 ALTER TABLE t MODIFY COLUMN a VARCHAR(10), ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY
 SHOW CREATE TABLE t;
 Table	Create Table
 t	CREATE TABLE `t` (
-  `a` varchar(10) NOT NULL,
+  `a` int(11) NOT NULL,
   `b` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`)
 ) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
@@ -1747,7 +1765,7 @@ db_alter_col	t	b	NULL	YES	INTEGER	NULL
 
 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_COMMENT FROM information_schema.columns WHERE TABLE_NAME = 't';
 TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_COMMENT
-db_alter_col	t	a	NULL	NO	varchar	
+db_alter_col	t	a	NULL	NO	int	
 db_alter_col	t	b	NULL	YES	int	
 
 DROP TABLE t;

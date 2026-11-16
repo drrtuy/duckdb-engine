@@ -1,3 +1,5 @@
+SET @saved_ignore_pk= @@GLOBAL.duckdb_ignore_pk;
+SET GLOBAL duckdb_ignore_pk= ON;
 CREATE TABLE t (c1 INT KEY) ENGINE=DuckDB;
 INSERT INTO t VALUES (1),(1);
 ALTER TABLE t ADD c2 INT NOT NULL;
@@ -14,6 +16,26 @@ c1	c2
 1	0
 1	0
 DROP TABLE t;
+SET GLOBAL duckdb_ignore_pk= OFF;
+CREATE TABLE t (c1 INT KEY) ENGINE=DuckDB;
+INSERT INTO t VALUES (1),(1);
+ERROR HY000: Got error 168 'Constraint Error: PRIMARY KEY or UNIQUE constraint violation: duplicate key "1"' from DuckDB
+INSERT INTO t VALUES (1),(2);
+ALTER TABLE t ADD c2 INT NOT NULL;
+SELECT * FROM t ORDER BY c1, c2;
+c1	c2
+1	0
+2	0
+INSERT INTO t (c1) VALUES (3);
+ERROR HY000: Field 'c2' doesn't have a default value
+ALTER TABLE t PARTITION BY HASH (c1) (PARTITION p1, PARTITION p2);
+ERROR HY000: Engine cannot be used in partitioned tables
+SELECT * FROM t ORDER BY c1, c2;
+c1	c2
+1	0
+2	0
+DROP TABLE t;
+SET GLOBAL duckdb_ignore_pk= @saved_ignore_pk;
 CREATE TABLE t (id INT PRIMARY KEY, c1 INT) ENGINE=DuckDB;
 INSERT INTO t VALUES (1, NULL);
 ALTER TABLE t ADD c2 INT, MODIFY c1 INT NOT NULL;

@@ -16,6 +16,8 @@ The mapping is implemented in `duckdb_charset_collation.cc` (`get_duckdb_collati
 1. **DDL** (`ddl_convertor.cc`) — VARCHAR columns get `COLLATE <collation>` appended based on the column's `CHARSET_INFO`.
 2. **Session context** (`duckdb_context.cc`) — each DuckDB connection's `default_collation` is set from the MariaDB session's `collation_connection`.
 
+DuckDB applies a column collation to comparisons but not to `PRIMARY KEY`/`UNIQUE` checks, which compare bytes. For a primary key with a `NOCASE` or `NOCASE.NOACCENT` column, `ddl_convertor.cc` (`pk_index_exprs()`) therefore creates a unique index over `lower(col)` or `lower(strip_accents(col))` — the expressions DuckDB itself compares for these collations — instead of the constraint.
+
 ### Supported charsets
 
 Only `utf8mb3`, `utf8mb4`, and `ascii` charsets are mapped to ICU-aware collations. All other charsets (e.g. `latin1`, `cp1251`) fall back to `POSIX` (binary comparison) because DuckDB cannot replicate their byte-level sorting rules.

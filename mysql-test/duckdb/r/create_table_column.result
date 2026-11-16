@@ -749,8 +749,9 @@ c3	4	DECIMAL(38,5)	38
 run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 1]
+[ Rows: 2]
 t1	NOT NULL	NOT NULL
+t1	PRIMARY KEY	PRIMARY KEY(id)
 
 
 # ③ Print INDEXs of t1 ##
@@ -811,8 +812,9 @@ c1	2	DECIMAL(38,5)	38
 run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 1]
+[ Rows: 2]
 t1	NOT NULL	NOT NULL
+t1	PRIMARY KEY	PRIMARY KEY(id)
 
 
 # ③ Print INDEXs of t1 ##
@@ -873,8 +875,9 @@ c1	2	DECIMAL(38,5)	38
 run_in_duckdb("SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE schema_name = 'duckdb_db' AND table_name = 't1'")
 table_name	constraint_type	constraint_text	
 VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 1]
+[ Rows: 2]
 t1	NOT NULL	NOT NULL
+t1	PRIMARY KEY	PRIMARY KEY(id)
 
 
 # ③ Print INDEXs of t1 ##

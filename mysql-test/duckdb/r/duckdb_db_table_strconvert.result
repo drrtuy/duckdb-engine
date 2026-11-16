@@ -1,6 +1,8 @@
 #
 # 1) PREPARE
 #
+SET @saved_ignore_pk= @@GLOBAL.duckdb_ignore_pk;
+SET GLOBAL duckdb_ignore_pk= ON;
 CREATE DATABASE `my-db`;
 USE `my-db`;
 CREATE TABLE `my-table` (
@@ -68,3 +70,4 @@ BIGINT
 0
 
 
+SET GLOBAL duckdb_ignore_pk= @saved_ignore_pk;

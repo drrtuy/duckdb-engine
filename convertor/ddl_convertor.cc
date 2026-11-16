@@ -258,6 +258,93 @@ Field *find_autoinc_field(const TABLE *table)
   return nullptr;
 }
 
+std::string pk_index_exprs(const TABLE *table, bool *collated)
+{
+  std::string exprs;
+  if (collated)
+    *collated= false;
+
+  for (uint i= 0; i < table->s->keys; i++)
+  {
+    const KEY &key= table->key_info[i];
+    if (!is_primary_key(&key))
+      continue;
+    for (uint j= 0; j < key.user_defined_key_parts; j++)
+    {
+      const Field *field= key.key_part[j].field;
+      std::string column= quote_duckdb_identifier(field->field_name.str,
+                                                  field->field_name.length);
+      std::string expr= column;
+      std::string type= FieldConvertor::convert_type(field);
+      auto has_collation= [&type](const std::string &collation) {
+        std::string suffix= " COLLATE " + collation;
+        return type.size() > suffix.size() &&
+               !type.compare(type.size() - suffix.size(), suffix.size(),
+                             suffix);
+      };
+
+      /* The functions DuckDB itself applies to compare such columns. */
+      if (has_collation(myduck::COLLATION_NOCASE_NOACCENT))
+        expr= "lower(strip_accents(" + column + "))";
+      else if (has_collation(myduck::COLLATION_NOCASE))
+        expr= "lower(" + column + ")";
+      if (collated && expr != column)
+        *collated= true;
+
+      if (j)
+        exprs+= ",";
+      exprs+= expr;
+    }
+    break;
+  }
+  return exprs;
+}
+
+static std::string pk_index_name(const std::string &table_name)
+{
+  return "mdb_pk_" + table_name;
+}
+
+static std::string duckdb_string_literal(const std::string &value)
+{
+  std::string literal= "'";
+  for (char c : value)
+  {
+    if (c == '\'')
+      literal.push_back('\'');
+    literal.push_back(c);
+  }
+  return literal + "'";
+}
+
+std::string pk_index_create_stmt(const std::string &schema_name,
+                                 const std::string &table_name,
+                                 const std::string &exprs)
+{
+  std::string schema= quote_duckdb_identifier(schema_name);
+  std::string index= quote_duckdb_identifier(pk_index_name(table_name));
+  return "CREATE UNIQUE INDEX " + index + " ON " + schema + "." +
+         quote_duckdb_identifier(table_name) + " (" + exprs +
+         ");COMMENT ON INDEX " + schema + "." + index + " IS " +
+         duckdb_string_literal(exprs) + ";";
+}
+
+std::string pk_index_drop_stmt(const std::string &schema_name,
+                               const std::string &table_name)
+{
+  return "DROP INDEX " + quote_duckdb_identifier(schema_name) + "." +
+         quote_duckdb_identifier(pk_index_name(table_name)) + ";";
+}
+
+std::string pk_index_lookup_stmt(const std::string &schema_name,
+                                 const std::string &table_name)
+{
+  return "SELECT comment FROM duckdb_indexes() WHERE schema_name = " +
+         duckdb_string_literal(schema_name) + " AND index_name = " +
+         duckdb_string_literal(pk_index_name(table_name)) +
+         " AND comment IS NOT NULL";
+}
+
 /** Reference to the auto-increment sequence usable as a nextval() argument. */
 static std::string autoinc_nextval_expr(const std::string &schema_name,
                                         const std::string &table_name)
@@ -782,6 +869,24 @@ bool CreateTableConvertor::check()
     return true;
   }
 
+  if (!myduck::ignore_pk)
+  {
+    for (uint i= 0; i < share->keys; i++)
+    {
+      const KEY &key= key_info[i];
+      if (!is_primary_key(&key))
+        continue;
+      for (uint j= 0; j < key.user_defined_key_parts; j++)
+      {
+        if (key.key_part[j].key_part_flag & HA_PART_KEY_SEG)
+        {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0), "DuckDB prefix primary keys");
+          return true;
+        }
+      }
+    }
+  }
+
   return false;
 }
 
@@ -823,7 +928,14 @@ std::string CreateTableConvertor::translate()
   result << " (";
 
   append_column_definition(result);
+  bool pk_collated= false;
+  std::string pk_exprs=
+      myduck::ignore_pk ? "" : pk_index_exprs(m_table, &pk_collated);
+  if (!pk_exprs.empty() && !pk_collated)
+    result << ",PRIMARY KEY (" << pk_exprs << ")";
   result << ");";
+  if (pk_collated)
+    result << pk_index_create_stmt(m_schema_name, m_table_name, pk_exprs);
 
   return result.str();
 }

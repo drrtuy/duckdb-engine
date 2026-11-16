@@ -16,6 +16,8 @@ CREATE DATABASE IF NOT EXISTS db_duckdb_monitor CHARACTER SET utf8mb4;
 USE db_duckdb_monitor;
 --enable_query_log
 
+SET @saved_ignore_pk= @@GLOBAL.duckdb_ignore_pk;
+SET GLOBAL duckdb_ignore_pk= ON;
 CREATE TABLE t1(id INT PRIMARY KEY, v VARCHAR(255)) ENGINE=duckdb;
 CREATE TABLE t2(id INT PRIMARY KEY, v VARCHAR(255)) ENGINE=duckdb;
 CREATE TABLE t3(id INT PRIMARY KEY, v VARCHAR(255)) ENGINE=innodb;
@@ -88,6 +90,7 @@ SHOW STATUS LIKE 'Duckdb_rows_delete_in_batch';
 DROP TABLE t1;
 DROP TABLE t2;
 DROP TABLE t3;
+SET GLOBAL duckdb_ignore_pk= @saved_ignore_pk;
 
 
 --disable_query_log

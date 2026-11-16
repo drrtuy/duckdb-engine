@@ -1,0 +1,245 @@
+--source ../include/have_duckdb.inc
+
+--disable_query_log
+CALL mtr.add_suppression('DuckDB: DeltaAppender flush error: .*Constraint.*[Dd]uplicate key');
+--enable_query_log
+
+SET @saved_ignore_pk= @@GLOBAL.duckdb_ignore_pk;
+SET @saved_require_pk= @@GLOBAL.duckdb_require_primary_key;
+SET @saved_batch= @@GLOBAL.duckdb_dml_in_batch;
+SET @saved_copy_batch= @@GLOBAL.duckdb_copy_ddl_in_batch;
+SELECT @@GLOBAL.duckdb_ignore_pk;
+SET GLOBAL duckdb_dml_in_batch= OFF;
+SET GLOBAL duckdb_copy_ddl_in_batch= OFF;
+SET GLOBAL duckdb_ignore_pk= OFF;
+
+CREATE TABLE pk_single (id INT PRIMARY KEY, v INT) ENGINE=DuckDB;
+INSERT INTO pk_single VALUES (1, 10);
+--error ER_GET_ERRMSG
+INSERT INTO pk_single VALUES (1, 20);
+SELECT * FROM pk_single;
+ALTER TABLE pk_single ADD INDEX v_index (v);
+SELECT run_in_duckdb("SELECT constraint_column_names FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_single' AND constraint_type='PRIMARY KEY'");
+
+CREATE TABLE pk_composite (`first"part` INT, second_part INT, PRIMARY KEY (second_part, `first"part`)) ENGINE=DuckDB;
+INSERT INTO pk_composite VALUES (1, 1), (1, 2), (2, 1);
+--error ER_GET_ERRMSG
+INSERT INTO pk_composite VALUES (1, 1);
+SELECT * FROM pk_composite ORDER BY second_part, `first"part`;
+SELECT run_in_duckdb('SELECT constraint_column_names FROM duckdb_constraints() WHERE schema_name=''test'' AND table_name=''pk_composite'' AND constraint_type=''PRIMARY KEY''');
+CREATE TABLE pk_like LIKE pk_composite;
+INSERT INTO pk_like VALUES (1, 1);
+--error ER_GET_ERRMSG
+INSERT INTO pk_like VALUES (1, 1);
+
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_ignored (id INT PRIMARY KEY, v INT) ENGINE=DuckDB;
+INSERT INTO pk_ignored VALUES (1, 10), (1, 20);
+SELECT * FROM pk_ignored ORDER BY v;
+SELECT run_in_duckdb("SELECT count(*) AS pk_count FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_ignored' AND constraint_type='PRIMARY KEY'");
+--error ER_GET_ERRMSG
+INSERT INTO pk_single VALUES (1, 30);
+--error ER_REQUIRES_PRIMARY_KEY
+CREATE TABLE pk_required (id INT) ENGINE=DuckDB;
+
+SET GLOBAL duckdb_ignore_pk= OFF;
+INSERT INTO pk_ignored VALUES (1, 30);
+SELECT COUNT(*) FROM pk_ignored;
+SET GLOBAL duckdb_require_primary_key= OFF;
+CREATE TABLE pk_absent (id INT) ENGINE=DuckDB;
+INSERT INTO pk_absent VALUES (1), (1);
+--error ER_GET_ERRMSG
+ALTER TABLE pk_absent ADD PRIMARY KEY (id);
+SELECT COUNT(*) FROM pk_absent;
+DROP TABLE pk_absent;
+CREATE TABLE pk_absent (id INT) ENGINE=DuckDB;
+INSERT INTO pk_absent VALUES (1), (2);
+ALTER TABLE pk_absent ADD PRIMARY KEY (id);
+--error ER_GET_ERRMSG
+INSERT INTO pk_absent VALUES (1);
+ALTER TABLE pk_absent DROP PRIMARY KEY;
+INSERT INTO pk_absent VALUES (1);
+SELECT id FROM pk_absent ORDER BY id;
+
+ALTER TABLE pk_single DROP PRIMARY KEY, ADD PRIMARY KEY (id, v);
+INSERT INTO pk_single VALUES (1, 20);
+--error ER_GET_ERRMSG
+INSERT INTO pk_single VALUES (1, 20);
+SELECT * FROM pk_single ORDER BY id, v;
+SET GLOBAL duckdb_ignore_pk= ON;
+ALTER TABLE pk_single DROP PRIMARY KEY, ADD PRIMARY KEY (id);
+INSERT INTO pk_single VALUES (1, 30);
+SELECT * FROM pk_single ORDER BY id, v;
+SET GLOBAL duckdb_ignore_pk= OFF;
+--error ER_GET_ERRMSG
+ALTER TABLE pk_single FORCE, ALGORITHM=COPY;
+SELECT * FROM pk_single ORDER BY id, v;
+
+CREATE TABLE pk_converted (id INT PRIMARY KEY, v INT) ENGINE=InnoDB;
+INSERT INTO pk_converted VALUES (1, 10);
+ALTER TABLE pk_converted ENGINE=DuckDB;
+--error ER_GET_ERRMSG
+INSERT INTO pk_converted VALUES (1, 20);
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_converted_ignored (id INT PRIMARY KEY, v INT) ENGINE=InnoDB;
+INSERT INTO pk_converted_ignored VALUES (1, 10);
+ALTER TABLE pk_converted_ignored ENGINE=DuckDB;
+INSERT INTO pk_converted_ignored VALUES (1, 20);
+SELECT * FROM pk_converted_ignored ORDER BY v;
+
+SET GLOBAL duckdb_ignore_pk= OFF;
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE pk_prefix (id VARCHAR(20), PRIMARY KEY (id(5))) ENGINE=DuckDB CHARSET=utf8mb4;
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_prefix (id VARCHAR(20), PRIMARY KEY (id(5))) ENGINE=DuckDB CHARSET=utf8mb4;
+INSERT INTO pk_prefix VALUES ('first1'), ('first2');
+SELECT * FROM pk_prefix ORDER BY id;
+DROP TABLE pk_prefix;
+SET GLOBAL duckdb_ignore_pk= OFF;
+
+--echo #
+--echo # Case- and accent-insensitive key columns: a DuckDB PRIMARY KEY compares
+--echo # bytes, so a unique expression index enforces the key instead.
+--echo #
+SET NAMES utf8mb4;
+CREATE TABLE pk_ci (id VARCHAR(20) PRIMARY KEY, v INT) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO pk_ci VALUES ('a', 1);
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci VALUES ('A', 2);
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci VALUES ('á', 3);
+SELECT * FROM pk_ci;
+SELECT run_in_duckdb("SELECT index_name, table_name, is_unique, expressions FROM duckdb_indexes() WHERE schema_name='test' ORDER BY index_name");
+SELECT run_in_duckdb("SELECT count(*) AS pk_count FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_ci' AND constraint_type='PRIMARY KEY'");
+
+--echo # A binary collation keeps the PRIMARY KEY constraint
+CREATE TABLE pk_bin (id VARCHAR(20) PRIMARY KEY) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+INSERT INTO pk_bin VALUES ('a'), ('A');
+--error ER_GET_ERRMSG
+INSERT INTO pk_bin VALUES ('a');
+SELECT run_in_duckdb("SELECT count(*) AS pk_count FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_bin' AND constraint_type='PRIMARY KEY'");
+
+--echo # Composite key, accent-sensitive
+CREATE TABLE pk_ci_composite (`na"me` VARCHAR(20) COLLATE utf8mb4_uca1400_as_ci, n INT, v INT, PRIMARY KEY (n, `na"me`)) ENGINE=DuckDB CHARSET=utf8mb4;
+INSERT INTO pk_ci_composite VALUES ('a', 1, 0), ('a', 2, 0), ('á', 1, 0);
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_composite VALUES ('A', 1, 0);
+
+--echo # In-place ALTER keeps the index
+ALTER TABLE pk_ci_composite RENAME COLUMN `na"me` TO name2, ALGORITHM=INPLACE;
+ALTER TABLE pk_ci_composite DROP COLUMN v, ALGORITHM=INPLACE;
+ALTER TABLE pk_ci_composite ADD COLUMN w INT NOT NULL DEFAULT 5, ALGORITHM=INPLACE;
+ALTER TABLE pk_ci_composite ADD INDEX w_index (w);
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_composite VALUES ('A', 1, 5);
+SELECT * FROM pk_ci_composite ORDER BY n, name2;
+
+--echo # RENAME TABLE moves the index
+RENAME TABLE pk_ci TO pk_ci_renamed;
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_renamed VALUES ('A', 2);
+CREATE TABLE pk_ci (id VARCHAR(20) PRIMARY KEY) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+SELECT run_in_duckdb("SELECT index_name, table_name, is_unique, expressions FROM duckdb_indexes() WHERE schema_name='test' ORDER BY index_name");
+
+--echo # ALGORITHM=COPY rebuilds the index
+ALTER TABLE pk_ci_renamed FORCE, ALGORITHM=COPY;
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_renamed VALUES ('A', 2);
+ALTER TABLE pk_ci_renamed DROP PRIMARY KEY, ADD PRIMARY KEY (id, v);
+INSERT INTO pk_ci_renamed VALUES ('A', 2);
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_renamed VALUES ('á', 2);
+SELECT * FROM pk_ci_renamed ORDER BY v;
+
+--echo # Changing the key collation switches between the index and the constraint
+--error ER_GET_ERRMSG
+ALTER TABLE pk_bin MODIFY id VARCHAR(20) COLLATE utf8mb4_general_ci;
+ALTER TABLE pk_ci MODIFY id VARCHAR(20) COLLATE utf8mb4_bin;
+INSERT INTO pk_ci VALUES ('a'), ('A');
+SELECT run_in_duckdb("SELECT index_name, table_name, is_unique, expressions FROM duckdb_indexes() WHERE schema_name='test' ORDER BY index_name");
+SELECT run_in_duckdb("SELECT count(*) AS pk_count FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_ci' AND constraint_type='PRIMARY KEY'");
+
+--echo # A column standing before a key column is dropped by a table rebuild:
+--echo # DuckDB indexes address columns by position
+CREATE TABLE pk_drop (a INT, b INT, c INT, d INT, e INT, PRIMARY KEY (d, b)) ENGINE=DuckDB;
+INSERT INTO pk_drop VALUES (1, 2, 3, 4, 5);
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE pk_drop DROP COLUMN a, ALGORITHM=INPLACE;
+ALTER TABLE pk_drop DROP COLUMN e, ALGORITHM=INPLACE;
+ALTER TABLE pk_drop DROP COLUMN a;
+ALTER TABLE pk_drop DROP COLUMN c;
+SELECT * FROM pk_drop;
+--error ER_GET_ERRMSG
+INSERT INTO pk_drop VALUES (2, 4);
+CREATE TABLE pk_ci_drop (a INT, id VARCHAR(20) PRIMARY KEY, z INT) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO pk_ci_drop VALUES (1, 'a', 1);
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE pk_ci_drop DROP COLUMN a, ALGORITHM=INPLACE;
+ALTER TABLE pk_ci_drop DROP COLUMN z, ALGORITHM=INPLACE;
+ALTER TABLE pk_ci_drop DROP COLUMN a;
+SELECT * FROM pk_ci_drop;
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_drop VALUES ('A');
+
+--echo # duckdb_ignore_pk=ON creates no index, and a later ALTER does not add one
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_ci_ignored (id VARCHAR(20) PRIMARY KEY) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO pk_ci_ignored VALUES ('a'), ('A');
+SET GLOBAL duckdb_ignore_pk= OFF;
+ALTER TABLE pk_ci_ignored ADD COLUMN w INT, ALGORITHM=INPLACE;
+SELECT run_in_duckdb("SELECT count(*) AS index_count FROM duckdb_indexes() WHERE schema_name='test' AND table_name='pk_ci_ignored'");
+--error ER_GET_ERRMSG
+ALTER TABLE pk_ci_ignored FORCE, ALGORITHM=COPY;
+SELECT COUNT(*) FROM pk_ci_ignored;
+
+SET GLOBAL duckdb_dml_in_batch= ON;
+CREATE TABLE pk_batch (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO pk_batch VALUES (1), (2);
+--error ER_GET_ERRMSG
+INSERT INTO pk_batch VALUES (2), (3);
+SELECT id FROM pk_batch ORDER BY id;
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_batch_ignored (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO pk_batch_ignored VALUES (1), (1);
+SELECT COUNT(*) FROM pk_batch_ignored;
+SET GLOBAL duckdb_ignore_pk= OFF;
+CREATE TABLE pk_ci_batch (id VARCHAR(20) PRIMARY KEY) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_batch VALUES ('a'), ('A');
+SELECT COUNT(*) FROM pk_ci_batch;
+
+SET GLOBAL duckdb_copy_ddl_in_batch= ON;
+SET GLOBAL duckdb_ignore_pk= ON;
+CREATE TABLE pk_copy (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO pk_copy VALUES (1), (1);
+SET GLOBAL duckdb_ignore_pk= OFF;
+--error ER_GET_ERRMSG
+ALTER TABLE pk_copy FORCE, ALGORITHM=COPY;
+SELECT COUNT(*) FROM pk_copy;
+DROP TABLE pk_copy;
+CREATE TABLE pk_copy (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO pk_copy VALUES (1), (2);
+ALTER TABLE pk_copy FORCE, ALGORITHM=COPY;
+SELECT id FROM pk_copy ORDER BY id;
+SELECT run_in_duckdb("SELECT count(*) AS pk_count FROM duckdb_constraints() WHERE schema_name='test' AND table_name='pk_copy' AND constraint_type='PRIMARY KEY'");
+CREATE TABLE pk_ci_copy (id VARCHAR(20) PRIMARY KEY) ENGINE=DuckDB CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO pk_ci_copy VALUES ('a'), ('b');
+ALTER TABLE pk_ci_copy FORCE, ALGORITHM=COPY;
+--error ER_GET_ERRMSG
+INSERT INTO pk_ci_copy VALUES ('A');
+SELECT id FROM pk_ci_copy ORDER BY id;
+
+SET GLOBAL duckdb_dml_in_batch= OFF;
+CREATE TABLE pk_autoinc (id INT AUTO_INCREMENT PRIMARY KEY, v INT) ENGINE=DuckDB;
+INSERT INTO pk_autoinc (v) VALUES (10);
+--error ER_TABLE_CANT_HANDLE_AUTO_INCREMENT
+ALTER TABLE pk_autoinc DROP PRIMARY KEY, ADD PRIMARY KEY (id, v);
+SELECT id, v FROM pk_autoinc;
+DROP TABLE pk_autoinc;
+DROP TABLE pk_single, pk_composite, pk_like, pk_ignored, pk_absent, pk_converted, pk_converted_ignored, pk_batch, pk_batch_ignored, pk_copy;
+DROP TABLE pk_ci, pk_ci_renamed, pk_bin, pk_ci_composite, pk_ci_ignored, pk_ci_batch, pk_ci_copy;
+DROP TABLE pk_drop, pk_ci_drop;
+SET GLOBAL duckdb_ignore_pk= @saved_ignore_pk;
+SET GLOBAL duckdb_require_primary_key= @saved_require_pk;
+SET GLOBAL duckdb_dml_in_batch= @saved_batch;
+SET GLOBAL duckdb_copy_ddl_in_batch= @saved_copy_batch;

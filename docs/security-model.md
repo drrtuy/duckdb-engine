@@ -331,8 +331,11 @@ exist only in DuckDB, without MariaDB table definitions.
 - Loads run on a separate DuckDB connection: they are not binlogged
   (replicas do not receive the rows) and do not update the engine's
   AUTO_INCREMENT bookkeeping.
-- Loads do not check primary-key uniqueness. Neither does `INSERT` into a
-  DuckDB table, since DuckDB tables carry no key constraints.
+- Loads and inserts enforce primary-key uniqueness only when the physical
+  DuckDB table has that constraint (or the unique index that replaces it
+  for case-insensitive keys). New or rebuilt tables include it by
+  default (`duckdb_ignore_pk=OFF`); tables created with `ON` or before this
+  DDL support do not acquire a constraint merely by changing the setting.
 - With `duckdb_log_options` query logging enabled, statements are written to
   the error log in full, including presigned URLs, which carry credentials.
 - `duckdb_checkpoint(1)` runs `FORCE CHECKPOINT`, which aborts every running

@@ -299,8 +299,9 @@ Requirements and limitations:
   a DELETE of a row absent on the replica is a silent no-op; an UPDATE of such
   a row is a no-op without batching and inserts the after-image with batching
   (the flush deletes by key, then inserts). An UPDATE that changes the primary
-  key to an existing key replaces that row with batching and leaves a duplicate
-  key without batching (DuckDB tables carry no primary key constraint).
+  key to an existing key replaces that row with batching. Without batching,
+  a DuckDB primary key constraint rejects the conflict; tables created with
+  `duckdb_ignore_pk=ON` or before primary key generation can retain duplicates.
   `slave_exec_mode=STRICT` is therefore not enforced for DuckDB tables.
 - **Not crash-safe.** The replica position (`mysql.gtid_slave_pos`) and the
   DuckDB data are committed separately.
@@ -373,7 +374,7 @@ INSERT/UPDATE/DELETE within a transaction:
 Translate MariaDB DDL → DuckDB DDL:
 - Data type mapping (MariaDB types → DuckDB types)
 - Expression defaults (read from `TABLE_SHARE::vcol_defs` binary blob, since the Item tree is invalid at `ha_duckdb::create()` time)
-- PRIMARY KEY → NOT NULL constraints (DuckDB has no indexes)
+- PRIMARY KEY → a DuckDB PRIMARY KEY constraint by default; `duckdb_ignore_pk=ON` omits it while retaining column NOT NULL declarations. This affects newly created or rebuilt tables, not existing storage. Primary key changes use ALGORITHM=COPY. DuckDB compares PRIMARY KEY values by bytes, so a key with a `NOCASE`/`NOACCENT` column gets a unique index over `lower()`/`strip_accents()` of those columns instead (`pk_index_exprs()` in `convertor/ddl_convertor.cc`). DuckDB refuses most ALTER TABLE operations while an index depends on the table, so `ha_duckdb::rename_table()` and `ha_duckdb::commit_inplace_alter_table()` (`ha_duckdb.cc`) drop the index and create it again in the same DuckDB transaction. DuckDB indexes address columns by position, so it cannot drop a column that stands before an indexed one; `ha_duckdb::check_if_supported_inplace_alter()` sends such a DROP COLUMN to ALGORITHM=COPY, judging by the MariaDB primary key alone.
 - ADD/DROP/CHANGE COLUMN, RENAME TABLE
 
 ### DML Convertors (`convertor/dml_convertor.cc`)
