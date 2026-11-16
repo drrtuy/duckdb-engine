@@ -1,0 +1,24 @@
+--source ../include/have_duckdb.inc
+
+# The server runs with TZ=MET, which has summer time. Under
+# time_zone=SYSTEM DuckDB must use the zone's rules, not today's offset.
+
+CREATE DATABASE test_duckdb;
+USE test_duckdb;
+CREATE TABLE t (id INT PRIMARY KEY, dt DATETIME) ENGINE = DuckDB;
+INSERT INTO t VALUES (1, '2024-01-01 00:00:00'), (2, '2024-07-01 00:00:00');
+
+SET time_zone = SYSTEM;
+SELECT @@system_time_zone;
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+
+--echo # DST gap and repeated hour: MariaDB first, then pushed down
+let $args = UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+  UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice;
+--disable_warnings
+eval SELECT $args;
+--enable_warnings
+eval SELECT $args FROM t WHERE id = 1;
+
+SET time_zone = DEFAULT;
+DROP DATABASE test_duckdb;

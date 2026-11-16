@@ -32,6 +32,7 @@
 #include "fiber_scan.h"
 #include "ddl_convertor.h"
 #include "duckdb_log.h"
+#include "duckdb_timezone.h"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/types/datetime.hpp"
@@ -202,12 +203,16 @@ static duckdb::Value field_to_duckdb_value(Field *field)
   case MYSQL_TYPE_DATE:
   case MYSQL_TYPE_NEWDATE:
   case MYSQL_TYPE_DATETIME:
-  case MYSQL_TYPE_DATETIME2:
-  case MYSQL_TYPE_TIMESTAMP:
-  case MYSQL_TYPE_TIMESTAMP2: {
+  case MYSQL_TYPE_DATETIME2: {
     String buf;
     field->val_str(&buf);
     return duckdb::Value(std::string(buf.ptr(), buf.length()));
+  }
+  case MYSQL_TYPE_TIMESTAMP:
+  case MYSQL_TYPE_TIMESTAMP2: {
+    /* The column is TIMESTAMP_TZ; a string would be cast as UTC. */
+    return duckdb::Value::TIMESTAMPTZ(
+        duckdb::timestamp_tz_t(myduck::get_timestamp_epoch_us(field)));
   }
   case MYSQL_TYPE_TIME:
   case MYSQL_TYPE_TIME2: {

@@ -255,15 +255,6 @@ bool DuckdbManager::Initialize()
                "timezone('UTC', now())::TIME");
     init_query("CREATE OR REPLACE MACRO utc_date() AS "
                "timezone('UTC', now())::DATE");
-    /* unix_timestamp([ts]) — epoch seconds; no arg = now().
-       MariaDB reads its argument as wall-clock time in the session
-       time_zone. DATETIME columns are stored as naive TIMESTAMP, which
-       epoch() would read as UTC, so cast to TIMESTAMPTZ first: that cast
-       applies the session TimeZone set in DuckdbThdContext, and is a
-       no-op for TIMESTAMP columns (already timestamptz). It also lets
-       string and DATE arguments bind. */
-    init_query("CREATE OR REPLACE MACRO unix_timestamp(ts := now()) AS "
-               "epoch(ts::TIMESTAMPTZ)::BIGINT");
     /* time_to_sec(t) — seconds since midnight */
     init_query("CREATE OR REPLACE MACRO time_to_sec(t) AS "
                "(date_part('hour', t)*3600 + date_part('minute', t)*60 "
@@ -294,6 +285,17 @@ bool DuckdbManager::Initialize()
        in register_mariadb_compat_functions() -- no SQL macros needed. */
     /* Register MySQL-compatible function overloads */
     register_mariadb_compat_functions(*m_database->instance);
+    /* unix_timestamp([ts]) — epoch seconds; no arg = now().
+       mariadb_datetime() (duckdb_mysql_compat.cc) turns numbers,
+       strings, TIME and DATE into a naive TIMESTAMP the way MariaDB
+       does; TIMESTAMP columns and now() stay TIMESTAMPTZ.
+       mariadb_unix_timestamp() reads a naive TIMESTAMP as wall-clock
+       time in the session TimeZone (set by
+       DuckdbThdContext::config_duckdb_timezone()) with MariaDB's DST
+       rules, and returns NULL outside the TIMESTAMP range.
+       Created after both are registered: macros bind here. */
+    init_query("CREATE OR REPLACE MACRO unix_timestamp(ts := now()) AS "
+               "mariadb_unix_timestamp(mariadb_datetime(ts, current_date))");
 
     /* Register cross-engine scan support (_mdb_scan + replacement scan) */
     register_cross_engine_scan(*m_database->instance);

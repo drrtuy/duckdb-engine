@@ -25,6 +25,114 @@ SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
 id	UNIX_TIMESTAMP(dt)
 1	1704085200
 2	104400
+# Offsets that are not whole hours
+SET time_zone = '+05:30';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704047400
+2	66600
+SET time_zone = '-03:45';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704080700
+2	99900
+# Arguments MariaDB converts to DATETIME. Each query runs first in
+# MariaDB (no table), then pushed down; the rows must match.
+SET time_zone = '+02:00';
+SELECT UNIX_TIMESTAMP(20240101) AS n8, UNIX_TIMESTAMP(240101) AS n6,
+UNIX_TIMESTAMP(20240101123000) AS n14, UNIX_TIMESTAMP(0) AS zero,
+UNIX_TIMESTAMP(-1) AS neg;
+n8	n6	n14	zero	neg
+1704060000	1704060000	1704105000	NULL	NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '-1'
+SELECT UNIX_TIMESTAMP(20240101) AS n8, UNIX_TIMESTAMP(240101) AS n6,
+UNIX_TIMESTAMP(20240101123000) AS n14, UNIX_TIMESTAMP(0) AS zero,
+UNIX_TIMESTAMP(-1) AS neg FROM t WHERE id = 1;
+n8	n6	n14	zero	neg
+1704060000	1704060000	1704105000	NULL	NULL
+SELECT UNIX_TIMESTAMP('20240101') AS s8, UNIX_TIMESTAMP('2024-01-01') AS d,
+UNIX_TIMESTAMP('2024-01-01T10:00') AS iso, UNIX_TIMESTAMP('240101') AS s6;
+s8	d	iso	s6
+1704060000	1704060000	1704096000	1704060000
+SELECT UNIX_TIMESTAMP('20240101') AS s8, UNIX_TIMESTAMP('2024-01-01') AS d,
+UNIX_TIMESTAMP('2024-01-01T10:00') AS iso, UNIX_TIMESTAMP('240101') AS s6 FROM t WHERE id = 1;
+s8	d	iso	s6
+1704060000	1704060000	1704096000	1704060000
+# Invalid, TIME-only and pre-epoch values give NULL
+SELECT UNIX_TIMESTAMP('2024-13-01') AS bad, UNIX_TIMESTAMP('10:00:00') AS tm,
+UNIX_TIMESTAMP('garbage') AS g, UNIX_TIMESTAMP('1970-01-01 00:00:00') AS pre;
+bad	tm	g	pre
+NULL	NULL	NULL	NULL
+SELECT UNIX_TIMESTAMP('2024-13-01') AS bad, UNIX_TIMESTAMP('10:00:00') AS tm,
+UNIX_TIMESTAMP('garbage') AS g, UNIX_TIMESTAMP('1970-01-01 00:00:00') AS pre FROM t WHERE id = 1;
+bad	tm	g	pre
+NULL	NULL	NULL	NULL
+SELECT UNIX_TIMESTAMP(NULL) AS n;
+n
+NULL
+SELECT UNIX_TIMESTAMP(NULL) AS n FROM t WHERE id = 1;
+n
+NULL
+# Clocks going forward (02:30 does not exist) and back (02:30 happens
+# twice) in MET: MariaDB takes the start of the gap and the earlier
+# instant
+SET time_zone = 'MET';
+SELECT UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice,
+UNIX_TIMESTAMP('2024-03-31 01:59:59') AS before_gap,
+UNIX_TIMESTAMP('2024-03-31 03:00:00') AS after_gap,
+UNIX_TIMESTAMP('2024-10-27 03:00:00') AS after_twice;
+gap	twice	before_gap	after_gap	after_twice
+1711846800	1729989000	1711846799	1711846800	1729994400
+SELECT UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice,
+UNIX_TIMESTAMP('2024-03-31 01:59:59') AS before_gap,
+UNIX_TIMESTAMP('2024-03-31 03:00:00') AS after_gap,
+UNIX_TIMESTAMP('2024-10-27 03:00:00') AS after_twice FROM t WHERE id = 1;
+gap	twice	before_gap	after_gap	after_twice
+1711846800	1729989000	1711846799	1711846800	1729994400
+SET time_zone = '+02:00';
+# A TIME value is taken on the current date
+SELECT UNIX_TIMESTAMP(CAST('10:00:00' AS TIME)) -
+UNIX_TIMESTAMP(CAST(CURDATE() AS DATETIME)) AS time_on_today FROM t WHERE id = 1;
+time_on_today
+36000
+# A zone MariaDB knows but DuckDB does not: current offset + warning.
+# It is an alias of India/Kolkata, whose current offset in MTR's time
+# zone data is +05:29:38. MariaDB's own values: the fallback matches
+# for 2024, not for 1970, when the zone had another offset.
+SELECT Time_zone_id INTO @kolkata_id FROM mysql.time_zone_name WHERE Name = 'India/Kolkata';
+INSERT INTO mysql.time_zone_name (Name, Time_zone_id) VALUES ('Fake/Zone', @kolkata_id);
+SET time_zone = 'Fake/Zone';
+SELECT UNIX_TIMESTAMP('2024-01-01 00:00:00') AS d1, UNIX_TIMESTAMP('1970-01-02 00:00:00') AS d2;
+d1	d2
+1704047422	86400
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704047422
+2	66622
+Warnings:
+Warning	1105	DuckDB: unknown time zone 'Fake/Zone', using its current offset GMT+05:29:38
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704047422
+2	66622
+Warnings:
+Warning	1105	DuckDB: unknown time zone 'Fake/Zone', using its current offset GMT+05:29:38
+SET time_zone = '+02:00';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704060000
+2	79200
+SET time_zone = 'Fake/Zone';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+id	UNIX_TIMESTAMP(dt)
+1	1704047422
+2	66622
+Warnings:
+Warning	1105	DuckDB: unknown time zone 'Fake/Zone', using its current offset GMT+05:29:38
+DELETE FROM mysql.time_zone_name WHERE Name = 'Fake/Zone';
 SET time_zone = '+02:00';
 CREATE TABLE ts (id INT PRIMARY KEY, ts TIMESTAMP NULL) ENGINE = DuckDB;
 INSERT INTO ts VALUES (1, '2024-01-01 00:00:00'), (2, NULL);
@@ -32,7 +140,7 @@ SELECT id, UNIX_TIMESTAMP(ts) FROM ts ORDER BY id;
 id	UNIX_TIMESTAMP(ts)
 1	1704060000
 2	NULL
-SELECT ABS(UNIX_TIMESTAMP() - (SELECT UNIX_TIMESTAMP() FROM t LIMIT 1)) < 5 AS now_ok;
+SELECT ABS(UNIX_TIMESTAMP() - <MariaDB UNIX_TIMESTAMP()>) < 5 AS now_ok FROM t WHERE id = 1;
 now_ok
 1
 SET time_zone = DEFAULT;

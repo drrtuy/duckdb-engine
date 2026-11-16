@@ -53,6 +53,7 @@ MariaDB function semantics differ from DuckDB in several areas. These are handle
 | `to_days(DATE/VARCHAR)` | DuckDB `to_days(BIGINT)` builds an INTERVAL; no date/string overload | Added DATE/VARCHAR→BIGINT overloads returning MariaDB day number (epoch_days + 719528) |
 | `dayofweek(DATE/TIMESTAMP)` | DuckDB is 0=Sunday..6=Saturday | Overloads returning MariaDB 1=Sunday..7=Saturday |
 | `weekday(DATE/TIMESTAMP)` | Not in DuckDB with MariaDB semantics | Overloads returning MariaDB 0=Monday..6=Sunday |
+| `unix_timestamp([x])` | DuckDB `epoch()` reads a naive TIMESTAMP as UTC and binds no numbers or MariaDB date strings | SQL macro (`duckdb_manager.cc`): `mariadb_datetime()` converts numbers, strings, DATE and TIME the way MariaDB does; `mariadb_unix_timestamp()` reads the result in the session time zone with MariaDB's DST rules (start of a skipped hour; earlier instant of a repeated hour, later under `time_zone=SYSTEM`) and returns NULL outside the TIMESTAMP range. Fractional seconds are truncated; MariaDB returns a DECIMAL. With no argument it uses DuckDB `now()`, the transaction start, where MariaDB uses the statement start |
 
 ### Compatible aliases (already work in DuckDB)
 
@@ -123,6 +124,14 @@ DuckDB upstream Appender API does not accept raw `Append<intN_t>()` for DECIMAL 
 
 **Affected file**: `delta_appender.cc`
 
+### TIMESTAMP and time zones
+
+MariaDB `TIMESTAMP` is an instant and maps to DuckDB `TIMESTAMPTZ`; `DATETIME` is wall-clock time and maps to naive `TIMESTAMP`. Every path moves TIMESTAMP values as instants: the batch appender (`delta_appender.cc`), the SQL write path (`dml_convertor.cc`, a `+00` literal), cross-engine scans (`cross_engine_scan.cc`, `fiber_scan.cc`) and reads (`store_epoch_us()` in `common/duckdb_timezone.cc`). The zero TIMESTAMP is stored as `zero_timestamp_epoch_us` on all of them.
+
+The session `time_zone` reaches DuckDB in `DuckdbThdContext::config_duckdb_timezone()`: offsets become ICU ids such as `GMT+05:30`, `SYSTEM` becomes the zone the server process uses (`TZ` or `/etc/localtime`) so DST rules hold, and a named zone ICU does not know falls back to its current offset with a warning. DuckDB's own casts and functions (other than `UNIX_TIMESTAMP()`) resolve skipped and repeated local times around DST changes their own way, which can differ from MariaDB.
+
+Rows written by the batch appender before this change hold wall-clock time instead of the instant, and read back shifted by the writer's offset.
+
 ### Text types
 
 MariaDB `MEDIUMTEXT`, `LONGTEXT`, `TEXT`, `TINYTEXT` all map to DuckDB `VARCHAR`.
@@ -190,7 +199,6 @@ These have not been triggered yet but are likely to cause issues when more compl
 |---|---|---|
 | `GROUP_CONCAT()` | `string_agg()` / `list_aggr()` | Different syntax and separator handling |
 | `DATE_FORMAT()` | `strftime()` | Different format specifiers |
-| `UNIX_TIMESTAMP()` | `epoch()` | -- |
 | `FORMAT(number, decimals)` | -- | MariaDB: locale-aware number formatting; DuckDB: printf-style |
 | `FOUND_ROWS()` | -- | No equivalent |
 | `LAST_INSERT_ID()` | -- | No equivalent |

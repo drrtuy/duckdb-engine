@@ -424,17 +424,10 @@ int DeltaAppender::append_mysql_field(const Field *field_arg,
   }
   case MYSQL_TYPE_TIMESTAMP:
   case MYSQL_TYPE_TIMESTAMP2: {
-    /* Use get_date() to get local-time representation, matching the
-       non-batch SQL path which stores val_str() (local time string).
-       get_timestamp() returns UTC, but DuckDB read path does not
-       apply timezone conversion, so we must store local time. */
-    MYSQL_TIME tm;
-    field->get_date(&tm, date_mode_t(0));
-    long days= calc_daynr(tm.year, tm.month, tm.day) - calc_daynr(1970, 1, 1);
-    longlong secs=
-        days * 86400LL + tm.hour * 3600LL + tm.minute * 60LL + tm.second;
+    /* The column is TIMESTAMPTZ: append the instant, not the session
+       wall-clock time. */
     appender->Append<duckdb::timestamp_t>(
-        static_cast<duckdb::timestamp_t>(secs * 1000000LL + tm.second_part));
+        duckdb::timestamp_t(myduck::get_timestamp_epoch_us(field)));
     break;
   }
   case MYSQL_TYPE_SET:

@@ -32,7 +32,6 @@
 #include "duckdb_context.h"
 #include "duckdb_query.h"
 #include "duckdb_config.h"
-#include "duckdb_timezone.h"
 #include "duckdb_types.h"
 #include "duckdb_select.h"
 #include "ddl_convertor.h"
@@ -248,8 +247,6 @@ static int duckdb_init_func(void *p)
 
   duckdb_hton->create_select= create_duckdb_select_handler;
   duckdb_hton->create_unit= create_duckdb_unit_handler;
-
-  myduck::TimeZoneOffsetHelper::init_timezone();
 
   if (myduck::DuckdbManager::CreateInstance())
   {

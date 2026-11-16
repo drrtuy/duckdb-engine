@@ -20,16 +20,82 @@ SELECT id, UNIX_TIMESTAMP(CAST(dt AS DATE)) FROM t ORDER BY id;
 SET time_zone = '-05:00';
 SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
 
-# TIMESTAMP columns: the suite inserts through the SQL path
-# (duckdb_dml_in_batch=OFF), which stores the true instant. The batch
-# appender stores wall-clock time instead and still gives a wrong epoch.
+--echo # Offsets that are not whole hours
+SET time_zone = '+05:30';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+SET time_zone = '-03:45';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+
+--echo # Arguments MariaDB converts to DATETIME. Each query runs first in
+--echo # MariaDB (no table), then pushed down; the rows must match.
+SET time_zone = '+02:00';
+let $args = UNIX_TIMESTAMP(20240101) AS n8, UNIX_TIMESTAMP(240101) AS n6,
+  UNIX_TIMESTAMP(20240101123000) AS n14, UNIX_TIMESTAMP(0) AS zero,
+  UNIX_TIMESTAMP(-1) AS neg;
+eval SELECT $args;
+eval SELECT $args FROM t WHERE id = 1;
+let $args = UNIX_TIMESTAMP('20240101') AS s8, UNIX_TIMESTAMP('2024-01-01') AS d,
+  UNIX_TIMESTAMP('2024-01-01T10:00') AS iso, UNIX_TIMESTAMP('240101') AS s6;
+eval SELECT $args;
+eval SELECT $args FROM t WHERE id = 1;
+--echo # Invalid, TIME-only and pre-epoch values give NULL
+let $args = UNIX_TIMESTAMP('2024-13-01') AS bad, UNIX_TIMESTAMP('10:00:00') AS tm,
+  UNIX_TIMESTAMP('garbage') AS g, UNIX_TIMESTAMP('1970-01-01 00:00:00') AS pre;
+--disable_warnings
+eval SELECT $args;
+--enable_warnings
+eval SELECT $args FROM t WHERE id = 1;
+let $args = UNIX_TIMESTAMP(NULL) AS n;
+eval SELECT $args;
+eval SELECT $args FROM t WHERE id = 1;
+
+--echo # Clocks going forward (02:30 does not exist) and back (02:30 happens
+--echo # twice) in MET: MariaDB takes the start of the gap and the earlier
+--echo # instant
+SET time_zone = 'MET';
+let $args = UNIX_TIMESTAMP('2024-03-31 02:30:00') AS gap,
+  UNIX_TIMESTAMP('2024-10-27 02:30:00') AS twice,
+  UNIX_TIMESTAMP('2024-03-31 01:59:59') AS before_gap,
+  UNIX_TIMESTAMP('2024-03-31 03:00:00') AS after_gap,
+  UNIX_TIMESTAMP('2024-10-27 03:00:00') AS after_twice;
+--disable_warnings
+eval SELECT $args;
+--enable_warnings
+eval SELECT $args FROM t WHERE id = 1;
+SET time_zone = '+02:00';
+
+--echo # A TIME value is taken on the current date
+SELECT UNIX_TIMESTAMP(CAST('10:00:00' AS TIME)) -
+  UNIX_TIMESTAMP(CAST(CURDATE() AS DATETIME)) AS time_on_today FROM t WHERE id = 1;
+
+--echo # A zone MariaDB knows but DuckDB does not: current offset + warning.
+--echo # It is an alias of India/Kolkata, whose current offset in MTR's time
+--echo # zone data is +05:29:38. MariaDB's own values: the fallback matches
+--echo # for 2024, not for 1970, when the zone had another offset.
+SELECT Time_zone_id INTO @kolkata_id FROM mysql.time_zone_name WHERE Name = 'India/Kolkata';
+INSERT INTO mysql.time_zone_name (Name, Time_zone_id) VALUES ('Fake/Zone', @kolkata_id);
+SET time_zone = 'Fake/Zone';
+SELECT UNIX_TIMESTAMP('2024-01-01 00:00:00') AS d1, UNIX_TIMESTAMP('1970-01-02 00:00:00') AS d2;
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+SET time_zone = '+02:00';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+SET time_zone = 'Fake/Zone';
+SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
+DELETE FROM mysql.time_zone_name WHERE Name = 'Fake/Zone';
+
+# TIMESTAMP columns hold instants; see also timestamp_time_zone.test
 SET time_zone = '+02:00';
 CREATE TABLE ts (id INT PRIMARY KEY, ts TIMESTAMP NULL) ENGINE = DuckDB;
 INSERT INTO ts VALUES (1, '2024-01-01 00:00:00'), (2, NULL);
 SELECT id, UNIX_TIMESTAMP(ts) FROM ts ORDER BY id;
 
-# No argument: the macro must still bind and return the current time.
-SELECT ABS(UNIX_TIMESTAMP() - (SELECT UNIX_TIMESTAMP() FROM t LIMIT 1)) < 5 AS now_ok;
+# No argument: the current time, as MariaDB computes it
+let $now = `SELECT UNIX_TIMESTAMP()`;
+--echo SELECT ABS(UNIX_TIMESTAMP() - <MariaDB UNIX_TIMESTAMP()>) < 5 AS now_ok FROM t WHERE id = 1;
+--disable_query_log
+eval SELECT ABS(UNIX_TIMESTAMP() - $now) < 5 AS now_ok FROM t WHERE id = 1;
+--enable_query_log
 
 SET time_zone = DEFAULT;
 DROP DATABASE test_duckdb;
