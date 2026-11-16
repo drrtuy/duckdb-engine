@@ -289,7 +289,55 @@ struct MdbScanGlobalState : duckdb::GlobalTableFunctionState
   std::unique_ptr<FiberScanState> fiber;
 
   idx_t MaxThreads() const override { return 1; }
+
+  /*
+    Ends the direct ha_rnd_init() scan, if one is open.  The server
+    asserts at unlock that no handler scan is left open, and DuckDB may
+    stop pulling before EOF (a conversion error, LIMIT, cancellation).
+  */
+  void end_rnd_scan()
+  {
+    if (!rnd_inited)
+      return;
+    rnd_inited= false;
+    THD *prev_thd= _current_thd();
+    if (table->in_use && table->in_use != prev_thd)
+      set_current_thd(table->in_use);
+    table->file->ha_rnd_end();
+    if (_current_thd() != prev_thd)
+      set_current_thd(prev_thd);
+  }
+
+  ~MdbScanGlobalState() override { end_rnd_scan(); }
 };
+
+/*
+  Fails the scan with handler error `err`.  The handler reports it first,
+  on the connection's THD, as the server would for its own read: the
+  client then gets that error's own code (a lock wait timeout as 1205, a
+  deadlock as 1213, after which InnoDB has rolled the transaction back,
+  KILL as "interrupted"), since the first error raised wins over the
+  generic one the select handler raises for this exception.
+*/
+[[noreturn]] static void throw_handler_error(TABLE *tbl, int err)
+{
+  THD *thd= tbl->in_use;
+  THD *prev_thd= _current_thd();
+  if (thd && thd != prev_thd)
+    set_current_thd(thd);
+  tbl->file->print_error(err, MYF(0));
+  const char *fallback= my_get_err_msg(err);
+  std::string text= thd && thd->get_stmt_da()->is_error()
+                        ? std::string(thd->get_stmt_da()->message())
+                        : std::string(fallback ? fallback : "unknown error");
+  if (_current_thd() != prev_thd)
+    set_current_thd(prev_thd);
+  throw duckdb::InvalidInputException(
+      "_mdb_scan of `%s`.`%s` failed: %s (handler error %d)",
+      std::string(tbl->s->db.str, tbl->s->db.length),
+      std::string(tbl->s->table_name.str, tbl->s->table_name.length),
+      text, err);
+}
 
 static duckdb::unique_ptr<duckdb::FunctionData>
 mdb_scan_bind(duckdb::ClientContext &context,
@@ -489,13 +537,17 @@ static void mdb_scan_function(duckdb::ClientContext &context,
         bitmap_set_bit(tbl->read_set, static_cast<uint>(col_idx));
     }
 
-    if (tbl->file->ha_rnd_init(true))
+    int err= 0;
+    DBUG_EXECUTE_IF("duckdb_mdb_scan_init_error",
+                    err= HA_ERR_LOCK_WAIT_TIMEOUT;);
+    if (!err)
+      err= tbl->file->ha_rnd_init(true);
+    if (err)
     {
       state.finished= true;
-      output.SetChildCardinality(0);
       if (_current_thd() != prev_thd)
         set_current_thd(prev_thd);
-      return;
+      throw_handler_error(tbl, err);
     }
     state.rnd_inited= true;
   }
@@ -504,28 +556,47 @@ static void mdb_scan_function(duckdb::ClientContext &context,
   duckdb::idx_t ncols= state.column_ids.size();
   uint nfields= tbl->s->fields;
 
-  while (count < STANDARD_VECTOR_SIZE)
+  try
   {
-    int err= tbl->file->ha_rnd_next(tbl->record[0]);
-    if (err)
+    while (count < STANDARD_VECTOR_SIZE)
     {
-      tbl->file->ha_rnd_end();
-      state.finished= true;
-      break;
-    }
-
-    for (duckdb::idx_t i= 0; i < ncols; i++)
-    {
-      if (state.column_ids[i] >= nfields)
+      int err= tbl->file->ha_rnd_next(tbl->record[0]);
+      /* A read error the handler returns without reporting it itself */
+      DBUG_EXECUTE_IF("duckdb_mdb_scan_read_error",
+                      if (!err && count == 50) err= HA_ERR_LOCK_WAIT_TIMEOUT;);
+      if (err == HA_ERR_END_OF_FILE)
       {
-        output.data[i].SetValue(count, duckdb::Value());
-        continue;
+        state.end_rnd_scan();
+        state.finished= true;
+        break;
       }
-      Field *field= tbl->field[state.column_ids[i]];
-      duckdb::Value val= field_to_duckdb_value(field);
-      output.data[i].SetValue(count, val);
+      /* Anything else (a lock wait timeout, a deadlock, KILL, an I/O
+         error) must fail the query, not end it with the rows so far */
+      if (err)
+        throw_handler_error(tbl, err);
+
+      for (duckdb::idx_t i= 0; i < ncols; i++)
+      {
+        if (state.column_ids[i] >= nfields)
+        {
+          output.data[i].SetValue(count, duckdb::Value());
+          continue;
+        }
+        Field *field= tbl->field[state.column_ids[i]];
+        duckdb::Value val= field_to_duckdb_value(field);
+        output.data[i].SetValue(count, val);
+      }
+      count++;
     }
-    count++;
+  }
+  catch (...)
+  {
+    /* E.g. a value DuckDB cannot cast, such as DATETIME '0000-00-00'. */
+    state.finished= true;
+    if (_current_thd() != prev_thd)
+      set_current_thd(prev_thd);
+    state.end_rnd_scan();
+    throw;
   }
 
   output.SetChildCardinality(count);

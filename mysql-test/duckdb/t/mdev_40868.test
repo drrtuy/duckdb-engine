@@ -25,5 +25,15 @@ SET SESSION duckdb_cross_engine_ryow=DEFAULT;
 # Server must still be usable after the conversion error.
 SELECT 1 AS still_alive;
 
+# The direct (RYOW) scan of the InnoDB table must also be closed when
+# DuckDB stops reading it before the end.  A scan left open only trips
+# an assertion at unlock, so this case guards debug servers.
+CREATE TABLE t3 (a INT) ENGINE=InnoDB;
+INSERT INTO t3 WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 100) SELECT a.n FROM s a, s b;
+SET SESSION duckdb_cross_engine_ryow=1;
+SELECT COUNT(*) FROM (SELECT * FROM t2 UNION ALL SELECT * FROM t3 LIMIT 3) d;
+SET SESSION duckdb_cross_engine_ryow=DEFAULT;
+DROP TABLE t3;
+
 DROP TABLE t2;
 DROP TABLE t1;

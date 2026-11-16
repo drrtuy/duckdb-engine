@@ -169,6 +169,46 @@ static int duckdb_rollback(handlerton *hton, THD *thd, bool rollback_trx)
   return 0;
 }
 
+/* XAER_NOTA ("unknown XID") of the X/Open XA spec; the server headers
+   do not define it. */
+static constexpr int DUCKDB_XAER_NOTA= -4;
+
+/*
+  XA recovery hooks.  prepare() only flushes buffered DML into the open
+  DuckDB transaction so that errors surface before the binlog is written;
+  nothing prepared survives a restart, and explicit XA is refused
+  (reject_xa_if_active()), so there is never an in-doubt DuckDB
+  transaction to report or resolve.
+
+  They are still required: with the binlog on, a DuckDB write commits
+  through 2PC with an XID, and the server counts the read-write
+  participants that have recover() when it writes the GTID event.  A
+  DuckDB-only transaction would count zero, which trips an assertion in
+  debug servers and wraps the engine count in the event in release ones.
+
+  Because prepare() is not durable, a crash between the binlog write and
+  the DuckDB commit loses the DuckDB part of a binlogged transaction, and
+  semisync-replica binlog truncation cannot protect it either; registering
+  these hooks does not change that.
+*/
+#if MYSQL_VERSION_ID >= 110800
+static int duckdb_recover(XID *, uint)
+#else
+static int duckdb_recover(handlerton *, XID *, uint)
+#endif
+{
+  return 0;
+}
+
+#if MYSQL_VERSION_ID >= 110800
+static int duckdb_commit_or_rollback_by_xid(XID *)
+#else
+static int duckdb_commit_or_rollback_by_xid(handlerton *, XID *)
+#endif
+{
+  return DUCKDB_XAER_NOTA;
+}
+
 #if MYSQL_VERSION_ID >= 110800
 static int duckdb_close_connection(THD *thd)
 #else
@@ -242,6 +282,9 @@ static int duckdb_init_func(void *p)
   duckdb_hton->prepare= duckdb_prepare;
   duckdb_hton->commit= duckdb_commit;
   duckdb_hton->rollback= duckdb_rollback;
+  duckdb_hton->recover= duckdb_recover;
+  duckdb_hton->commit_by_xid= duckdb_commit_or_rollback_by_xid;
+  duckdb_hton->rollback_by_xid= duckdb_commit_or_rollback_by_xid;
   duckdb_hton->close_connection= duckdb_close_connection;
   duckdb_hton->kill_query= duckdb_kill_query;
   duckdb_hton->drop_database= duckdb_drop_database;
