@@ -289,6 +289,26 @@ struct MdbScanGlobalState : duckdb::GlobalTableFunctionState
   std::unique_ptr<FiberScanState> fiber;
 
   idx_t MaxThreads() const override { return 1; }
+
+  /*
+    Ends the direct ha_rnd_init() scan, if one is open.  The server
+    asserts at unlock that no handler scan is left open, and DuckDB may
+    stop pulling before EOF (a conversion error, LIMIT, cancellation).
+  */
+  void end_rnd_scan()
+  {
+    if (!rnd_inited)
+      return;
+    rnd_inited= false;
+    THD *prev_thd= _current_thd();
+    if (table->in_use && table->in_use != prev_thd)
+      set_current_thd(table->in_use);
+    table->file->ha_rnd_end();
+    if (_current_thd() != prev_thd)
+      set_current_thd(prev_thd);
+  }
+
+  ~MdbScanGlobalState() override { end_rnd_scan(); }
 };
 
 static duckdb::unique_ptr<duckdb::FunctionData>
@@ -504,28 +524,40 @@ static void mdb_scan_function(duckdb::ClientContext &context,
   duckdb::idx_t ncols= state.column_ids.size();
   uint nfields= tbl->s->fields;
 
-  while (count < STANDARD_VECTOR_SIZE)
+  try
   {
-    int err= tbl->file->ha_rnd_next(tbl->record[0]);
-    if (err)
+    while (count < STANDARD_VECTOR_SIZE)
     {
-      tbl->file->ha_rnd_end();
-      state.finished= true;
-      break;
-    }
-
-    for (duckdb::idx_t i= 0; i < ncols; i++)
-    {
-      if (state.column_ids[i] >= nfields)
+      int err= tbl->file->ha_rnd_next(tbl->record[0]);
+      if (err)
       {
-        output.data[i].SetValue(count, duckdb::Value());
-        continue;
+        state.end_rnd_scan();
+        state.finished= true;
+        break;
       }
-      Field *field= tbl->field[state.column_ids[i]];
-      duckdb::Value val= field_to_duckdb_value(field);
-      output.data[i].SetValue(count, val);
+
+      for (duckdb::idx_t i= 0; i < ncols; i++)
+      {
+        if (state.column_ids[i] >= nfields)
+        {
+          output.data[i].SetValue(count, duckdb::Value());
+          continue;
+        }
+        Field *field= tbl->field[state.column_ids[i]];
+        duckdb::Value val= field_to_duckdb_value(field);
+        output.data[i].SetValue(count, val);
+      }
+      count++;
     }
-    count++;
+  }
+  catch (...)
+  {
+    /* E.g. a value DuckDB cannot cast, such as DATETIME '0000-00-00'. */
+    state.finished= true;
+    if (_current_thd() != prev_thd)
+      set_current_thd(prev_thd);
+    state.end_rnd_scan();
+    throw;
   }
 
   output.SetChildCardinality(count);
