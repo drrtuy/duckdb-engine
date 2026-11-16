@@ -120,13 +120,9 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 - `duckdb_sql_mode`: pass permissive GROUP BY setting to DuckDB on pushdown, or refuse pushdown when `ONLY_FULL_GROUP_BY` is off
 - `alter_duckdb_index`: don't register ignored index names in MariaDB metadata
 
-## Group H: Timestamp/timezone (1 test)
+## Group H: Timestamp/timezone — DONE
 
-| Test | Problem |
-|------|---------|
-| `create_table_column_timestamp` | Checksums InnoDB vs DuckDB don't match — timezone offset applied incorrectly |
-
-**Fix:** Fix timezone propagation in `config_duckdb_session` — DuckDB sees wrong timezone on INSERT/SELECT timestamps.
+`create_table_column_timestamp` is enabled again (2026-11-16). TIMESTAMP values now move as instants on every path and the session time zone reaches DuckDB with DST rules; see `timestamp_time_zone.test`. The `.result` was re-recorded for MariaDB, and the `+14:00` case was dropped because MariaDB rejects that offset.
 
 ---
 
@@ -161,7 +157,6 @@ Error code fixes done: `ER_DUCKDB_TABLE_STRUCT_INVALID` for ALTER structural err
 | 9a | **AVG(VARCHAR)** — no string overload in DuckDB | `duckdb_agg_func` | medium |
 | 9b | **Strict GROUP BY** — DuckDB requires ONLY_FULL_GROUP_BY | `duckdb_sql_mode` | medium |
 | 10 | **ACOS domain** [-1,1] — DuckDB stricter than MariaDB | `duckdb_numeric_func` | medium |
-| 12 | **Timezone propagation** — checksum mismatch | `create_table_column_timestamp` | medium |
 | 22 | **DuckDB "temp"/"system" schema conflict** — reserved schema names | `bugfix_temp_and_system_database` | medium |
 | 23 | **XA PREPARED lifecycle** — INSERT after XA COMMIT fails | `duckdb_refuse_xa` | medium |
 | 24 | **Cross-schema rename error code** — test expects `ER_ALTER_OPERATION_NOT_SUPPORTED` for INPLACE | `supported_copy_ddl` | low — update test |
