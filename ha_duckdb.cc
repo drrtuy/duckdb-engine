@@ -1805,8 +1805,9 @@ extern Plugin_function plugin_descriptor_function_run_in_duckdb;
 
 #define DUCKDB_FN_ENTRY(SYM, NAME, DESC)                                      \
   , {MariaDB_FUNCTION_PLUGIN, &plugin_descriptor_function_##SYM, NAME,        \
-     "MariaDB Foundation", DESC, PLUGIN_LICENSE_GPL, NULL, NULL, 0x0200,      \
-     NULL, NULL, "1.0", MariaDB_PLUGIN_MATURITY_GAMMA}
+     "MariaDB Foundation", DESC, PLUGIN_LICENSE_GPL, NULL, NULL,             \
+     PLUGIN_HEX_VERSION, NULL, NULL, PLUGIN_VERSION,                          \
+     MariaDB_PLUGIN_MATURITY_GAMMA}
 
 DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_DECLARE_FN)
 
@@ -1820,10 +1821,10 @@ maria_declare_plugin(duckdb)
     PLUGIN_LICENSE_GPL,
     duckdb_init_func,              /* Plugin Init */
     duckdb_deinit_func,            /* Plugin Deinit */
-    0x0200,                        /* version number (2.0) */
+    PLUGIN_HEX_VERSION,            /* version number (2.0) */
     duckdb_status_variables,       /* status variables */
     duckdb_system_variables,       /* system variables */
-    "1.0",                         /* string version */
+    PLUGIN_VERSION,                /* string version */
     MariaDB_PLUGIN_MATURITY_GAMMA  /* maturity */
 },
 {
@@ -1835,10 +1836,10 @@ maria_declare_plugin(duckdb)
     PLUGIN_LICENSE_GPL,
     NULL,                          /* Plugin Init */
     NULL,                          /* Plugin Deinit */
-    0x0200,                        /* version number (2.0) */
+    PLUGIN_HEX_VERSION,            /* version number (2.0) */
     NULL,                          /* status variables */
     NULL,                          /* system variables */
-    "1.0",                         /* string version */
+    PLUGIN_VERSION,                /* string version */
     MariaDB_PLUGIN_MATURITY_GAMMA  /* maturity */
 }
 DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_FN_ENTRY)

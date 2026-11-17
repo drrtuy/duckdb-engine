@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(duckdb LANGUAGES C CXX)
 find_package(mariadb-plugin REQUIRED)
+INCLUDE("${CMAKE_CURRENT_SOURCE_DIR}/VERSIONS")
 INCLUDE(CheckCXXCompilerFlag)
 
 IF(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -45,7 +46,7 @@ SET(DUCKDB_PLUGIN_SOURCES
 
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
                    AUTHOR "drrtuy,lfedorov"
-                   VERSION 2.0
+                   VERSION "${DUCKDB_PLUGIN_VERSION}"
                    DESCRIPTION "DuckDB storage engine"
                    CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/duckdb.cnf)
 
