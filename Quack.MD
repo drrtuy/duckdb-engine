@@ -56,7 +56,6 @@ Each patch is security-relevant and a candidate for upstream.
 |---|---|
 | `0001-random-token-from-openssl.patch` | Session ids, the HMAC key and generated tokens come from OpenSSL's CSPRNG (`RAND_bytes`). Stock Quack takes them from DuckDB's writable crypto module, which exists only when the `httpfs` extension is loaded; the plugin deliberately does not link `httpfs` (network access from SQL, see `docs/security-model.md`). |
 | `0002-disable-quack-serve.patch` | `quack_serve()` always fails. The stock server would listen inside `mariadbd` and parse unauthenticated requests; the plugin runs its own authenticated listener. |
-| `0003-client-loopback-only.patch` | The Quack client (`quack_query`, `ATTACH 'quack:...'`) only reaches `localhost`, `127.0.0.1` or `::1`. With a pinned certificate fingerprint it needs no `httpfs`, so without this patch `run_in_duckdb` would gain network egress. Loopback stays open for the in-server test client. |
 | `0004-connection-hooks.patch` | Virtual hooks in `QuackServer` so the plugin's listener overrides Quack's login and statement decisions instead of copying Quack's code (a Quack update that changes them then breaks the patch, not silently the listener): `AuthenticateConnection()` (a connection request, after Quack's version and heartbeat checks), `AuthorizeStatement()` (the SQL of a `PREPARE_REQUEST`), `OnConnectionCreated()` (a new session before it becomes visible), `OnConnectionClosed()` (every session removed by disconnect or lease expiry); `CleanupExpiredConnection()` made reachable for subclasses; `ConnectionRequestMessage::WipeAuthString()`. Each default keeps Quack's behaviour. |
 
 ## Stock Quack entry points are closed
@@ -594,9 +593,9 @@ connects.
 
 - `mysql-test/duckdb/t/quack_lockdown.test`: both callbacks are pinned, cannot
   be set (any scope), reset, replaced or dropped, and deny; `quack_serve()`
-  fails; the client refuses non-loopback hosts and still tries loopback. The
-  test does not use `have_duckdb.inc`, so a lockdown failure that keeps the
-  engine from loading fails it instead of skipping it.
+  fails; the client still reaches loopback. The test does not use
+  `have_duckdb.inc`, so a lockdown failure that keeps the engine from
+  loading fails it instead of skipping it.
 
 ## Follow-ups
 

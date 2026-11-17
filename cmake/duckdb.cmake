@@ -107,7 +107,6 @@ ENDIF()
 SET(_QUACK_PATCHES
   0001-random-token-from-openssl.patch
   0002-disable-quack-serve.patch
-  0003-client-loopback-only.patch
   0004-connection-hooks.patch
 )
 LIST(TRANSFORM _QUACK_PATCHES
