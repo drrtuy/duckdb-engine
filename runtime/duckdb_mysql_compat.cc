@@ -45,9 +45,12 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -1476,6 +1479,63 @@ static void register_mariadb_datetime_function(
    Registration
    ================================================================ */
 
+static void register_concat_function(duckdb::Catalog &catalog,
+                                      duckdb::CatalogTransaction transaction)
+{
+  auto function= duckdb::ConcatFun::GetFunction();
+  auto native_concat= function.GetFunctionCallback();
+  function.SetFunctionCallback(
+      [native_concat= std::move(native_concat)](duckdb::DataChunk &args,
+                                               duckdb::ExpressionState &state,
+                                               duckdb::Vector &result) {
+        for (const auto &input : args.data)
+        {
+          if (input.GetVectorType() == duckdb::VectorType::CONSTANT_VECTOR &&
+              duckdb::ConstantVector::IsNull(input))
+          {
+            duckdb::ConstantVector::SetNull(result, duckdb::count_t(args.size()));
+            return;
+          }
+        }
+
+        native_concat(args, state, result);
+        for (const auto &input : args.data)
+        {
+          if (input.GetVectorType() == duckdb::VectorType::FLAT_VECTOR)
+          {
+            const auto &input_mask= duckdb::FlatVector::Validity(input);
+            if (input_mask.CanHaveNull())
+            {
+              result.Flatten();
+              auto &result_mask= duckdb::FlatVector::ValidityMutable(result);
+              result_mask.EnsureWritable();
+              result_mask.Combine(input_mask, args.size());
+            }
+          }
+          else if (input.GetVectorType() != duckdb::VectorType::CONSTANT_VECTOR)
+          {
+            auto entries= input.Validity();
+            if (entries.CanHaveNull())
+            {
+              result.Flatten();
+              auto &result_mask= duckdb::FlatVector::ValidityMutable(result);
+              result_mask.EnsureWritable();
+              for (duckdb::idx_t i= 0; i < args.size(); i++)
+              {
+                if (!entries.IsValid(i))
+                  result_mask.SetInvalid(i);
+              }
+            }
+          }
+        }
+      });
+  duckdb::ScalarFunctionSet set("concat");
+  set.AddFunction(std::move(function));
+  duckdb::CreateScalarFunctionInfo info(std::move(set));
+  info.on_conflict= duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+  catalog.CreateFunction(transaction, info);
+}
+
 static void register_length_functions(duckdb::Catalog &catalog,
                                       duckdb::CatalogTransaction transaction)
 {
@@ -2004,6 +2064,7 @@ void register_mariadb_compat_functions(duckdb::DatabaseInstance &db)
   auto &catalog= duckdb::Catalog::GetSystemCatalog(db);
   auto transaction= duckdb::CatalogTransaction::GetSystemTransaction(db);
 
+  register_concat_function(catalog, transaction);
   register_length_functions(catalog, transaction);
   register_hex_function(catalog, transaction);
   register_oct_function(catalog, transaction);
@@ -2019,7 +2080,7 @@ void register_mariadb_compat_functions(duckdb::DatabaseInstance &db)
 
   sql_print_information(
       "DuckDB: registered MariaDB-compatible function overloads "
-      "(octet_length, length, ascii, ord, hex, oct, bin, locate, mid, "
+      "(concat, octet_length, length, ascii, ord, hex, oct, bin, locate, mid, "
       "rtrim, ltrim, regexp_instr, regexp_replace, regexp_substr, "
       "json_unquote, json_contains, week, yearweek, to_days, dayofweek, "
       "weekday, mariadb_datetime)");

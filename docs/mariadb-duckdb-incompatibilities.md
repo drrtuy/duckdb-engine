@@ -1,8 +1,5 @@
 # MariaDB - DuckDB Incompatibilities
 
-Discovered during porting the DuckDB storage engine plugin to MariaDB 12.
-Current DuckDB pin: **`5406f514e6aa23a43ec4413cc89ebe3e73dd4cd4`** (`v2.0.0-3524-g5406f514e6a`, post-tag 2.0 development revision) in `third_parties/duckdb/`. SELECT/source execution uses the fixed-profile `mariadb` PEG dialect; this is not full MariaDB syntax or `sql_mode` compatibility.
-
 ---
 
 ## 1. Identifier Quoting
@@ -29,6 +26,7 @@ MariaDB function semantics differ from DuckDB in several areas. These are handle
 
 | Function | Issue | Fix |
 |---|---|---|
+| `concat(...)` | DuckDB skips NULL arguments | Wraps the native function: any NULL argument yields NULL; type resolution and non-NULL behavior stay native. The override is global and independent of `sql_mode`: it applies to SELECT pushdown, direct UPDATE/DELETE and `run_in_duckdb()`, including list arguments (`concat([1,2], NULL)` is NULL; `list_concat` is unchanged). Under `sql_mode=ORACLE` MariaDB's `CONCAT` skips NULLs, so a pushed-down `CONCAT` returns NULL where MariaDB returns a value — a known wrong result. Binary/charset compatibility is not addressed. `concat_ws` and `||` are unchanged. |
 | `octet_length(VARCHAR)` | DuckDB builtin only has BLOB overload | Added VARCHAR→BIGINT overload (byte count) |
 | `length(VARCHAR)` | DuckDB returns character count; MariaDB returns byte count | Overridden to return byte count |
 | `length(BLOB)` | DuckDB builtin `length()` only works on VARCHAR | Added BLOB→BIGINT overload |
