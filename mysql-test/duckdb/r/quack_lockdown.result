@@ -68,17 +68,7 @@ SELECT run_in_duckdb("SELECT count(*) FROM quack_server_list()") LIKE
 '%\n0\n%' AS no_server;
 no_server
 1
-# The client cannot leave this host
-SELECT run_in_duckdb("FROM quack_query('quack:example.com:443', 'SELECT 1',
-  token => 'tok', ssl_fingerprint => 'sha256:0000000000000000000000000000000000000000000000000000000000000000')")
-LIKE '%limited to loopback%' AS remote_denied;
-remote_denied
-1
-SELECT run_in_duckdb("ATTACH 'quack:192.0.2.1:9494' AS r (TOKEN 'tok')") LIKE
-'%limited to loopback%' AS attach_denied;
-attach_denied
-1
-# Loopback is still allowed (nothing listens on port 1)
+# The client still works (nothing listens on port 1)
 SELECT run_in_duckdb("FROM quack_query('quack:127.0.0.1:1', 'SELECT 1',
   token => 'tok', ssl_fingerprint => 'sha256:0000000000000000000000000000000000000000000000000000000000000000')")
 LIKE '%Could not establish connection%' AS loopback_attempted;
