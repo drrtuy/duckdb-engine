@@ -1420,10 +1420,11 @@ static void test_listener_queries(duckdb::DuckDB &db,
              quack_guard::STATEMENT_DENIED));
   {
     std::FILE *f= std::fopen("quack_guard_probe.csv", "w");
-    std::fputs("secret\n42\n", f);
+    /* Not a number: the error quotes the endpoint, whose port can hold one */
+    std::fputs("secret\nprobe_marker_value\n", f);
     std::fclose(f);
     auto r= q("SELECT * FROM quack_guard_probe.csv");
-    EXPECT(has(r, quack_guard::ACCESS_DENIED) && !has(r, "42"));
+    EXPECT(has(r, quack_guard::ACCESS_DENIED) && !has(r, "probe_marker_value"));
     if (!has(r, quack_guard::ACCESS_DENIED))
       std::fprintf(stderr, "probe: %s\n", r.c_str());
     std::remove("quack_guard_probe.csv");
