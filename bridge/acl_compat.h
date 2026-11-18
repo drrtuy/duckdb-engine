@@ -33,6 +33,7 @@
 #include "sql_acl.h"
 #include "sql_parse.h"
 #include "handler.h"
+#include "ha_table_exists_compat.h"
 
 namespace quack_bridge
 {
@@ -106,16 +107,8 @@ inline handlerton *compat_table_engine(THD *thd, const LEX_CSTRING &db,
                                        const LEX_CSTRING &table)
 {
   handlerton *hton= nullptr;
-#if MYSQL_VERSION_ID < 110700
-  if (!ha_table_exists(thd, &db, &table, nullptr, nullptr, &hton, nullptr))
+  if (!myduck::table_exists(thd, &db, &table, &hton))
     return nullptr;
-#elif MYSQL_VERSION_ID < 130000
-  if (!ha_table_exists(thd, &db, &table, nullptr, &hton, nullptr))
-    return nullptr;
-#else
-  if (!ha_table_exists(thd, &db, &table, nullptr, &hton, nullptr, 0))
-    return nullptr;
-#endif
   return hton;
 }
 
