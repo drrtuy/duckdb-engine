@@ -49,6 +49,7 @@
 #include "sql_class.h"
 #include "sql_parse.h"
 #include "handler.h"
+#include "ha_table_exists_compat.h"
 #include "ha_duckdb.h"
 
 #include <sys/stat.h>
@@ -235,11 +236,7 @@ bool prepare_table(THD *thd, privilege_t want, bool write,
     or internal objects.
   */
   handlerton *hton= NULL;
-#if MYSQL_VERSION_ID >= 110800
-  bool exists= ha_table_exists(thd, &db_l, &tbl_l, NULL, &hton);
-#else
-  bool exists= ha_table_exists(thd, &db_l, &tbl_l, NULL, NULL, &hton);
-#endif
+  bool exists= myduck::table_exists(thd, &db_l, &tbl_l, &hton);
   if (!exists || hton != duckdb_hton)
     return fail("not an existing ENGINE=DuckDB table");
   return false;
