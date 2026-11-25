@@ -1,0 +1,12 @@
+diff --git a/src/quack_active_connections.cpp b/src/quack_active_connections.cpp
+--- a/src/quack_active_connections.cpp
++++ b/src/quack_active_connections.cpp
+@@ -27,7 +27,7 @@ struct QuackActiveConnectionsData : FunctionData {
+ 	unique_ptr<FunctionData> Copy() const override {
+ 		auto result = make_uniq<QuackActiveConnectionsData>();
+ 		result->finished = finished;
+-		return result;
++		return std::move(result);
+ 	}
+ 	bool Equals(const FunctionData &) const override {
+ 		return false;
