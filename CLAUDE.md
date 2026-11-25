@@ -56,6 +56,8 @@ The test wraps the pinned DuckDB PEG transformer entry with the linker to count 
 
 Installed MTR can also test a source suite and the freshly built plugin without installation: run `mtr` from the installed `mariadb-test` directory with an absolute `--suite` path, a fresh `--vardir` under `build/`, and `--mysqld=--plugin-dir=<source>/build`. The installed runner splits suite names at `-`, so source paths containing dashes need a dash-free symlink for `--suite`. Preserve the suite's utf8mb4 server charset/collation settings when running this way.
 
+The standalone `ha_table_exists_compat_test` checks all three supported `ha_table_exists` signatures, argument forwarding and both existence results without starting MariaDB. Build and run it with `cmake --build build --target ha_table_exists_compat_test -j 4 && ./build/common/ha_table_exists_compat_test`. The shared adapter is in `common/ha_table_exists_compat.h`; its callers are `prepare_table()` in `duckdb_udf_wrappers.cc` and `compat_table_engine()` in `bridge/acl_compat.h`.
+
 ## Architecture
 
 All engine code is in the `myduck` namespace (except `ha_duckdb` which is in global scope per MariaDB handler convention).
