@@ -108,6 +108,7 @@ SET(_QUACK_PATCHES
   0001-random-token-from-openssl.patch
   0002-disable-quack-serve.patch
   0004-connection-hooks.patch
+  0005-explicit-move-bind-data.patch
 )
 LIST(TRANSFORM _QUACK_PATCHES
      PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/patches/duckdb-quack/")

@@ -107,7 +107,7 @@ inline handlerton *compat_table_engine(THD *thd, const LEX_CSTRING &db,
                                        const LEX_CSTRING &table)
 {
   handlerton *hton= nullptr;
-  if (!myduck::table_exists(thd, &db, &table, &hton))
+  if (!myduck::ha_table_exists_compat(&ha_table_exists, thd, &db, &table, &hton))
     return nullptr;
   return hton;
 }

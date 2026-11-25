@@ -12,4 +12,5 @@ ADD_LIBRARY(quack_bridge STATIC
 duckdb_setup_target(quack_bridge)
 TARGET_INCLUDE_DIRECTORIES(quack_bridge PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
   ${PROJECT_SOURCE_DIR}/common)
+TARGET_INCLUDE_DIRECTORIES(quack_bridge PRIVATE ${PROJECT_SOURCE_DIR}/common)
 TARGET_LINK_LIBRARIES(quack_bridge PUBLIC quack_guard_api)

@@ -29,51 +29,29 @@
 
 #pragma once
 
+#include <my_global.h>
 #include <type_traits>
-
+#include "sql_class.h"
 #include "handler.h"
 
 namespace myduck
 {
-namespace ha_table_exists_detail
-{
 
-template <typename T>
-inline T arg_for(handlerton **hton)
+template <typename TableExists>
+inline bool ha_table_exists_compat(TableExists table_exists, THD *thd,
+                                   const LEX_CSTRING *db,
+                                   const LEX_CSTRING *table, handlerton **hton)
 {
-  if constexpr (std::is_same_v<T, handlerton **>)
-    return hton;
-  else if constexpr (std::is_pointer_v<T>)
-    return nullptr;
+  if constexpr (std::is_invocable_v<TableExists, THD *, const LEX_CSTRING *,
+                                    const LEX_CSTRING *, LEX_CUSTRING *,
+                                    handlerton **, bool *, uint>)
+    return table_exists(thd, db, table, nullptr, hton, nullptr, 0);
+  else if constexpr (std::is_invocable_v<TableExists, THD *, const LEX_CSTRING *,
+                                         const LEX_CSTRING *, LEX_CUSTRING *,
+                                         handlerton **, bool *>)
+    return table_exists(thd, db, table, nullptr, hton, nullptr);
   else
-    return T{};
+    return table_exists(thd, db, table, nullptr, nullptr, hton, nullptr);
 }
 
-template <typename R, typename... Rest>
-inline bool call(R (*fn)(THD *, const LEX_CSTRING *, const LEX_CSTRING *,
-                         Rest...),
-                 THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table,
-                 handlerton **hton)
-{
-  static_assert((std::is_same_v<Rest, handlerton **> || ...),
-                "ha_table_exists() has no handlerton** parameter");
-  static_assert(sizeof...(Rest) <= 4 &&
-                    ((std::is_pointer_v<Rest> || std::is_unsigned_v<Rest>) &&
-                     ...),
-                "unknown ha_table_exists() signature, review the arguments");
-  return fn(thd, db, table, arg_for<Rest>(hton)...);
 }
-
-} /* namespace ha_table_exists_detail */
-
-/*
-  True if the table exists; *hton is set to its engine (may stay null for a
-  table the server cannot attribute to an engine).
-*/
-inline bool table_exists(THD *thd, const LEX_CSTRING *db,
-                         const LEX_CSTRING *table, handlerton **hton)
-{
-  return ha_table_exists_detail::call(&ha_table_exists, thd, db, table, hton);
-}
-
-} /* namespace myduck */

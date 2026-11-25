@@ -59,6 +59,7 @@
 #include "duckdb_query.h"
 #include "duckdb_manager.h"
 #include "duckdb_types.h"
+#include "ha_table_exists_compat.h"
 
 extern my_bool allow_duckdb_file_io;
 extern char *duckdb_remote_url_prefixes;
@@ -236,7 +237,8 @@ bool prepare_table(THD *thd, privilege_t want, bool write,
     or internal objects.
   */
   handlerton *hton= NULL;
-  bool exists= myduck::table_exists(thd, &db_l, &tbl_l, &hton);
+  bool exists= myduck::ha_table_exists_compat(&ha_table_exists, thd, &db_l,
+                                              &tbl_l, &hton);
   if (!exists || hton != duckdb_hton)
     return fail("not an existing ENGINE=DuckDB table");
   return false;
