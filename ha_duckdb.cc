@@ -45,6 +45,7 @@
 #include "row_helpers.h"
 #include "ha_duckdb_pushdown.h"
 #include "ha_duckdb_quack.h"
+#include "cdc/plugin.h"
 #include "duckdb_log.h"
 
 /* Global status counters */
@@ -285,6 +286,9 @@ static int duckdb_init_func(void *p)
   duckdb_hton->db_type= DB_TYPE_AUTOASSIGN;
   duckdb_hton->create= duckdb_create_handler;
   duckdb_hton->flags= HTON_TEMPORARY_NOT_SUPPORTED | HTON_NO_PARTITION;
+#ifdef HTON_REQUIRES_RPL_GROUP_COMMIT_BARRIER
+  duckdb_hton->flags|= HTON_REQUIRES_RPL_GROUP_COMMIT_BARRIER;
+#endif
   duckdb_hton->prepare= duckdb_prepare;
   duckdb_hton->commit= duckdb_commit;
   duckdb_hton->rollback= duckdb_rollback;
@@ -313,6 +317,7 @@ static int duckdb_init_func(void *p)
 static int duckdb_deinit_func(void *p)
 {
   DBUG_ENTER("duckdb_deinit_func");
+  myduck::cdc::Shutdown();
   quack_stop();
   myduck::DuckdbManager::Cleanup();
   DBUG_RETURN(0);
@@ -1006,7 +1011,9 @@ int ha_duckdb::rnd_pos(uchar *, uchar *)
 int ha_duckdb::rnd_pos_by_record(uchar *)
 {
   DBUG_ENTER("ha_duckdb::rnd_pos_by_record");
-  if (!myduck::thd_is_replication_applier(ha_thd()))
+  THD *thd= ha_thd();
+  if (!myduck::thd_is_replication_applier(thd) &&
+      !myduck::thd_is_binlog_row_injection(thd))
     DBUG_RETURN(HA_ERR_WRONG_COMMAND);
   DBUG_RETURN(0);
 }
@@ -1969,5 +1976,22 @@ maria_declare_plugin(duckdb)
     "1.0",                         /* string version */
     MariaDB_PLUGIN_MATURITY_GAMMA  /* maturity */
 }
+#ifdef WITH_DUCKDB_CDC
+,{
+    MYSQL_DAEMON_PLUGIN,
+    &myduck::cdc::daemon,
+    "DUCKDB_CDC",
+    "MariaDB Foundation",
+    "Batched binlog CDC into DuckDB",
+    PLUGIN_LICENSE_GPL,
+    myduck::cdc::Init,
+    myduck::cdc::Deinit,
+    PLUGIN_HEX_VERSION,
+    myduck::cdc::status,
+    myduck::cdc::variables,
+    PLUGIN_VERSION,
+    MariaDB_PLUGIN_MATURITY_EXPERIMENTAL
+}
+#endif
 DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_FN_ENTRY)
 maria_declare_plugin_end;

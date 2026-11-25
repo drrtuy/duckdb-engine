@@ -45,6 +45,10 @@ SET(DUCKDB_PLUGIN_SOURCES
   duckdb_udf_wrappers.cc
   bridge/bridge_test_udf.cc
 )
+OPTION(DUCKDB_CDC "Build the experimental CDC daemon plugin" OFF)
+IF(DUCKDB_CDC)
+  LIST(APPEND DUCKDB_PLUGIN_SOURCES cdc/plugin.cc cdc/events.cc cdc/spool.cc cdc/ddl.cc cdc/applier.cc)
+ENDIF()
 
 IF(RPM)
   SET(INSTALL_MYSQLTESTDIR "")
@@ -73,6 +77,23 @@ IF(TARGET duckdb)
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb.cmake)
   INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_target_setup.cmake)
 
+  IF(DUCKDB_CDC)
+    TARGET_COMPILE_DEFINITIONS(duckdb PRIVATE WITH_DUCKDB_CDC)
+    FIND_PATH(DUCKDB_CDC_CLIENT_INCLUDE_DIR mariadb_rpl.h PATH_SUFFIXES mariadb)
+    FIND_LIBRARY(DUCKDB_CDC_CLIENT_ARCHIVE NAMES libmariadb.a)
+    FIND_LIBRARY(DUCKDB_CDC_ZLIB NAMES z libz.so.1)
+    IF(NOT DUCKDB_CDC_CLIENT_INCLUDE_DIR OR NOT DUCKDB_CDC_CLIENT_ARCHIVE OR NOT DUCKDB_CDC_ZLIB)
+      MESSAGE(FATAL_ERROR "DuckDB CDC requires Connector/C headers, its PIC static archive and ZLIB")
+    ENDIF()
+    ADD_LIBRARY(duckdb_cdc_reader OBJECT cdc/reader.cc)
+    TARGET_INCLUDE_DIRECTORIES(duckdb_cdc_reader PRIVATE ${DUCKDB_CDC_CLIENT_INCLUDE_DIR})
+    duckdb_setup_target(duckdb_cdc_reader)
+    TARGET_SOURCES(duckdb PRIVATE $<TARGET_OBJECTS:duckdb_cdc_reader>)
+    TARGET_LINK_LIBRARIES(duckdb ${DUCKDB_CDC_CLIENT_ARCHIVE} OpenSSL::SSL OpenSSL::Crypto
+                                 ${DUCKDB_CDC_ZLIB} ${CMAKE_DL_LIBS} m pthread)
+    SET_PROPERTY(TARGET duckdb APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--exclude-libs,libmariadb.a")
+  ENDIF()
+
   # DuckDB-side Quack module; added first so it gets no MariaDB headers.
   ADD_SUBDIRECTORY(quack_guard)
 
@@ -92,6 +113,22 @@ IF(TARGET duckdb)
     quack_bridge quack_guard ${DUCKDB_LIBRARY} atomic
   )
   TARGET_SOURCES(duckdb PRIVATE ${DUCKDB_STATIC_EXTENSION_LOADER})
+
+  ADD_EXECUTABLE(duckdb_cdc_spool_test EXCLUDE_FROM_ALL cdc/spool.cc cdc/spool_test.cc)
+  duckdb_setup_target(duckdb_cdc_spool_test)
+  TARGET_LINK_LIBRARIES(duckdb_cdc_spool_test pthread)
+  ADD_EXECUTABLE(duckdb_cdc_spool_group_test EXCLUDE_FROM_ALL cdc/spool.cc cdc/spool_group_test.cc)
+  duckdb_setup_target(duckdb_cdc_spool_group_test)
+  TARGET_LINK_LIBRARIES(duckdb_cdc_spool_group_test pthread)
+  SET_PROPERTY(TARGET duckdb_cdc_spool_group_test APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--wrap=fsync")
+  ADD_EXECUTABLE(duckdb_cdc_ddl_test EXCLUDE_FROM_ALL cdc/ddl.cc cdc/ddl_test.cc)
+  duckdb_setup_target(duckdb_cdc_ddl_test)
+  ADD_EXECUTABLE(duckdb_cdc_events_test EXCLUDE_FROM_ALL cdc/events.cc cdc/ddl.cc cdc/events_test.cc)
+  duckdb_setup_target(duckdb_cdc_events_test)
+  ADD_EXECUTABLE(duckdb_cdc_ddl_recovery_test EXCLUDE_FROM_ALL cdc/ddl_recovery_test.cc)
+  duckdb_setup_target(duckdb_cdc_ddl_recovery_test)
+  ADD_EXECUTABLE(duckdb_cdc_metrics_test EXCLUDE_FROM_ALL cdc/metrics_test.cc cdc/events.cc)
+  duckdb_setup_target(duckdb_cdc_metrics_test)
 
   duckdb_setup_target(duckdb)
   TARGET_INCLUDE_DIRECTORIES(duckdb PRIVATE
