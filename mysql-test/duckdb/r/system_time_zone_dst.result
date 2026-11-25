@@ -5,7 +5,7 @@ INSERT INTO t VALUES (1, '2024-01-01 00:00:00'), (2, '2024-07-01 00:00:00');
 SET time_zone = SYSTEM;
 SELECT @@system_time_zone;
 @@system_time_zone
-MET
+CET
 SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
 id	UNIX_TIMESTAMP(dt)
 1	1704063600

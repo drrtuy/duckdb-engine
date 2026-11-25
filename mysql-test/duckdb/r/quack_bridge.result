@@ -81,6 +81,7 @@ SELECT quack_bridge_test('check|u_tbl|127.0.0.1|r_sel|qb.t:a') AS r;
 r
 deny:denied
 # PUBLIC
+SET @saved_public_priv= (SELECT Priv FROM mysql.global_priv WHERE Host='' AND User='PUBLIC');
 GRANT SELECT ON qb.t2 TO PUBLIC;
 SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
 r
@@ -89,6 +90,9 @@ REVOKE SELECT ON qb.t2 FROM PUBLIC;
 SELECT quack_bridge_test('check|u_none|127.0.0.1||qb.t2:x') AS r;
 r
 deny:denied
+DELETE FROM mysql.global_priv WHERE Host='' AND User='PUBLIC' AND @saved_public_priv IS NULL;
+UPDATE mysql.global_priv SET Priv=@saved_public_priv WHERE Host='' AND User='PUBLIC' AND @saved_public_priv IS NOT NULL;
+FLUSH PRIVILEGES;
 # Host-specific accounts match the peer address; with name resolution
 # on, only loopback peers are supported (quack_bridge_ip.test covers
 # remote peers with --skip-name-resolve)

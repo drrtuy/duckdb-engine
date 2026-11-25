@@ -1,7 +1,11 @@
 --source ../include/have_duckdb.inc
 
-# The server runs with TZ=MET, which has summer time. Under
-# time_zone=SYSTEM DuckDB must use the zone's rules, not today's offset.
+# The server runs with TZ=Europe/Paris (CET/CEST), which has summer time.
+# Europe/Paris has the same offsets and DST transitions as MET but, unlike
+# the legacy MET name, ships in the base tzdata of every distro (MET lives
+# in tzdata-legacy and is absent on Debian 13 and other modern systems,
+# where it would silently fall back to UTC). Under time_zone=SYSTEM DuckDB
+# must use the zone's rules, not today's offset.
 
 CREATE DATABASE test_duckdb;
 USE test_duckdb;
@@ -9,6 +13,9 @@ CREATE TABLE t (id INT PRIMARY KEY, dt DATETIME) ENGINE = DuckDB;
 INSERT INTO t VALUES (1, '2024-01-01 00:00:00'), (2, '2024-07-01 00:00:00');
 
 SET time_zone = SYSTEM;
+# @@system_time_zone is the libc abbreviation at server start: CET in
+# winter, CEST in summer. Normalize so the result is season-independent.
+--replace_regex /CEST/CET/
 SELECT @@system_time_zone;
 SELECT id, UNIX_TIMESTAMP(dt) FROM t ORDER BY id;
 

@@ -5,6 +5,7 @@
 # reads must show it in the reader's time_zone. Every DuckDB result below
 # must match the InnoDB reference table.
 
+SET @saved_duckdb_dml_in_batch= @@GLOBAL.duckdb_dml_in_batch;
 CREATE DATABASE test_duckdb;
 USE test_duckdb;
 CREATE TABLE t (id INT PRIMARY KEY, ts TIMESTAMP(6) NULL) ENGINE = DuckDB;
@@ -91,6 +92,6 @@ SELECT t.id FROM t JOIN ref ON ref.id = t.id
 SELECT id FROM ref WHERE ts > '2024-03-01 18:00:00' AND id < 5 ORDER BY id;
 SET sql_mode = DEFAULT;
 
-SET GLOBAL duckdb_dml_in_batch = DEFAULT;
+SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
 SET time_zone = DEFAULT;
 DROP DATABASE test_duckdb;
