@@ -46,6 +46,10 @@ SET(DUCKDB_PLUGIN_SOURCES
   bridge/bridge_test_udf.cc
 )
 
+IF(RPM)
+  SET(INSTALL_MYSQLTESTDIR "")
+ENDIF()
+
 MARIADB_ADD_PLUGIN(duckdb ${DUCKDB_PLUGIN_SOURCES} STORAGE_ENGINE MODULE_ONLY
                    AUTHOR "drrtuy,lfedorov"
                    VERSION "${DUCKDB_PLUGIN_VERSION}"

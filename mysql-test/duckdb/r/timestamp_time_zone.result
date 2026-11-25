@@ -1,3 +1,4 @@
+SET @saved_duckdb_dml_in_batch= @@GLOBAL.duckdb_dml_in_batch;
 CREATE DATABASE test_duckdb;
 USE test_duckdb;
 CREATE TABLE t (id INT PRIMARY KEY, ts TIMESTAMP(6) NULL) ENGINE = DuckDB;
@@ -158,6 +159,6 @@ id
 3
 4
 SET sql_mode = DEFAULT;
-SET GLOBAL duckdb_dml_in_batch = DEFAULT;
+SET GLOBAL duckdb_dml_in_batch = @saved_duckdb_dml_in_batch;
 SET time_zone = DEFAULT;
 DROP DATABASE test_duckdb;
