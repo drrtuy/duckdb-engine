@@ -20,6 +20,36 @@ if(WITH_DUCKDB_HTTPFS)
       GIT_URL https://github.com/duckdb/duckdb-httpfs
       GIT_TAG a2485c0fd240cbddc0d467019f30201c9a46cf06
       APPLY_PATCHES)
+  set(_httpfs_source "${DUCKDB_EXTENSION_HTTPFS_PATH}")
+  set(DUCKDB_EXTENSION_HTTPFS_PATH "${CMAKE_CURRENT_BINARY_DIR}/httpfs-patched")
+  file(COPY "${_httpfs_source}/" DESTINATION "${DUCKDB_EXTENSION_HTTPFS_PATH}"
+      PATTERN ".git" EXCLUDE)
+  set(DUCKDB_EXTENSION_HTTPFS_INCLUDE_PATH "${DUCKDB_EXTENSION_HTTPFS_PATH}/src/include")
+  set(DUCKDB_EXTENSION_HTTPFS_TEST_PATH "${DUCKDB_EXTENSION_HTTPFS_PATH}/test/sql")
+  set(_httpfs_patch "${CMAKE_CURRENT_LIST_DIR}/../patches/duckdb-httpfs/0001-explicit-move-http-params.patch")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_httpfs_patch}")
+  find_program(_httpfs_patch_executable patch REQUIRED)
+  execute_process(
+      COMMAND "${_httpfs_patch_executable}" -p1 --forward --batch --fuzz=0 --dry-run -i "${_httpfs_patch}"
+      WORKING_DIRECTORY "${DUCKDB_EXTENSION_HTTPFS_PATH}"
+      RESULT_VARIABLE _httpfs_patch_check OUTPUT_QUIET ERROR_QUIET)
+  if(_httpfs_patch_check EQUAL 0)
+    execute_process(
+        COMMAND "${_httpfs_patch_executable}" -p1 --forward --batch --fuzz=0 --no-backup-if-mismatch -i "${_httpfs_patch}"
+        WORKING_DIRECTORY "${DUCKDB_EXTENSION_HTTPFS_PATH}"
+        RESULT_VARIABLE _httpfs_patch_result ERROR_VARIABLE _httpfs_patch_error)
+    if(NOT _httpfs_patch_result EQUAL 0)
+      message(FATAL_ERROR "Cannot apply ${_httpfs_patch}: ${_httpfs_patch_error}")
+    endif()
+  else()
+    execute_process(
+        COMMAND "${_httpfs_patch_executable}" -p1 --reverse --batch --fuzz=0 --dry-run -i "${_httpfs_patch}"
+        WORKING_DIRECTORY "${DUCKDB_EXTENSION_HTTPFS_PATH}"
+        RESULT_VARIABLE _httpfs_patch_result ERROR_VARIABLE _httpfs_patch_error)
+    if(NOT _httpfs_patch_result EQUAL 0)
+      message(FATAL_ERROR "Cannot apply or verify ${_httpfs_patch}: ${_httpfs_patch_error}")
+    endif()
+  endif()
   duckdb_extension_statically_link(httpfs)
 endif()
 

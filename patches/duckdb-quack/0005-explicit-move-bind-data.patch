@@ -10,3 +10,45 @@ diff --git a/src/quack_active_connections.cpp b/src/quack_active_connections.cpp
  	}
  	bool Equals(const FunctionData &) const override {
  		return false;
+diff --git a/src/quack_scan.cpp b/src/quack_scan.cpp
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -87,7 +87,7 @@ static unique_ptr<FunctionData> QuackScanBind(ClientContext &context, TableFunct
+ 	bind_data->needs_more_fetch = bind_response->NeedsMoreFetch();
+ 	bind_data->query_uuid = bind_response->QueryUUID();
+ 
+-	return bind_data;
++	return std::move(bind_data);
+ }
+ 
+ static unique_ptr<FunctionData> QuackScanBindCatalogName(ClientContext &context, TableFunctionBindInput &input,
+@@ -146,7 +146,7 @@ static unique_ptr<FunctionData> QuackScanBindCatalogName(ClientContext &context,
+ 		// executed it (PREPARE runs the query), so our snapshot of the remote catalog is out of date
+ 		catalog.Invalidate();
+ 	}
+-	return bind_data;
++	return std::move(bind_data);
+ }
+ 
+ enum class ChunkResultPushdownType { REQUIRES_PUSHDOWN, PUSHDOWN_ALREADY_APPLIED };
+@@ -326,7 +326,7 @@ unique_ptr<LocalTableFunctionState> QuackScanInitLocal(ExecutionContext &context
+ 	for (auto &chunk : results) {
+ 		local_state->results.push(std::move(chunk));
+ 	}
+-	return local_state;
++	return std::move(local_state);
+ }
+ 
+ static void SendAcknowledgement(ClientContext &context, QuackScanGlobalState &global_state,
+diff --git a/src/quack_cancel.cpp b/src/quack_cancel.cpp
+--- a/src/quack_cancel.cpp
++++ b/src/quack_cancel.cpp
+@@ -19,7 +19,7 @@ struct QuackCancelBindData : FunctionData {
+ 	unique_ptr<FunctionData> Copy() const override {
+ 		auto result = make_uniq<QuackCancelBindData>(target_connection_id, cancelled);
+ 		result->finished = finished;
+-		return result;
++		return std::move(result);
+ 	}
+ 	bool Equals(const FunctionData &other_p) const override {
+ 		return target_connection_id == other_p.Cast<QuackCancelBindData>().target_connection_id;
