@@ -17,6 +17,7 @@ duckdb_numeric_func : ACOS domain error in DuckDB
 duckdb_refuse_xa : XA PREPARED state handling
 duckdb_sql_mode : strict GROUP BY in DuckDB
 duckdb_time_func_unsupported : unsupported time functions
+mdev_42299_rpl : legacy native replication test requires HTON_REQUIRES_RPL_GROUP_COMMIT_BARRIER server patch; not a CDC test
 rename_duckdb_table : server log warnings on cross-schema rename
 supported_copy_ddl : cross-schema rename not supported
 system_timezone : hangs on mariadbd-safe restart
