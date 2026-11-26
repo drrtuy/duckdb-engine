@@ -46,15 +46,25 @@ SET(_DUCKDB_LINKED_EXTENSIONS
 # Remote file access (https, http, s3) in DuckDB. Needs OpenSSL and libcurl,
 # linked from the system as mysqld links OpenSSL. Without them the engine is
 # built without it, and remote reads are refused with an error saying so.
+#
+# httpfs's curl client uses APIs added in libcurl 7.85.0 (CURLOPT_PROTOCOLS_STR;
+# also CURLOPT_CAINFO_BLOB / CURLSSLOPT_AUTO_CLIENT_CERT from 7.77 and
+# curl_url_strerror from 7.80). Older libcurl (e.g. RHEL / CentOS Stream 9
+# 7.76.1, Ubuntu 22.04 7.81.0) cannot compile it, so drop httpfs there.
+SET(_DUCKDB_HTTPFS_MIN_CURL "7.85.0")
 OPTION(WITH_DUCKDB_HTTPFS "Link DuckDB's httpfs extension" ON)
 IF(WITH_DUCKDB_HTTPFS)
   FIND_PACKAGE(OpenSSL)
   FIND_PACKAGE(CURL)
-  IF(OPENSSL_FOUND AND CURL_FOUND)
-    LIST(APPEND _DUCKDB_LINKED_EXTENSIONS httpfs)
-  ELSE()
+  IF(NOT (OPENSSL_FOUND AND CURL_FOUND))
     MESSAGE(WARNING "OpenSSL or libcurl not found: building without httpfs")
     SET(WITH_DUCKDB_HTTPFS OFF)
+  ELSEIF(CURL_VERSION_STRING VERSION_LESS _DUCKDB_HTTPFS_MIN_CURL)
+    MESSAGE(WARNING "libcurl ${CURL_VERSION_STRING} is older than "
+            "${_DUCKDB_HTTPFS_MIN_CURL}: building without httpfs")
+    SET(WITH_DUCKDB_HTTPFS OFF)
+  ELSE()
+    LIST(APPEND _DUCKDB_LINKED_EXTENSIONS httpfs)
   ENDIF()
 ENDIF()
 
@@ -239,6 +249,11 @@ ExternalProject_Add(duckdb_build
 # (submodule + patches) change.
 FILE(GLOB_RECURSE _QUACK_STAGED_FILES "${QUACK_SOURCE_DIR}/*")
 ExternalProject_Add_StepDependencies(duckdb_build build ${_QUACK_STAGED_FILES})
+IF(WITH_DUCKDB_HTTPFS)
+  ExternalProject_Add_StepDependencies(duckdb_build configure
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/duckdb_extensions.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/duckdb-httpfs/0001-explicit-move-http-params.patch")
+ENDIF()
 
 # Expose all DuckDB archives as a single INTERFACE target so the rest of the
 # cmake tree links against "libduckdb" unchanged.
