@@ -215,5 +215,6 @@ bool thd_is_replication_applier(THD *thd);
 
 /** Return true when THD applies row events (replication or BINLOG). */
 bool thd_is_row_injection(THD *thd);
+bool thd_is_binlog_row_injection(THD *thd);
 
 } // namespace myduck

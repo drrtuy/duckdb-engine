@@ -18,6 +18,7 @@
 */
 
 #include "ha_duckdb_quack.h"
+#include "cdc/plugin.h"
 
 #include <my_global.h>
 #include "sql_class.h"
@@ -175,7 +176,11 @@ void quack_stop()
 }
 
 /* After client connections are closed, before plugins go down */
-static void quack_pre_shutdown(void) { quack_stop(); }
+static void quack_pre_shutdown(void)
+{
+  quack_stop();
+  myduck::cdc::Shutdown();
+}
 
 void quack_init(handlerton *hton)
 {

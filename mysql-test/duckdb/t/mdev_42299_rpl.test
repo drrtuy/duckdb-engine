@@ -1,0 +1,171 @@
+--source ../include/have_duckdb.inc
+--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+--connection master
+SET @save_commit_wait_count=@@GLOBAL.binlog_commit_wait_count;
+SET @save_commit_wait_usec=@@GLOBAL.binlog_commit_wait_usec;
+CREATE DATABASE mdev_42299_rpl CHARACTER SET utf8mb4;
+--sync_slave_with_master
+
+--connection slave
+--source include/stop_slave.inc
+SET @save_parallel_threads=@@GLOBAL.slave_parallel_threads;
+SET @save_parallel_mode=@@GLOBAL.slave_parallel_mode;
+SET GLOBAL slave_parallel_threads=4;
+SET GLOBAL slave_parallel_mode=conservative;
+USE mdev_42299_rpl;
+SET SESSION sql_log_bin=0;
+CREATE TABLE t (id INT PRIMARY KEY, v INT, untouched VARCHAR(16)) ENGINE=DuckDB;
+CREATE TABLE u (id INT PRIMARY KEY, v INT, untouched VARCHAR(16)) ENGINE=DuckDB;
+SET SESSION sql_log_bin=1;
+--source include/start_slave.inc
+
+--connection master
+USE mdev_42299_rpl;
+SET SESSION sql_log_bin=0;
+CREATE TABLE t (id INT PRIMARY KEY, v INT, untouched VARCHAR(16)) ENGINE=InnoDB;
+CREATE TABLE u (id INT PRIMARY KEY, v INT, untouched VARCHAR(16)) ENGINE=InnoDB;
+SET SESSION sql_log_bin=1;
+INSERT INTO t VALUES (1,0,'keep-1'),(2,0,'keep-2'),(3,0,'keep-3'),(4,0,'keep-4');
+INSERT INTO u SELECT * FROM t;
+--sync_slave_with_master
+
+--connection slave
+--source include/stop_slave_sql.inc
+
+--echo Conservative parallel replay of four-transaction commit groups
+--connect (writer1,localhost,root,,mdev_42299_rpl,$MASTER_MYPORT,$MASTER_MYSOCK)
+--connect (writer2,localhost,root,,mdev_42299_rpl,$MASTER_MYPORT,$MASTER_MYSOCK)
+--connect (writer3,localhost,root,,mdev_42299_rpl,$MASTER_MYPORT,$MASTER_MYSOCK)
+--connect (writer4,localhost,root,,mdev_42299_rpl,$MASTER_MYPORT,$MASTER_MYSOCK)
+--connection master
+SET GLOBAL binlog_commit_wait_count=4;
+SET GLOBAL binlog_commit_wait_usec=1000000;
+
+--disable_query_log
+--let $rounds=32
+--let $offset=0
+while ($rounds)
+{
+  --connection writer1
+  BEGIN;
+  --eval UPDATE t SET id=id+4, v=v+1 WHERE id=$offset+1
+  UPDATE u SET v=v+1 WHERE id=1;
+  --connection writer2
+  BEGIN;
+  --eval UPDATE t SET id=id+4, v=v+1 WHERE id=$offset+2
+  UPDATE u SET v=v+1 WHERE id=2;
+  --connection writer3
+  BEGIN;
+  --eval UPDATE t SET id=id+4, v=v+1 WHERE id=$offset+3
+  UPDATE u SET v=v+1 WHERE id=3;
+  --connection writer4
+  BEGIN;
+  --eval UPDATE t SET id=id+4, v=v+1 WHERE id=$offset+4
+  UPDATE u SET v=v+1 WHERE id=4;
+
+  --connection writer1
+  --send COMMIT
+  --connection writer2
+  --send COMMIT
+  --connection writer3
+  --send COMMIT
+  --connection writer4
+  --send COMMIT
+  --connection writer1
+  --reap
+  --connection writer2
+  --reap
+  --connection writer3
+  --reap
+  --connection writer4
+  --reap
+
+  --let $offset= `SELECT $offset+4`
+  --dec $rounds
+}
+--enable_query_log
+
+--connection master
+SET GLOBAL binlog_commit_wait_count=@save_commit_wait_count;
+SET GLOBAL binlog_commit_wait_usec=@save_commit_wait_usec;
+--save_master_pos
+--connection slave
+START SLAVE SQL_THREAD;
+--sync_with_master
+--source include/stop_slave_sql.inc
+SELECT * FROM t ORDER BY id;
+SELECT * FROM u ORDER BY id;
+--let $diff_tables=master:mdev_42299_rpl.t,slave:mdev_42299_rpl.t
+--source include/diff_tables.inc
+--let $diff_tables=master:mdev_42299_rpl.u,slave:mdev_42299_rpl.u
+--source include/diff_tables.inc
+
+--connection slave
+START SLAVE SQL_THREAD;
+CALL mtr.add_suppression("optimistic or aggressive parallel replication with this storage engine");
+CALL mtr.add_suppression("Slave: Storage engine DUCKDB of the table `mdev_42299_rpl`.`t` doesn't have this option Error_code: 1031");
+--let $mode=optimistic
+--let $modes=2
+--let $expected=32
+while ($modes)
+{
+  --connection slave
+  --source include/stop_slave_sql.inc
+  --eval SET GLOBAL slave_parallel_mode=$mode
+
+  --connection master
+  BEGIN;
+  UPDATE t SET v=v+100 WHERE id=129;
+  UPDATE u SET v=v+100 WHERE id=1;
+  COMMIT;
+  --save_master_pos
+
+  --connection slave
+  --echo Reject $mode before changing either table
+  START SLAVE SQL_THREAD;
+  --let $slave_sql_errno=1235
+  --source include/wait_for_slave_sql_error.inc
+  if (`SELECT COUNT(*) != 1 FROM t WHERE id=129 AND v=$expected`)
+  {
+    --die Unsupported parallel mode changed t
+  }
+  if (`SELECT COUNT(*) != 1 FROM u WHERE id=1 AND v=$expected`)
+  {
+    --die Unsupported parallel mode changed u
+  }
+  SELECT * FROM t ORDER BY id;
+  SELECT * FROM u ORDER BY id;
+
+  --echo Resume conservatively without skipping the failed transaction
+  SET GLOBAL slave_parallel_mode=conservative;
+  START SLAVE SQL_THREAD;
+  --sync_with_master
+  --let $diff_tables=master:mdev_42299_rpl.t,slave:mdev_42299_rpl.t
+  --source include/diff_tables.inc
+  --let $diff_tables=master:mdev_42299_rpl.u,slave:mdev_42299_rpl.u
+  --source include/diff_tables.inc
+  --let $expected= `SELECT $expected+100`
+  --let $mode=aggressive
+  --dec $modes
+}
+
+--disconnect writer1
+--disconnect writer2
+--disconnect writer3
+--disconnect writer4
+
+--connection master
+DROP DATABASE mdev_42299_rpl;
+--sync_slave_with_master
+
+--connection slave
+--source include/stop_slave.inc
+SET GLOBAL slave_parallel_threads=@save_parallel_threads;
+SET GLOBAL slave_parallel_mode=@save_parallel_mode;
+--source include/start_slave.inc
+
+--connection master
+--source include/rpl_end.inc
