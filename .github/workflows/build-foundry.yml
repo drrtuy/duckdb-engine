@@ -17,10 +17,11 @@ jobs:
   build:
     uses: lefred/mariadb-plugin-ci/.github/workflows/build-plugin-new.yml@main
     with:
-      # Autobake build IDs: 11.4.13, 12.3.4
+      # Stable series resolved via mirror/archive.mariadb.org
       mariadb_versions: |
-        74647
-        75263
+        11.4
+        12.3
+        13.2
       package_formats: deb
       test_suites: duckdb
       parallel: "4"
