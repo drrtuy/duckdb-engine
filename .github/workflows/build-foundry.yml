@@ -15,16 +15,19 @@ permissions:
 
 jobs:
   build:
-    uses: lefred/mariadb-plugin-ci/.github/workflows/build-plugin-new.yml@main
+    uses: lefred/mariadb-plugin-ci/.github/workflows/build-plugin-new.yml@v1
     with:
       # Stable series resolved via mirror/archive.mariadb.org
       mariadb_versions: |
         11.4
         12.3
         13.2
-      package_formats: deb
+      package_formats: deb rpm tgz
       test_suites: duckdb
       parallel: "4"
+      almalinux_version: "10"
+      allow_partial_release: true
       # Quack (MDEV-41383) serves HTTPS through the system OpenSSL
       extra_packages_deb: libssl-dev
-      extra_packages_rpm: openssl-devel
+      # libatomic is required for the rpm build to link
+      extra_packages_rpm: openssl-devel libatomic
