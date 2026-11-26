@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - foundry
+      - repl
     tags:
       - "v*"
 
@@ -26,5 +27,5 @@ jobs:
       test_suites: duckdb
       parallel: "4"
       # Quack (MDEV-41383) serves HTTPS through the system OpenSSL
-      extra_packages_deb: libssl-dev
-      extra_packages_rpm: openssl-devel
+      extra_packages_deb: libssl-dev zlib1g-dev
+      extra_packages_rpm: openssl-devel zlib-devel

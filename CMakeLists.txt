@@ -45,9 +45,13 @@ SET(DUCKDB_PLUGIN_SOURCES
   duckdb_udf_wrappers.cc
   bridge/bridge_test_udf.cc
 )
-OPTION(DUCKDB_CDC "Build the experimental CDC daemon plugin" OFF)
+OPTION(DUCKDB_CDC "Build the experimental CDC daemon plugin" ON)
 IF(DUCKDB_CDC)
   LIST(APPEND DUCKDB_PLUGIN_SOURCES cdc/plugin.cc cdc/events.cc cdc/spool.cc cdc/ddl.cc cdc/applier.cc)
+ENDIF()
+
+IF(INSTALL_LAYOUT STREQUAL "STANDALONE" AND NOT DEFINED INSTALL_SYSCONF2DIR)
+  SET(INSTALL_SYSCONF2DIR "etc/my.cnf.d")
 ENDIF()
 
 IF(RPM)
@@ -79,19 +83,41 @@ IF(TARGET duckdb)
 
   IF(DUCKDB_CDC)
     TARGET_COMPILE_DEFINITIONS(duckdb PRIVATE WITH_DUCKDB_CDC)
-    FIND_PATH(DUCKDB_CDC_CLIENT_INCLUDE_DIR mariadb_rpl.h PATH_SUFFIXES mariadb)
-    FIND_LIBRARY(DUCKDB_CDC_CLIENT_ARCHIVE NAMES libmariadb.a)
-    FIND_LIBRARY(DUCKDB_CDC_ZLIB NAMES z libz.so.1)
-    IF(NOT DUCKDB_CDC_CLIENT_INCLUDE_DIR OR NOT DUCKDB_CDC_CLIENT_ARCHIVE OR NOT DUCKDB_CDC_ZLIB)
-      MESSAGE(FATAL_ERROR "DuckDB CDC requires Connector/C headers, its PIC static archive and ZLIB")
+    FIND_PATH(DUCKDB_CDC_CLIENT_INCLUDE_DIR mariadb_rpl.h PATH_SUFFIXES mariadb mysql)
+    FIND_LIBRARY(DUCKDB_CDC_CLIENT_ARCHIVE NAMES libmariadb.a libmariadbclient.a)
+    FIND_PACKAGE(ZLIB REQUIRED)
+    IF(NOT DUCKDB_CDC_CLIENT_INCLUDE_DIR OR NOT DUCKDB_CDC_CLIENT_ARCHIVE)
+      MESSAGE(FATAL_ERROR "DuckDB CDC requires Connector/C headers and its PIC OpenSSL static archive (libmariadb-dev / MariaDB-devel)")
     ENDIF()
+    INCLUDE(CMakePushCheckState)
+    INCLUDE(CheckCXXSourceCompiles)
+    CMAKE_PUSH_CHECK_STATE(RESET)
+    SET(CMAKE_REQUIRED_INCLUDES ${DUCKDB_CDC_CLIENT_INCLUDE_DIR})
+    SET(CMAKE_REQUIRED_LIBRARIES ${DUCKDB_CDC_CLIENT_ARCHIVE} OpenSSL::SSL OpenSSL::Crypto
+                                 ZLIB::ZLIB ${CMAKE_DL_LIBS} m pthread)
+    UNSET(DUCKDB_CDC_CLIENT_LINKS CACHE)
+    CHECK_CXX_SOURCE_COMPILES("
+      #include <mysql.h>
+      #include <mariadb_rpl.h>
+      int main() {
+        MYSQL *client = mysql_init(nullptr);
+        mysql_options(client, MARIADB_OPT_RESTRICTED_AUTH, \"mysql_native_password\");
+        mariadb_rpl_close(mariadb_rpl_init_ex(client, MARIADB_RPL_VERSION));
+        mysql_close(client);
+        return 0;
+      }" DUCKDB_CDC_CLIENT_LINKS)
+    CMAKE_POP_CHECK_STATE()
+    IF(NOT DUCKDB_CDC_CLIENT_LINKS)
+      MESSAGE(FATAL_ERROR "DuckDB CDC needs a compatible OpenSSL-built Connector/C static archive; check DUCKDB_CDC_CLIENT_INCLUDE_DIR and DUCKDB_CDC_CLIENT_ARCHIVE (GnuTLS archives are not supported by this link configuration)")
+    ENDIF()
+    GET_FILENAME_COMPONENT(DUCKDB_CDC_CLIENT_ARCHIVE_NAME ${DUCKDB_CDC_CLIENT_ARCHIVE} NAME)
     ADD_LIBRARY(duckdb_cdc_reader OBJECT cdc/reader.cc)
     TARGET_INCLUDE_DIRECTORIES(duckdb_cdc_reader PRIVATE ${DUCKDB_CDC_CLIENT_INCLUDE_DIR})
     duckdb_setup_target(duckdb_cdc_reader)
     TARGET_SOURCES(duckdb PRIVATE $<TARGET_OBJECTS:duckdb_cdc_reader>)
     TARGET_LINK_LIBRARIES(duckdb ${DUCKDB_CDC_CLIENT_ARCHIVE} OpenSSL::SSL OpenSSL::Crypto
-                                 ${DUCKDB_CDC_ZLIB} ${CMAKE_DL_LIBS} m pthread)
-    SET_PROPERTY(TARGET duckdb APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--exclude-libs,libmariadb.a")
+                                 ZLIB::ZLIB ${CMAKE_DL_LIBS} m pthread)
+    SET_PROPERTY(TARGET duckdb APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--exclude-libs,${DUCKDB_CDC_CLIENT_ARCHIVE_NAME}")
   ENDIF()
 
   # DuckDB-side Quack module; added first so it gets no MariaDB headers.

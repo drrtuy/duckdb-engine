@@ -6,7 +6,7 @@
 
 ### Реализованный объём
 
-- Фоновый daemon plugin включается в сборку только с `-DDUCKDB_CDC=ON` и по умолчанию выключен при запуске; reader и один applier работают отдельными потоками внутри `mariadbd`. Обычная сборка без CDC сохраняет существующий `plugin-maturity=gamma`; для экспериментальной CDC-сборки требуется явный `plugin-maturity=experimental`.
+- В этой ветке фоновый daemon plugin включён в сборку по умолчанию (`DUCKDB_CDC=ON`, отключение сборки — явным OFF), но runtime enablement по-прежнему OFF; reader и один applier работают отдельными потоками внутри `mariadbd`. Штатный пакетный `duckdb.cnf` сохраняет `plugin-maturity=gamma` и загружает engine и существующие функции по именам, без автозагрузки экспериментального CDC. Для загрузки CDC оператор явно задаёт `plugin-maturity=experimental` и `plugin-load-add=DUCKDB_CDC=ha_duckdb.so`. Доставка CDC в библиотеке не означает включение репликации.
 - Connector/C связан приватным PIC static archive с локально скрытыми символами. `dlmopen` не используется: он оказался небезопасен при повторном создании потоков с отдельной libc.
 - Reader требует TLS с проверкой сертификата, `mysql_native_password`, ROW/FULL/CRC32. Чтение восстанавливается по file/position, а MariaDB GTID используется для распознавания исходных транзакционных границ. Автоматическое GTID-переключение источника не реализовано.
 - Сегментированный spool с CRC32, групповым fsync, exclusive lock, проверкой identity, восстановлением незавершённого хвоста и удалением целиком применённых старых сегментов. `Run`/`flush_group` в `cdc/plugin.cc` накапливают только завершённые source transactions; `Spool::AppendBatch` в `cdc/spool.cc` публикует index/sequence после sync всех затронутых сегментов. Reader reconnect cursor может опережать durable received только в пределах живого RAM-буфера, не сохраняя это опережение как checkpoint.
@@ -29,7 +29,7 @@
 
 ### Сборка и проверка
 
-Нужны соответствующий серверу MariaDB plugin SDK, Connector/C headers и пригодный для shared linkage `libmariadb.a`, OpenSSL и ZLIB. Символы client archive должны оставаться скрытыми в конечном `ha_duckdb.so`.
+Нужны соответствующий серверу MariaDB plugin SDK, Connector/C headers и пригодный для shared linkage OpenSSL-built `libmariadb.a` (либо `libmariadbclient.a`), OpenSSL и ZLIB development files. Проверка API/link на configure отклоняет несовместимый client archive, включая GnuTLS archive при текущем OpenSSL link configuration. Символы client archive должны оставаться скрытыми в конечном `ha_duckdb.so`; динамическая зависимость от `libmariadb.so` не требуется. Пакетный путь `build.sh -p` явно включает CDC даже при старом cache OFF; прямой CMake использует default ON только для новой/непереопределённой опции.
 
 ```bash
 cmake -S . -B build -DDUCKDB_CDC=ON
@@ -53,6 +53,16 @@ python3 -B mysql-test/duckdb/cdc_shutdown_order_gdb.py
 Проверенный локальный стенд: source 11.4.14, target и SDK 11.4.15. BINLOG gate прошёл 17 проверок атомарности, rollback и отклонения частичных after-images, включая FULL → MINIMAL/FULL_NODUP внутри одного пакета. End-to-end daemon test прошёл 72 проверки (включая новые metrics assertions): объединение 100 исходных транзакций, packet chunking при `max_allowed_packet=16 KiB`, OFF/ON, rotate, SIGKILL/restart, недоступный/restarted source, startup enablement, TLS rejection, DDL и сохранение backlog/intent. Три первоначальных standalone unit executables прошли обычную сборку и ASan/UBSan; добавлены и проверены recovery/metrics unit targets. Отдельный DDL recovery integration прошёл 28 проверок с четырьмя SIGKILL: prepared TRUNCATE, marked ALTER, unmarked RENAME и безопасная остановка на unmarked ALTER. Ранее выбрано и пройдено девять native/security MTR runs. Это не полный MTR suite и не original-scale performance coverage.
 
 Обычная сборка с `-DDUCKDB_CDC=OFF` отдельно проверяется BINLOG gate под неизменённой gamma-политикой: `DUCKDB_TEST_MATURITY=gamma python3 -B mysql-test/duckdb/cdc_binlog_gate.py`.
+
+### Доставка CDC в пакетах ветки repl
+
+Сборка CDC включена по умолчанию и для прямого CMake package path в CI. `build.sh -p deb|rpm|tgz` дополнительно передаёт явный ON, чтобы старый cache OFF не исключил CDC из пакета. Workflow `.github/workflows/build-foundry.yml` включает push ветки `repl`; в build prerequisites добавлены ZLIB development packages. Connector/C headers ищутся в layouts mariadb/mysql, а скрытие client symbols использует basename выбранного static archive. При standalone layout CMake задаёт `etc/my.cnf.d` только если SDK не определил INSTALL_SYSCONF2DIR, чтобы TGZ также содержал конфиг.
+
+Доставка остаётся в существующем `ha_duckdb.so`/пакете движка, без выделения отдельного CDC `.so` и без изменений shutdown lifecycle. Стандартный конфиг содержит gamma и поимённую загрузку engine + 14 существующих функций. Экспериментальный daemon не загружается автоматически. Для него оператор отдельно разрешает experimental и добавляет named load; после загрузки runtime всё равно OFF, до согласованного bootstrap и явного включения.
+
+Новая проверка: `python3 -B mysql-test/duckdb/cdc_package_smoke.py <extracted-package-root>`. Она использует фактические упакованные `.so` и `duckdb.cnf`, создаёт отдельный datadir, проверяет gamma startup без CDC, named experimental CDC startup с runtime OFF, сохранение строки после restart, private client exports и exit=0. `--server`, `--install-db`, повторяемый `--install-db-arg` позволяют использовать отдельную совместимую установку. Неправильный archive отдельно проверен отрицательным configure-тестом: отказ вместо молчаливого отключения CDC.
+
+Локальные проверки выполнены на SDK/server 11.4.15: DEB и standalone TGZ собраны, smoke по 86 checks pass (`/tmp/cdc-package-lyf5qyh8/`, `/tmp/cdc-package-akz1ikc3/`). До включения сборки этот тест обнаруживал отсутствие DUCKDB_CDC; первоначальный TGZ также обнаружил отсутствие конфига, исправленное fallback-ом. CDC integration: 72 pass (`/tmp/cdc-plugin-jh_41q2r/`), deterministic shutdown regression pass (`/tmp/cdc-plugin-5n3v9y33/`). Дополнительно реальный `build.sh -p deb` успешно пересобрал пакет из cache с заранее установленным CDC=OFF; smoke его извлечённого payload также 86 pass (`/tmp/cdc-package-cjovjlwz/`). Полный MTR/RPM и удалённый GitHub CI этим не подтверждаются. Установленный в окружении SDK 13.2.2 выявил существующую несовместимость этой ветки по ha_table_exists в `duckdb_udf_wrappers.cc`, ещё при CDC=OFF; она не исправлялась в данном шаге. Системный MariaDB/datadir не изменялся: недостающие build tools извлечены в изолированный `/tmp/cdc-package-tools.c3fTB0/`.
 
 ### CDC workload smoke и открытый performance gate
 
@@ -231,12 +241,12 @@ DuckDB и CDC планируются к раздельной поставке. �
 
 ### Начальная конфигурация
 
-Параметры подключения и spool задаются при старте сервера. Пароль не публикуется как SQL system variable; хранить его следует в защищённом конфигурационном файле, а не в командной строке. Пример содержит только placeholders:
+Параметры подключения и spool задаются при старте сервера. Пароль не публикуется как SQL system variable; хранить его следует в защищённом конфигурационном файле, а не в командной строке. Пример — дополнительный защищённый конфиг, читаемый после штатного пакетного `duckdb.cnf`, который уже загружает DuckDB engine и функции. Он содержит только placeholders и явное согласие оператора на экспериментальный CDC:
 
 ```ini
 [mariadbd]
 plugin-maturity=experimental
-plugin-load-add=ha_duckdb.so
+plugin-load-add=DUCKDB_CDC=ha_duckdb.so
 duckdb-cdc-enabled=OFF
 duckdb-cdc-source-host=oltp-primary
 duckdb-cdc-source-port=3306

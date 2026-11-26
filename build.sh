@@ -276,6 +276,10 @@ construct_cmake_flags() {
         MDB_CMAKE_FLAGS+=(-DWITH_ASAN=ON -DWITH_UBSAN=ON)
     fi
 
+    if [[ -n "$PKG_FORMAT" ]]; then
+        MDB_CMAKE_FLAGS+=(-DDUCKDB_CDC=ON)
+    fi
+
     case "$PKG_FORMAT" in
         rpm) MDB_CMAKE_FLAGS+=(-DRPM=1) ;;
         deb) MDB_CMAKE_FLAGS+=(-DDEB=1) ;;
@@ -302,12 +306,12 @@ install_deps() {
 
     # Plugin build prerequisites. The MariaDB devel package must provide
     # the plugin SDK (share/cmake/mariadb-plugin, MDEV-40608+).
-    local RPM_DEPS="git make cmake gcc gcc-c++ libatomic patch MariaDB-devel openssl-devel libcurl-devel"
+    local RPM_DEPS="git make cmake gcc gcc-c++ libatomic patch MariaDB-devel openssl-devel libcurl-devel zlib-devel file"
     if [[ "$PKG_FORMAT" == "rpm" ]]; then
         RPM_DEPS="$RPM_DEPS rpm-build"
     fi
 
-    local DEB_DEPS="build-essential git cmake patch libmariadb-dev libssl-dev libcurl4-openssl-dev"
+    local DEB_DEPS="build-essential git cmake patch libmariadb-dev libssl-dev libcurl4-openssl-dev zlib1g-dev file"
     if [[ "$PKG_FORMAT" == "deb" ]]; then
         DEB_DEPS="$DEB_DEPS lsb-release"
     fi

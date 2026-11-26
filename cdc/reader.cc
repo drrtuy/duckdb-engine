@@ -1,8 +1,8 @@
 #include "reader.h"
 
-#include <mariadb/mysql.h>
-#include <mariadb/mariadb_rpl.h>
-#include <mariadb/errmsg.h>
+#include <mysql.h>
+#include <mariadb_rpl.h>
+#include <errmsg.h>
 
 #include <cerrno>
 #include <limits>
