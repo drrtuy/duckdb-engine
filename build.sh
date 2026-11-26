@@ -14,6 +14,11 @@ BUILD_TYPE="${BUILD_TYPE:-}"
 PKG_FORMAT_OPTIONS=("rpm" "deb" "tgz")
 LAYOUT_OPTIONS=("DEB" "RPM" "STANDALONE")
 LAYOUT=""
+DUCKDB_PLATFORM_OPTIONS=("linux_amd64" "linux_arm64" "linux_amd64_musl" "linux_arm64_musl"
+                        "osx_amd64" "osx_arm64" "windows_amd64" "windows_arm64"
+                        "windows_amd64_mingw" "windows_amd64_rtools"
+                        "wasm_mvp" "wasm_eh" "wasm_threads")
+DUCKDB_PLATFORM=""
 DEFAULT_MDB_DATADIR="/var/lib/mysql"
 USER="mysql"
 GROUP="mysql"
@@ -36,6 +41,8 @@ usage() {
     echo "  -u          Build unit tests"
     echo "  -a          Enable ASAN/UBSAN (the server must be built the same way)"
     echo "  -p <fmt>    Build a package: ${PKG_FORMAT_OPTIONS[*]}"
+    echo "  --duckdb-platform <str>  Override the DuckDB platform string (default: auto-detect)"
+    echo "                          One of: ${DUCKDB_PLATFORM_OPTIONS[*]}"
     echo ""
     echo "  Run:"
     echo "  -c          CI mode: only build, skip install"
@@ -67,6 +74,8 @@ while [[ $# -gt 0 ]]; do
         --datadir=*) DEFAULT_MDB_DATADIR=$(realpath -m "${1#*=}") ;;
         --layout) LAYOUT="$2"; shift ;;
         --layout=*) LAYOUT="${1#*=}" ;;
+        --duckdb-platform) DUCKDB_PLATFORM="$2"; shift ;;
+        --duckdb-platform=*) DUCKDB_PLATFORM="${1#*=}" ;;
         -t) BUILD_TYPE="$2"; shift ;;
         -j) CPUS="$2"; shift ;;
         -p) PKG_FORMAT="$2"; shift ;;
@@ -90,6 +99,10 @@ fi
 
 if [[ -n "$PKG_FORMAT" && ! " ${PKG_FORMAT_OPTIONS[*]} " =~ " ${PKG_FORMAT} " ]]; then
     fail "Unsupported package format: $PKG_FORMAT (expected: ${PKG_FORMAT_OPTIONS[*]})"
+fi
+
+if [[ -n "$DUCKDB_PLATFORM" && ! " ${DUCKDB_PLATFORM_OPTIONS[*]} " =~ " ${DUCKDB_PLATFORM} " ]]; then
+    fail "Unsupported DuckDB platform: $DUCKDB_PLATFORM (expected: ${DUCKDB_PLATFORM_OPTIONS[*]})"
 fi
 
 # The SDK does not record the server's layout and defaults to STANDALONE,
@@ -143,6 +156,9 @@ info "ASAN/UBSAN: ${_CLR_YELLOW}$WITH_ASAN"
 info "Unit tests: ${_CLR_YELLOW}$UNIT_TESTS"
 if [[ -n "$PKG_FORMAT" ]]; then
     info "Package:    ${_CLR_YELLOW}$PKG_FORMAT"
+fi
+if [[ -n "$DUCKDB_PLATFORM" ]]; then
+    info "Platform:   ${_CLR_YELLOW}$DUCKDB_PLATFORM"
 fi
 echo ""
 
@@ -264,6 +280,10 @@ construct_cmake_flags() {
         rpm) MDB_CMAKE_FLAGS+=(-DRPM=1) ;;
         deb) MDB_CMAKE_FLAGS+=(-DDEB=1) ;;
     esac
+
+    if [[ -n "$DUCKDB_PLATFORM" ]]; then
+        MDB_CMAKE_FLAGS+=("-DDUCKDB_EXPLICIT_PLATFORM=$DUCKDB_PLATFORM")
+    fi
 }
 
 install_deps() {
