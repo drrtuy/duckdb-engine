@@ -1990,7 +1990,7 @@ maria_declare_plugin(duckdb)
     myduck::cdc::status,
     myduck::cdc::variables,
     PLUGIN_VERSION,
-    MariaDB_PLUGIN_MATURITY_EXPERIMENTAL
+    MariaDB_PLUGIN_MATURITY_GAMMA
 }
 #endif
 DUCKDB_WRAPPER_FUNCTIONS(DUCKDB_FN_ENTRY)
